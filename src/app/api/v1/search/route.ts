@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { admin } from '@/lib/supabase/admin'
+import { searchTasks, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -40,28 +40,24 @@ export const GET = route({
     }
     const { q, project, type, status, limit } = parsed.data
 
-    let query = admin()
-      .from('tasks')
-      .select(
-        'id, number, title, type, status, priority, resolution, resolution_kind, ' +
-          'description, claimed_by, updated_at, project:projects!inner(key, owner_user_id)',
-      )
-      .eq('projects.owner_user_id', actor.userId)
-      .textSearch('search_vector', q, { type: 'websearch', config: 'english' })
+    let rows: SearchRow[]
+    let widened: boolean
+    try {
+      ;({ rows, widened } = await searchTasks(
+        actor.userId,
+        q,
+        { project, type, status },
+        limit,
+      ))
+    } catch (error) {
+      return fail('internal_error', error instanceof Error ? error.message : 'Search failed.')
+    }
 
-    if (project) query = query.eq('projects.key', project.toUpperCase())
-    if (type) query = query.eq('type', type)
-    if (status) query = query.eq('status', status)
-
-    const { data, error } = await query.limit(limit)
-    if (error) return fail('internal_error', error.message)
-
-    type Row = Record<string, unknown> & { project: { key: string } | { key: string }[] }
-    const results = (data as unknown as Row[]).map((row) => {
+    const results = rows.map((row) => {
       const proj = Array.isArray(row.project) ? row.project[0] : row.project
       const resolution = row.resolution as string | null
       return {
-        ref: `${proj?.key}-${row.number}`,
+        ref: (row.external_ref as string | null) ?? `${proj?.key}-${row.number}`,
         title: row.title as string,
         type: row.type as string,
         status: row.status as string,
@@ -81,6 +77,6 @@ export const GET = route({
       return b.updatedAt.localeCompare(a.updatedAt)
     })
 
-    return ok({ count: results.length, query: q, results })
+    return ok({ count: results.length, query: q, widened, results })
   },
 })
