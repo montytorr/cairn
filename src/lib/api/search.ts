@@ -37,41 +37,32 @@ export const widenedQuery = (query: string): string | null => {
   return terms.length >= 2 ? terms.join(' OR ') : null
 }
 
-export type SearchRow = Record<string, unknown> & {
+export type SearchRow = {
+  id: string
   number: number
-  project: { key: string } | { key: string }[]
-}
-
-const SELECT =
-  'id, number, title, type, status, priority, resolution, resolution_kind, ' +
-  'description, claimed_by, updated_at, external_ref, ' +
-  'project:projects!inner(key, owner_user_id)'
-
-const run = async (
-  userId: string,
-  q: string,
-  filters: { project?: string; type?: string; status?: string },
-  limit: number,
-) => {
-  let query = admin()
-    .from('tasks')
-    .select(SELECT)
-    .eq('projects.owner_user_id', userId)
-    .textSearch('search_vector', q, { type: 'websearch', config: 'english' })
-
-  if (filters.project) query = query.eq('projects.key', filters.project.toUpperCase())
-  if (filters.type) query = query.eq('type', filters.type)
-  if (filters.status) query = query.eq('status', filters.status)
-
-  const { data, error } = await query.limit(limit)
-  if (error) throw new Error(error.message)
-  return (data ?? []) as unknown as SearchRow[]
+  title: string
+  type: string
+  status: string
+  priority: string
+  resolution: string | null
+  resolution_kind: string | null
+  description: string | null
+  claimed_by: string | null
+  updated_at: string
+  external_ref: string | null
+  project_key: string
+  rank: number
+  widened: boolean
 }
 
 /**
- * Runs the precise query, then widens if it found little. `widened` is
- * reported back so the caller can say so rather than silently changing
- * the meaning of the search.
+ * Ranking happens in Postgres, via the search_tasks function.
+ *
+ * ts_rank needs the tsvector and tsquery together, and PostgREST cannot order
+ * by an expression it did not select — so ordering here would mean ordering by
+ * something other than relevance. Doing exactly that (recency) dropped
+ * measured recall from 75% to 6%: widening returns many more rows, and a
+ * recency sort buries the exact match among them.
  */
 export const searchTasks = async (
   userId: string,
@@ -79,20 +70,18 @@ export const searchTasks = async (
   filters: { project?: string; type?: string; status?: string },
   limit: number,
 ): Promise<{ rows: SearchRow[]; widened: boolean }> => {
-  const precise = await run(userId, q, filters, limit)
+  const { data, error } = await admin().rpc('search_tasks', {
+    p_owner: userId,
+    p_query: q,
+    p_widen: widenedQuery(q),
+    p_project: filters.project ?? null,
+    p_type: filters.type ?? null,
+    p_status: filters.status ?? null,
+    p_limit: limit,
+  })
 
-  // Three is a judgement call, not a measurement: enough that a confident
-  // answer is probably in there, few enough that it is worth a second look.
-  if (precise.length >= 3) return { rows: precise, widened: false }
+  if (error) throw new Error(error.message)
 
-  const wide = widenedQuery(q)
-  if (!wide) return { rows: precise, widened: false }
-
-  const widenedRows = await run(userId, wide, filters, limit * 2)
-
-  // Precise matches keep their position at the top; widened ones fill in below.
-  const seen = new Set(precise.map((r) => r.id as string))
-  const merged = [...precise, ...widenedRows.filter((r) => !seen.has(r.id as string))]
-
-  return { rows: merged.slice(0, limit), widened: merged.length > precise.length }
+  const rows = (data ?? []) as SearchRow[]
+  return { rows, widened: rows.some((r) => r.widened) }
 }

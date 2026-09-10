@@ -53,29 +53,22 @@ export const GET = route({
       return fail('internal_error', error instanceof Error ? error.message : 'Search failed.')
     }
 
-    const results = rows.map((row) => {
-      const proj = Array.isArray(row.project) ? row.project[0] : row.project
-      const resolution = row.resolution as string | null
-      return {
-        ref: (row.external_ref as string | null) ?? `${proj?.key}-${row.number}`,
-        title: row.title as string,
-        type: row.type as string,
-        status: row.status as string,
-        // Flags which hits actually carry an answer.
-        resolved: Boolean(resolution),
-        resolutionKind: row.resolution_kind as string | null,
-        claimedBy: row.claimed_by as string | null,
-        updatedAt: row.updated_at as string,
-        tokens: estimateTokens(row.description as string, resolution),
-      }
-    })
-
-    // A hit with a written resolution answers the question; one without only
-    // says somebody else has been here. Rank accordingly.
-    results.sort((a, b) => {
-      if (a.resolved !== b.resolved) return a.resolved ? -1 : 1
-      return b.updatedAt.localeCompare(a.updatedAt)
-    })
+    // Rows arrive ranked by the database. Do NOT re-sort them here: ordering
+    // by anything other than ts_rank discards relevance, which is exactly the
+    // regression this replaced.
+    const results = rows.map((row) => ({
+      ref: row.external_ref ?? `${row.project_key}-${row.number}`,
+      title: row.title,
+      type: row.type,
+      status: row.status,
+      resolved: Boolean(row.resolution),
+      resolutionKind: row.resolution_kind,
+      claimedBy: row.claimed_by,
+      updatedAt: row.updated_at,
+      // Widened hits matched loosely; say so rather than implying precision.
+      loose: row.widened,
+      tokens: estimateTokens(row.description, row.resolution),
+    }))
 
     return ok({ count: results.length, query: q, widened, results })
   },
