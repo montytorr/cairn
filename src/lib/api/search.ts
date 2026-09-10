@@ -31,10 +31,16 @@ export const distinctiveTerms = (query: string): string[] =>
     ),
   ].slice(0, 8)
 
-/** `a OR b OR c` — websearch_to_tsquery understands OR. */
-export const widenedQuery = (query: string): string | null => {
+/**
+ * The distinctive terms, passed to the database as an array.
+ *
+ * The database needs the terms individually, not pre-joined: it ranks widened
+ * results by how many DISTINCT terms a row matches, which cannot be recovered
+ * from an already-ORed string.
+ */
+export const widenedTerms = (query: string): string[] | null => {
   const terms = distinctiveTerms(query)
-  return terms.length >= 2 ? terms.join(' OR ') : null
+  return terms.length >= 2 ? terms : null
 }
 
 export type SearchRow = {
@@ -52,6 +58,7 @@ export type SearchRow = {
   external_ref: string | null
   project_key: string
   rank: number
+  coverage: number
   widened: boolean
 }
 
@@ -73,7 +80,7 @@ export const searchTasks = async (
   const { data, error } = await admin().rpc('search_tasks', {
     p_owner: userId,
     p_query: q,
-    p_widen: widenedQuery(q),
+    p_terms: widenedTerms(q),
     p_project: filters.project ?? null,
     p_type: filters.type ?? null,
     p_status: filters.status ?? null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distinctiveTerms, widenedQuery } from './search'
+import { distinctiveTerms, widenedTerms } from './search'
 
 describe('distinctiveTerms', () => {
   it('keeps the words worth matching on', () => {
@@ -26,18 +26,21 @@ describe('distinctiveTerms', () => {
   })
 })
 
-describe('widenedQuery', () => {
-  it('ORs the distinctive terms', () => {
-    expect(widenedQuery('pagination missing on yima candidates')).toBe(
-      'pagination OR missing OR yima OR candidates',
-    )
+describe('widenedTerms', () => {
+  it('returns the terms individually, not pre-joined', () => {
+    // The database ranks by how many DISTINCT terms a row matches, which
+    // cannot be recovered from an already-ORed string.
+    expect(widenedTerms('pagination missing on yima candidates')).toEqual([
+      'pagination',
+      'missing',
+      'yima',
+      'candidates',
+    ])
   })
 
   it('returns null when there is nothing to widen', () => {
-    // One term ORed with itself is just the original query; widening it would
-    // spend a second round trip for the same result.
-    expect(widenedQuery('supavisor')).toBeNull()
-    expect(widenedQuery('a of to')).toBeNull()
+    expect(widenedTerms('supavisor')).toBeNull()
+    expect(widenedTerms('a of to')).toBeNull()
   })
 })
 
