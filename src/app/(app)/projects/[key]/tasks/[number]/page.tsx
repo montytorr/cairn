@@ -42,7 +42,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
         {task.project.title}
       </Link>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_15rem]">
+      <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_14rem] md:gap-10">
         <div className="min-w-0">
           <div className="mb-3 flex items-center gap-2.5">
             <code className="text-fg-subtle text-xs">
@@ -55,7 +55,8 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
             )}
           </div>
 
-          <h1 className="mb-5 text-xl leading-tight font-semibold tracking-tight">{task.title}</h1>
+          {/* The display face, used on the one thing the page is about. */}
+          <h1 className="font-display mb-5 text-[26px] leading-[1.15] text-balance">{task.title}</h1>
 
           {task.blocked_reason ? (
             <p className="text-danger bg-danger-subtle mb-4 rounded-md px-3 py-2 text-xs">
@@ -66,8 +67,10 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           {/* The resolution sits above the body: when a future agent opens a
               closed task, the answer is the thing it came for. */}
           {task.resolution ? (
-            <div className="border-status-done/40 bg-status-done/5 mb-5 rounded-md border p-3">
-              <p className="text-status-done mb-1 text-[11px] font-medium tracking-wide uppercase">
+            {/* Sits above the body on purpose: when a future agent opens a
+                closed task, the answer is what it came for. */}
+            <div className="border-status-done/30 bg-status-done/[0.06] mb-6 rounded-md border-l-2 border-l-status-done py-2.5 pr-3 pl-3.5">
+              <p className="text-status-done mb-1 text-[10.5px] font-medium tracking-[0.06em] uppercase">
                 Resolution{task.resolution_kind ? ` · ${task.resolution_kind}` : ''}
                 {task.resolved_by ? ` · ${task.resolved_by}` : ''}
               </p>
@@ -76,8 +79,8 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           ) : null}
 
           {task.checkpoint_summary && !task.resolution ? (
-            <div className="border-border bg-surface-raised mb-5 rounded-md border p-3">
-              <p className="text-fg-subtle mb-1 text-[11px] font-medium tracking-wide uppercase">
+            <div className="border-border bg-surface-raised mb-6 rounded-md border-l-2 py-2.5 pr-3 pl-3.5">
+              <p className="text-fg-subtle mb-1 text-[10.5px] font-medium tracking-[0.06em] uppercase">
                 Last checkpoint
                 {task.checkpoint_at ? ` · ${task.checkpoint_at.slice(0, 16).replace('T', ' ')}` : ''}
               </p>
@@ -89,7 +92,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
             <MarkdownEditor taskId={task.id} initial={task.description ?? ''} />
           </div>
 
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-10">
             <NotesPanel taskId={task.id} notes={notes} />
             <CommentsPanel taskId={task.id} comments={comments} />
           </div>

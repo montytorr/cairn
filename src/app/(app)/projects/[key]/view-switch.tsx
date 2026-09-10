@@ -47,8 +47,10 @@ export const ViewSwitch = ({
       aria-pressed={view === value}
       title={label}
       className={cn(
-        'grid size-6 place-items-center rounded transition-colors',
-        view === value ? 'bg-surface-raised text-fg' : 'text-fg-subtle hover:text-fg',
+        'grid size-6 place-items-center rounded transition-all duration-100',
+        view === value
+          ? 'bg-surface text-fg shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+          : 'text-fg-subtle hover:text-fg',
       )}
     >
       <Icon size={14} />
@@ -58,8 +60,10 @@ export const ViewSwitch = ({
   return (
     <div>
       <div className="mb-3 flex items-center gap-1">
+        <div className="bg-surface-sunken border-border flex items-center gap-0.5 rounded-md border p-0.5">
         {button('list', List, 'List view')}
         {button('board', Columns3, 'Board view')}
+        </div>
         {closedHidden > 0 || includeClosed ? (
           <Link
             href={includeClosed ? `/projects/${projectKey}` : `/projects/${projectKey}?closed=1`}

@@ -3,89 +3,113 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   Cairn design tokens.
+   Cairn — design tokens.
 
-   All colour is authored in oklch so that lightness is perceptually even —
-   nudging L on a status colour keeps its hue and chroma intact, which is what
-   keeps a dense list of badges looking like one system rather than a pile of
-   swatches.
+   A cairn is a stack of stones left to mark a trail, and the interface takes
+   that literally: warm stone rather than the cold blue-grey every tracker
+   defaults to, hairline rules stacked on a strict 4px rhythm, and colour held
+   back entirely for state. On a screen showing three hundred rows, restraint
+   is not an aesthetic preference — it is what makes the rows readable.
 
-   The look aims at Linear-calm: a near-neutral ground, one restrained accent,
-   and colour reserved almost entirely for conveying state.
+   Colour is authored in oklch so lightness is perceptually even: nudging L on
+   one status keeps its hue and chroma intact, which is what stops a dense
+   column of badges looking like a pile of swatches.
    --------------------------------------------------------------------------- */
 
 :root {
-  --radius: 0.5rem;
+  /* --- ground: warm paper -------------------------------------------- */
+  --bg:             oklch(0.9855 0.0035 85);
+  --surface:        oklch(1      0      0);
+  --surface-raised: oklch(0.9660 0.0050 85);
+  --surface-sunken: oklch(0.9520 0.0060 85);
 
-  /* ground + text */
-  --bg:            oklch(0.992 0.001 265);
-  --surface:       oklch(1     0     0);
-  --surface-raised:oklch(0.982 0.002 265);
-  --fg:            oklch(0.205 0.010 265);
-  --fg-muted:      oklch(0.545 0.012 265);
-  --fg-subtle:     oklch(0.660 0.010 265);
-  --border:        oklch(0.918 0.003 265);
-  --border-strong: oklch(0.858 0.005 265);
+  --fg:             oklch(0.2450 0.0110 65);
+  --fg-muted:       oklch(0.5100 0.0110 68);
+  --fg-subtle:      oklch(0.6450 0.0100 70);
 
-  /* one accent, used sparingly */
-  --accent:        oklch(0.545 0.185 281);
-  --accent-fg:     oklch(0.995 0     0);
-  --accent-subtle: oklch(0.955 0.022 281);
+  /* Hairlines. Two weights only: one you barely see, one you do. */
+  --border:         oklch(0.9080 0.0055 80);
+  --border-strong:  oklch(0.8350 0.0075 80);
 
-  --ring:          oklch(0.545 0.185 281 / 0.45);
-  --danger:        oklch(0.552 0.208 26);
-  --danger-subtle: oklch(0.958 0.022 26);
+  /* --- accent: ink. One colour, used sparingly. ---------------------- */
+  --accent:         oklch(0.4600 0.0950 245);
+  --accent-fg:      oklch(0.9920 0      0);
+  --accent-subtle:  oklch(0.9420 0.0250 245);
+  --ring:           oklch(0.4600 0.0950 245 / 0.35);
 
-  /* task status — matches the six values in the tasks.status CHECK */
-  --status-backlog:   oklch(0.640 0.014 265);
-  --status-todo:      oklch(0.585 0.098 248);
-  --status-doing:     oklch(0.700 0.150 78);
-  --status-in-review: oklch(0.585 0.160 300);
-  --status-done:      oklch(0.585 0.135 150);
-  --status-cancelled: oklch(0.620 0.030 265);
+  --danger:         oklch(0.5150 0.1650 28);
+  --danger-subtle:  oklch(0.9480 0.0260 28);
 
-  /* priority */
-  --priority-urgent: oklch(0.552 0.208 26);
-  --priority-high:   oklch(0.648 0.170 48);
-  --priority-medium: oklch(0.585 0.098 248);
-  --priority-low:    oklch(0.660 0.012 265);
+  /* --- state. The only place colour is allowed to speak. ------------- */
+  --status-backlog:   oklch(0.6300 0.0140 70);
+  --status-todo:      oklch(0.5450 0.0880 248);
+  --status-doing:     oklch(0.6350 0.1320 62);
+  --status-in-review: oklch(0.5300 0.1080 305);
+  --status-done:      oklch(0.5250 0.0980 152);
+  --status-cancelled: oklch(0.6600 0.0180 70);
+
+  --priority-urgent: oklch(0.5150 0.1650 28);
+  --priority-high:   oklch(0.6050 0.1300 52);
+  --priority-medium: oklch(0.5900 0.0620 245);
+  --priority-low:    oklch(0.6900 0.0110 70);
+
+  /* --- rhythm. Everything spatial resolves to these. ----------------- */
+  --step-1: 0.25rem;   /*  4px */
+  --step-2: 0.5rem;    /*  8px */
+  --step-3: 0.75rem;   /* 12px */
+  --step-4: 1rem;      /* 16px */
+  --step-5: 1.5rem;    /* 24px */
+  --step-6: 2rem;      /* 32px */
+  --step-7: 3rem;      /* 48px */
+
+  --row:    2rem;      /* 32px — the list row, and the unit everything aligns to */
+  --radius: 0.375rem;
+
+  --ease:   cubic-bezier(0.32, 0.72, 0, 1);  /* settles, rather than eases out */
+  --fast:   120ms;
+  --medium: 200ms;
 }
 
 :root.dark {
-  --bg:            oklch(0.158 0.008 265);
-  --surface:       oklch(0.190 0.008 265);
-  --surface-raised:oklch(0.224 0.009 265);
-  --fg:            oklch(0.952 0.004 265);
-  --fg-muted:      oklch(0.686 0.010 265);
-  --fg-subtle:     oklch(0.565 0.010 265);
-  --border:        oklch(0.272 0.008 265);
-  --border-strong: oklch(0.345 0.010 265);
+  /* Warm charcoal, not blue-black — the same stone at dusk. */
+  --bg:             oklch(0.1780 0.0055 75);
+  --surface:        oklch(0.2120 0.0060 75);
+  --surface-raised: oklch(0.2480 0.0068 75);
+  --surface-sunken: oklch(0.1520 0.0050 75);
 
-  --accent:        oklch(0.702 0.158 285);
-  --accent-fg:     oklch(0.170 0.010 265);
-  --accent-subtle: oklch(0.268 0.055 285);
+  --fg:             oklch(0.9420 0.0040 80);
+  --fg-muted:       oklch(0.6900 0.0090 78);
+  --fg-subtle:      oklch(0.5500 0.0090 76);
 
-  --ring:          oklch(0.702 0.158 285 / 0.50);
-  --danger:        oklch(0.660 0.185 26);
-  --danger-subtle: oklch(0.275 0.060 26);
+  --border:         oklch(0.2820 0.0070 75);
+  --border-strong:  oklch(0.3650 0.0090 75);
 
-  --status-backlog:   oklch(0.620 0.014 265);
-  --status-todo:      oklch(0.688 0.102 248);
-  --status-doing:     oklch(0.782 0.145 78);
-  --status-in-review: oklch(0.712 0.150 300);
-  --status-done:      oklch(0.712 0.130 150);
-  --status-cancelled: oklch(0.555 0.026 265);
+  --accent:         oklch(0.7150 0.1080 240);
+  --accent-fg:      oklch(0.1780 0.0055 75);
+  --accent-subtle:  oklch(0.2900 0.0480 240);
+  --ring:           oklch(0.7150 0.1080 240 / 0.45);
 
-  --priority-urgent: oklch(0.680 0.190 26);
-  --priority-high:   oklch(0.752 0.160 48);
-  --priority-medium: oklch(0.688 0.102 248);
-  --priority-low:    oklch(0.575 0.012 265);
+  --danger:         oklch(0.6550 0.1600 28);
+  --danger-subtle:  oklch(0.2820 0.0520 28);
+
+  --status-backlog:   oklch(0.6100 0.0140 75);
+  --status-todo:      oklch(0.6900 0.0920 248);
+  --status-doing:     oklch(0.7550 0.1250 68);
+  --status-in-review: oklch(0.7050 0.1050 305);
+  --status-done:      oklch(0.7000 0.1000 152);
+  --status-cancelled: oklch(0.5300 0.0180 75);
+
+  --priority-urgent: oklch(0.6700 0.1750 28);
+  --priority-high:   oklch(0.7350 0.1300 58);
+  --priority-medium: oklch(0.6800 0.0700 245);
+  --priority-low:    oklch(0.5500 0.0120 75);
 }
 
 @theme inline {
   --color-bg:             var(--bg);
   --color-surface:        var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
   --color-fg:             var(--fg);
   --color-fg-muted:       var(--fg-muted);
   --color-fg-subtle:      var(--fg-subtle);
@@ -111,11 +135,16 @@
   --color-priority-low:    var(--priority-low);
 
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-lg: calc(var(--radius) * 1.6);
   --radius-sm: calc(var(--radius) * 0.6);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --spacing-row: var(--row);
+
+  --font-sans:    var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-display: var(--font-display), Georgia, serif;
+
+  --ease-settle: var(--ease);
 }
 
 @layer base {
@@ -123,33 +152,67 @@
     border-color: var(--border);
   }
 
-  html {
-    color-scheme: light;
-  }
-  html.dark {
-    color-scheme: dark;
-  }
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
 
   body {
     background-color: var(--bg);
     color: var(--fg);
-    font-family: var(--font-sans);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
-  /* Dense UI: tabular figures stop counts and dates from jittering as they
-     update in a list. */
-  .tabular {
-    font-variant-numeric: tabular-nums;
+  /* Figures that change in place must not reflow the row around them. */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .font-display {
+    font-family: var(--font-display), Georgia, serif;
+    letter-spacing: -0.01em;
   }
 
   :focus-visible {
     outline: 2px solid var(--accent);
-    outline-offset: 2px;
+    outline-offset: 1px;
+    border-radius: var(--radius-sm);
   }
 
-  ::selection {
-    background-color: var(--accent-subtle);
+  ::selection { background-color: var(--accent-subtle); }
+
+  /* Scrollbars, so a 300-row list does not slam a grey slab down its edge. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--fg-subtle); }
+}
+
+@layer utilities {
+  /* One well-orchestrated entrance beats scattered micro-interactions.
+     Rows settle in sequence on load; the stagger is capped so a long list
+     does not turn into a slideshow. */
+  @keyframes settle {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .settle {
+    animation: settle var(--medium) var(--ease) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .settle { animation: none; }
+    * { transition-duration: 1ms !important; }
   }
 }

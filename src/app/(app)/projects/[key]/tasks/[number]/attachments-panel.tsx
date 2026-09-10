@@ -60,7 +60,7 @@ export const AttachmentsPanel = ({
 
   return (
     <section>
-      <h2 className="text-fg-muted mb-2 flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
+      <h2 className="text-fg-muted mb-2 flex items-center gap-2 text-[10.5px] font-medium tracking-[0.06em] uppercase">
         Files
         <span className="tabular text-fg-subtle">{attachments.length}</span>
       </h2>

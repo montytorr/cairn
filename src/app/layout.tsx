@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { ThemeProvider } from 'next-themes'
 import { SupabaseProvider } from '@/components/supabase-provider'
+import { display, mono, sans } from './fonts'
 import './globals.css'
 
 /**
@@ -35,7 +36,11 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${sans.variable} ${mono.variable} ${display.variable}`}
+    >
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <SupabaseProvider config={config}>{children}</SupabaseProvider>

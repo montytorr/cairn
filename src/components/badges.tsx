@@ -59,8 +59,9 @@ export const TypeBadge = ({ type, compact }: { type: TaskType; compact?: boolean
 }
 
 /**
- * Priority renders as bars rather than a word: it is scanned down a column,
- * where a shape reads faster than text and takes less width.
+ * Priority renders as a shape in the left margin, never a word. It is scanned
+ * vertically down a column of hundreds of rows, and at that job a silhouette
+ * beats text: it reads in peripheral vision and costs 12px instead of 60.
  */
 export const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
   const meta = PRIORITY_META[priority]
@@ -73,12 +74,16 @@ export const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
     )
   }
   return (
-    <span className={cn('inline-flex items-end gap-[2px]', meta.color)} title={meta.label}>
-      {[3, 5, 7].map((h, i) => (
+    <span
+      className={cn('inline-flex items-end gap-[2px]', meta.color)}
+      title={`${meta.label} priority`}
+      aria-label={`${meta.label} priority`}
+    >
+      {[4, 6, 8].map((h, i) => (
         <span
           key={h}
-          className="w-[3px] rounded-sm bg-current"
-          style={{ height: h, opacity: i < filled ? 1 : 0.25 }}
+          className="w-[2.5px] rounded-[1px] bg-current transition-opacity"
+          style={{ height: h, opacity: i < filled ? 1 : 0.18 }}
         />
       ))}
     </span>
@@ -86,7 +91,7 @@ export const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
 }
 
 export const Label = ({ children }: { children: React.ReactNode }) => (
-  <span className="border-border text-fg-muted rounded-full border px-1.5 py-px text-[11px] leading-4">
+  <span className="bg-surface-raised text-fg-muted rounded px-1.5 py-px text-[10.5px] leading-4">
     {children}
   </span>
 )
@@ -111,11 +116,14 @@ export const ActorChip = ({ actorId, actorType }: { actorId: string; actorType?:
 export const ClaimChip = ({ by, stale }: { by: string; stale: boolean }) => (
   <span
     className={cn(
-      'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[11px]',
-      stale ? 'text-fg-subtle border-border border' : 'bg-accent-subtle text-accent',
+      'inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[10.5px] leading-4',
+      stale ? 'text-fg-subtle bg-surface-raised' : 'bg-accent-subtle text-accent',
     )}
     title={stale ? `${by} holds this but has gone quiet — the lease is stealable` : `held by ${by}`}
   >
+    {/* A live claim pulses; a stale one does not. The difference should be
+        visible without reading the label. */}
+    {!stale && <span className="bg-accent size-1 animate-pulse rounded-full" />}
     {by}
     {stale ? ' · stale' : ''}
   </span>
