@@ -48,10 +48,21 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
     if (!hashesMatch(data.key_hash, hashApiKey(token))) return null
 
     // Best-effort; a failed touch must never fail the request.
-    void admin()
+    //
+    // NOTE: this must be `.then(...)`, not `void <builder>`. A Supabase query
+    // builder is a lazy thenable — it does not issue the request until
+    // something subscribes to it. `void builder` type-checks, looks like
+    // fire-and-forget, and silently never runs. It meant last_used_at stayed
+    // null for every key despite constant use, which was only noticed once
+    // the settings UI put that column on screen.
+    admin()
       .from('api_keys')
       .update({ last_used_at: new Date().toISOString() })
       .eq('id', data.id)
+      .then(
+        () => undefined,
+        () => undefined, // never let a failed touch fail the request
+      )
 
     return {
       userId: data.user_id,
