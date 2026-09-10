@@ -101,6 +101,15 @@ export const StatusIcon = ({
 
 const PRIORITY_BARS: Record<TaskPriority, number> = { urgent: 0, high: 3, medium: 2, low: 1 }
 
+/**
+ * `aria-label` carries the accessible name; the `<title>` is belt and braces.
+ *
+ * It must be a SINGLE string child. React 19 treats `<title>` as hoistable
+ * document metadata, and one whose children are an expression *plus* a literal
+ * is emitted on the client but dropped by the server renderer — which showed
+ * up as React #418 twenty-four times on a list page, and looked exactly like a
+ * broken page.
+ */
 export const PriorityIcon = ({
   priority,
   size = 14,
@@ -142,7 +151,8 @@ export const PriorityIcon = ({
       aria-label={`${label} priority`}
       role="img"
     >
-      <title>{label} priority</title>
+      {/* One string child, not two: see the note on `aria-label` below. */}
+      <title>{`${label} priority`}</title>
       {[
         { x: 1.5, y: 9.5, h: 5 },
         { x: 6.5, y: 6.5, h: 8 },

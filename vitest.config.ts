@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     // jsdom, because Tiptap's Editor needs a DOM even headless.
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    // .tsx too: the icon tests server-render JSX to catch the hoistable
+    // `<title>` trap, which is only observable through the renderer.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 })
