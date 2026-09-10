@@ -97,3 +97,22 @@ commented and is the best description of the data model.
 ## Licence
 
 MIT
+
+## Backups
+
+Cairn holds real work, so back up **both** halves — a database dump without the storage
+tree loses every attachment, and the storage tree without the dump loses every reference
+to those files.
+
+```bash
+export CAIRN_STACK_DIR=/srv/supabase/cairn      # holds the Supabase .env
+export CAIRN_BACKUP_DIR=/srv/backups/cairn
+export CAIRN_DB_CONTAINER=supabase-db
+
+./scripts/backup.sh          # nightly, from cron
+./scripts/restore-drill.sh   # weekly — actually restores and verifies
+```
+
+`restore-drill.sh` restores the newest dump into a throwaway database, asserts the data
+is really there (including that the generated `search_vector` survived, which would
+otherwise break search silently), then drops it. An untested backup is not a backup.
