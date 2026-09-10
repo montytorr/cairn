@@ -6,7 +6,7 @@ import { ClaimChip, Label, PriorityBadge, StatusBadge, TypeBadge } from '@/compo
 import { cn, isClaimStale } from '@/lib/utils'
 import { Input, Select } from '@/components/ui/control'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
-import type { Task } from '@/lib/data'
+import type { TaskListItem } from '@/lib/data'
 
 type GroupBy = 'status' | 'type' | 'priority' | 'none'
 
@@ -14,7 +14,7 @@ type GroupBy = 'status' | 'type' | 'priority' | 'none'
  * The dense view. For a personal tracker this usually beats the board — you
  * are scanning for one thing, not moving cards around.
  */
-export const ListView = ({ tasks, projectKey }: { tasks: Task[]; projectKey: string }) => {
+export const ListView = ({ tasks, projectKey }: { tasks: TaskListItem[]; projectKey: string }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>('status')
   const [status, setStatus] = useState<TaskStatus | 'all'>('all')
   const [type, setType] = useState<TaskType | 'all'>('all')
@@ -28,7 +28,7 @@ export const ListView = ({ tasks, projectKey }: { tasks: Task[]; projectKey: str
         if (type !== 'all' && t.type !== type) return false
         if (!showClosed && (t.status === 'done' || t.status === 'cancelled')) return false
         if (query) {
-          const haystack = `${t.title} ${t.description ?? ''} ${t.labels.join(' ')}`.toLowerCase()
+          const haystack = `${t.title} ${t.preview ?? ''} ${t.labels.join(' ')}`.toLowerCase()
           if (!haystack.includes(query.toLowerCase())) return false
         }
         return true
@@ -131,7 +131,15 @@ export const ListView = ({ tasks, projectKey }: { tasks: Task[]; projectKey: str
                   <TypeBadge type={task.type} compact />
                   {groupBy !== 'status' && <StatusBadge status={task.status} compact />}
                   <span className="min-w-0 flex-1 truncate text-[13px]">{task.title}</span>
-                  {task.resolution && (
+                  {task.external_ref && (
+                    <span
+                      className="text-fg-subtle hidden shrink-0 text-[10px] sm:inline"
+                      title={`imported from Linear ${task.external_ref}`}
+                    >
+                      {task.external_ref}
+                    </span>
+                  )}
+                  {task.has_resolution && (
                     <span className="text-status-done shrink-0 text-[11px]">answered</span>
                   )}
                   {task.labels.slice(0, 2).map((l) => (

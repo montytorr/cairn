@@ -12,7 +12,7 @@ import { ClaimChip, Label, PriorityBadge, TypeBadge } from '@/components/badges'
 import { ResolutionDialog } from './resolution-dialog'
 import { cn, isClaimStale } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type TaskStatus } from '@/schemas/task'
-import type { Task } from '@/lib/data'
+import type { TaskListItem } from '@/lib/data'
 
 const COLUMN_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
@@ -23,7 +23,7 @@ const COLUMN_LABEL: Record<TaskStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-const Card = ({ task, projectKey }: { task: Task; projectKey: string }) => {
+const Card = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id })
 
   return (
@@ -61,15 +61,15 @@ const Card = ({ task, projectKey }: { task: Task; projectKey: string }) => {
         {task.title}
       </Link>
 
-      {task.description ? (
+      {task.preview ? (
         <div className="mt-1.5">
-          <MarkdownPreview lines={2}>{task.description}</MarkdownPreview>
+          <MarkdownPreview lines={2}>{task.preview}</MarkdownPreview>
         </div>
       ) : null}
 
-      {task.resolution ? (
+      {task.has_resolution ? (
         <p className="text-status-done mt-1.5 line-clamp-2 text-[11px] leading-snug">
-          {task.resolution}
+          {task.resolution_kind ?? 'resolved'}
         </p>
       ) : null}
 
@@ -94,7 +94,7 @@ const Column = ({
   projectKey,
 }: {
   status: TaskStatus
-  tasks: Task[]
+  tasks: TaskListItem[]
   projectKey: string
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status })
@@ -124,19 +124,19 @@ export const BoardView = ({
   tasks: initial,
   projectKey,
 }: {
-  tasks: Task[]
+  tasks: TaskListItem[]
   projectKey: string
 }) => {
   const router = useRouter()
   const [tasks, setTasks] = useState(initial)
-  const [dragging, setDragging] = useState<Task | null>(null)
-  const [pendingClose, setPendingClose] = useState<{ task: Task; status: TaskStatus } | null>(null)
+  const [dragging, setDragging] = useState<TaskListItem | null>(null)
+  const [pendingClose, setPendingClose] = useState<{ task: TaskListItem; status: TaskStatus } | null>(null)
 
   // A small activation distance, so clicking a link inside a card does not
   // start a drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
-  const persist = async (task: Task, status: TaskStatus, resolution?: string) => {
+  const persist = async (task: TaskListItem, status: TaskStatus, resolution?: string) => {
     const previous = tasks
     setTasks((current) => current.map((t) => (t.id === task.id ? { ...t, status } : t)))
 
@@ -168,7 +168,7 @@ export const BoardView = ({
      * direct consequence of making resolutions mandatory — worth the friction,
      * but it has to be handled here or dragging would just silently fail.
      */
-    if (isTerminal(status) && !task.resolution) {
+    if (isTerminal(status) && !task.has_resolution) {
       setPendingClose({ task, status })
       return
     }

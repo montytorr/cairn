@@ -72,14 +72,74 @@ export const getProject = async (userId: string, key: string): Promise<Project |
   return (data as Project) ?? null
 }
 
-export const listTasks = async (projectId: string): Promise<Task[]> => {
-  const { data } = await admin()
-    .from('tasks')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('position')
-    .order('number', { ascending: false })
-  return (data ?? []) as Task[]
+/**
+ * Columns the board and list actually render. Deliberately NOT `select *`:
+ * one imported project holds 691 tasks and 1.9MB of markdown descriptions,
+ * and shipping all of that to the browser to render two clamped preview lines
+ * is the difference between a snappy page and a multi-second one.
+ *
+ * `preview` is truncated server-side; the full body is only fetched on the
+ * task detail page, where it is actually shown.
+ */
+const LIST_COLUMNS =
+  'id, number, title, type, status, priority, labels, due_date, position, ' +
+  'claimed_by, heartbeat_at, blocked_reason, external_ref, updated_at, ' +
+  'resolution_kind, has_resolution, checkpoint_summary, preview:description'
+
+export type TaskListItem = Pick<
+  Task,
+  | 'id' | 'number' | 'title' | 'type' | 'status' | 'priority' | 'labels'
+  | 'due_date' | 'position' | 'claimed_by' | 'heartbeat_at' | 'blocked_reason'
+  | 'updated_at'
+> & {
+  preview: string | null
+  external_ref: string | null
+  resolution_kind: string | null
+  has_resolution: boolean
+  checkpoint_summary: string | null
+}
+
+export type TaskPage = { tasks: TaskListItem[]; total: number; closedHidden: number }
+
+const PREVIEW_CHARS = 280
+
+/**
+ * Closed tasks are excluded by default. After importing years of history, 94%
+ * of tasks are done — rendering them all by default would bury the handful
+ * that are actually open.
+ */
+export const listTasks = async (
+  projectId: string,
+  { includeClosed = false, limit = 300 }: { includeClosed?: boolean; limit?: number } = {},
+): Promise<TaskPage> => {
+  const closedFilter = ['done', 'cancelled']
+
+  const [openRows, totals] = await Promise.all([
+    (() => {
+      let q = admin()
+        .from('tasks')
+        .select(LIST_COLUMNS)
+        .eq('project_id', projectId)
+      if (!includeClosed) q = q.not('status', 'in', `(${closedFilter.join(',')})`)
+      return q.order('position').order('number', { ascending: false }).limit(limit)
+    })(),
+    admin()
+      .from('tasks')
+      .select('status', { count: 'exact', head: false })
+      .eq('project_id', projectId),
+  ])
+
+  const all = (totals.data ?? []) as { status: string }[]
+  const tasks = ((openRows.data ?? []) as unknown as TaskListItem[]).map((t) => ({
+    ...t,
+    preview: t.preview ? t.preview.slice(0, PREVIEW_CHARS) : null,
+  }))
+
+  return {
+    tasks,
+    total: all.length,
+    closedHidden: includeClosed ? 0 : all.filter((t) => closedFilter.includes(t.status)).length,
+  }
 }
 
 export const getTask = async (
