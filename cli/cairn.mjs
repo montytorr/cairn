@@ -160,7 +160,14 @@ const flatten = (value, prefix = '', out = {}) => {
     const key = prefix ? `${prefix}.${k}` : k
     if (v === null || v === undefined || v === '') continue // omit nulls entirely
     if (Array.isArray(v)) {
-      if (v.length) out[key] = v.join(',')
+      if (!v.length) continue
+      // An array of objects joined with a comma is a row of "[object Object]".
+      // Index them instead, so `findings.0.note` is readable and greppable.
+      if (v.some((item) => item && typeof item === 'object')) {
+        v.forEach((item, i) => flatten(item, `${key}.${i}`, out))
+      } else {
+        out[key] = v.join(',')
+      }
     } else if (typeof v === 'object') flatten(v, key, out)
     else out[key] = String(v)
   }

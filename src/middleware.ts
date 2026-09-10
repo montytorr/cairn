@@ -65,7 +65,11 @@ export const config = {
     /*
      * Everything except: the agent API (bearer-authenticated), Next internals,
      * the health probe, and static assets.
+     *
+     * `apple-icon` and `opengraph-image` are route handlers, not files, so the
+     * extension rule below does not cover them — an icon behind a login
+     * redirect is an icon the browser never gets.
      */
-    '/((?!api/v1|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api/v1|_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
