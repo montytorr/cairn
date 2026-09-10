@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: lint
+        run: npm run lint
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: build
+        run: npm run build
+        env:
+          # Build-time placeholders. The real values are injected at runtime;
+          # nothing secret belongs in CI for a public repository.
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:8000
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+
+      - name: agent guide stays within budget
+        run: |
+          bytes=$(wc -c < AGENTS.md)
+          echo "AGENTS.md is $bytes bytes"
+          if [ "$bytes" -gt 8192 ]; then
+            echo "::error::AGENTS.md exceeds 8KB — agents read this on every session."
+            exit 1
+          fi

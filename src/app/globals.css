@@ -1,0 +1,155 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Cairn design tokens.
+
+   All colour is authored in oklch so that lightness is perceptually even —
+   nudging L on a status colour keeps its hue and chroma intact, which is what
+   keeps a dense list of badges looking like one system rather than a pile of
+   swatches.
+
+   The look aims at Linear-calm: a near-neutral ground, one restrained accent,
+   and colour reserved almost entirely for conveying state.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --radius: 0.5rem;
+
+  /* ground + text */
+  --bg:            oklch(0.992 0.001 265);
+  --surface:       oklch(1     0     0);
+  --surface-raised:oklch(0.982 0.002 265);
+  --fg:            oklch(0.205 0.010 265);
+  --fg-muted:      oklch(0.545 0.012 265);
+  --fg-subtle:     oklch(0.660 0.010 265);
+  --border:        oklch(0.918 0.003 265);
+  --border-strong: oklch(0.858 0.005 265);
+
+  /* one accent, used sparingly */
+  --accent:        oklch(0.545 0.185 281);
+  --accent-fg:     oklch(0.995 0     0);
+  --accent-subtle: oklch(0.955 0.022 281);
+
+  --ring:          oklch(0.545 0.185 281 / 0.45);
+  --danger:        oklch(0.552 0.208 26);
+  --danger-subtle: oklch(0.958 0.022 26);
+
+  /* task status — matches the six values in the tasks.status CHECK */
+  --status-backlog:   oklch(0.640 0.014 265);
+  --status-todo:      oklch(0.585 0.098 248);
+  --status-doing:     oklch(0.700 0.150 78);
+  --status-in-review: oklch(0.585 0.160 300);
+  --status-done:      oklch(0.585 0.135 150);
+  --status-cancelled: oklch(0.620 0.030 265);
+
+  /* priority */
+  --priority-urgent: oklch(0.552 0.208 26);
+  --priority-high:   oklch(0.648 0.170 48);
+  --priority-medium: oklch(0.585 0.098 248);
+  --priority-low:    oklch(0.660 0.012 265);
+}
+
+:root.dark {
+  --bg:            oklch(0.158 0.008 265);
+  --surface:       oklch(0.190 0.008 265);
+  --surface-raised:oklch(0.224 0.009 265);
+  --fg:            oklch(0.952 0.004 265);
+  --fg-muted:      oklch(0.686 0.010 265);
+  --fg-subtle:     oklch(0.565 0.010 265);
+  --border:        oklch(0.272 0.008 265);
+  --border-strong: oklch(0.345 0.010 265);
+
+  --accent:        oklch(0.702 0.158 285);
+  --accent-fg:     oklch(0.170 0.010 265);
+  --accent-subtle: oklch(0.268 0.055 285);
+
+  --ring:          oklch(0.702 0.158 285 / 0.50);
+  --danger:        oklch(0.660 0.185 26);
+  --danger-subtle: oklch(0.275 0.060 26);
+
+  --status-backlog:   oklch(0.620 0.014 265);
+  --status-todo:      oklch(0.688 0.102 248);
+  --status-doing:     oklch(0.782 0.145 78);
+  --status-in-review: oklch(0.712 0.150 300);
+  --status-done:      oklch(0.712 0.130 150);
+  --status-cancelled: oklch(0.555 0.026 265);
+
+  --priority-urgent: oklch(0.680 0.190 26);
+  --priority-high:   oklch(0.752 0.160 48);
+  --priority-medium: oklch(0.688 0.102 248);
+  --priority-low:    oklch(0.575 0.012 265);
+}
+
+@theme inline {
+  --color-bg:             var(--bg);
+  --color-surface:        var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-fg:             var(--fg);
+  --color-fg-muted:       var(--fg-muted);
+  --color-fg-subtle:      var(--fg-subtle);
+  --color-border:         var(--border);
+  --color-border-strong:  var(--border-strong);
+
+  --color-accent:         var(--accent);
+  --color-accent-fg:      var(--accent-fg);
+  --color-accent-subtle:  var(--accent-subtle);
+  --color-danger:         var(--danger);
+  --color-danger-subtle:  var(--danger-subtle);
+
+  --color-status-backlog:   var(--status-backlog);
+  --color-status-todo:      var(--status-todo);
+  --color-status-doing:     var(--status-doing);
+  --color-status-in-review: var(--status-in-review);
+  --color-status-done:      var(--status-done);
+  --color-status-cancelled: var(--status-cancelled);
+
+  --color-priority-urgent: var(--priority-urgent);
+  --color-priority-high:   var(--priority-high);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-low:    var(--priority-low);
+
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-sm: calc(var(--radius) * 0.6);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Dense UI: tabular figures stop counts and dates from jittering as they
+     update in a list. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--accent-subtle);
+  }
+}

@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# secrets — never commit any of these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+**/service-account*.json
+
+# deployment overlays holding host-specific config
+docker-compose.override.yml
+docker-compose.prod.yml
+deploy/local/
+
+# cli build
+cli/dist/
+cli/node_modules/
+
+# supabase local state
+supabase/.branches/
+supabase/.temp/
+.supabase/
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
+coverage/
+.vscode/
+.idea/
+tsconfig.tsbuildinfo

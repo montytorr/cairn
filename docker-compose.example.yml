@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# Cairn — example deployment.
+#
+# Copy to docker-compose.yml (or docker-compose.override.yml, which is
+# gitignored) and adjust. Nothing host-specific belongs in this file.
+#
+# Assumes a Traefik instance already running on an external Docker network
+# with a Let's Encrypt certificate resolver. Adapt the labels for nginx or
+# Caddy if you use those instead.
+#
+# Required environment:
+#   CAIRN_DOMAIN         hostname to serve on, e.g. cairn.example.com
+#   CAIRN_PROXY_NETWORK  existing external Docker network your proxy is on
+# ---------------------------------------------------------------------------
+
+services:
+  cairn:
+    build:
+      context: .
+      target: runner
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    container_name: cairn
+    restart: unless-stopped
+
+    # Secrets come from a gitignored env file, never from this compose file.
+    env_file:
+      - .env.local
+
+    expose:
+      - '3000'
+
+    # Hardening: the app needs no write access to its own filesystem.
+    user: 'nextjs'
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/api/v1/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    networks:
+      - proxy
+
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=${CAIRN_PROXY_NETWORK}'
+      - 'traefik.http.routers.cairn.rule=Host(`${CAIRN_DOMAIN}`)'
+      - 'traefik.http.routers.cairn.entrypoints=websecure'
+      - 'traefik.http.routers.cairn.tls.certresolver=letsencrypt'
+      - 'traefik.http.services.cairn.loadbalancer.server.port=3000'
+      - 'traefik.http.routers.cairn.middlewares=cairn-headers'
+      - 'traefik.http.middlewares.cairn-headers.headers.stsSeconds=31536000'
+      - 'traefik.http.middlewares.cairn-headers.headers.stsIncludeSubdomains=true'
+      - 'traefik.http.middlewares.cairn-headers.headers.stsPreload=true'
+      - 'traefik.http.middlewares.cairn-headers.headers.frameDeny=true'
+      - 'traefik.http.middlewares.cairn-headers.headers.contentTypeNosniff=true'
+
+networks:
+  proxy:
+    name: ${CAIRN_PROXY_NETWORK}
+    external: true
