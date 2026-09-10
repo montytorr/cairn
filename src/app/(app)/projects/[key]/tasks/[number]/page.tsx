@@ -8,6 +8,7 @@ import { MarkdownEditor } from '@/components/markdown-editor'
 import { MarkdownView } from '@/components/markdown'
 import { ProjectIcon } from '@/components/icons'
 import { Properties } from './properties'
+import { LiveUpdates } from '@/components/live-updates'
 import { NotesPanel } from './notes-panel'
 import { CommentsPanel } from './comments-panel'
 import { AttachmentsPanel } from './attachments-panel'
@@ -100,6 +101,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           <Properties task={task} project={task.project} />
         </div>
       </div>
+      <LiveUpdates projectKey={task.project.key} />
     </div>
   )
 }

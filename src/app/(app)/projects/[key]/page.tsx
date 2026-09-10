@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { currentUser, getProject, listTasks } from '@/lib/data'
 import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
+import { LiveUpdates } from '@/components/live-updates'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,7 @@ const ProjectPage = async ({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ViewSwitch tasks={tasks} projectKey={project.key} />
       </div>
+      <LiveUpdates projectKey={project.key} />
     </div>
   )
 }
