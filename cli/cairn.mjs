@@ -331,7 +331,20 @@ const commands = {
 
   async show() {
     const ref = need(positional[0], 'usage: cairn show <ref>')
-    emit(await request('GET', `/api/v1/tasks/${ref}`))
+    // A digest by default: the answer in full, findings and decisions, a
+    // clipped body, and a note of what was withheld. `--full` for everything.
+    const suffix = flags.full ? '' : '?view=digest'
+    const data = await request('GET', `/api/v1/tasks/${ref}${suffix}`)
+    emit(data)
+    if (FORMAT === 'tsv' && data.omitted) {
+      const { descriptionBytes, attemptsAndNotes, tokensToFetchFull } = data.omitted
+      if (descriptionBytes || attemptsAndNotes) {
+        process.stderr.write(
+          `withheld: ${descriptionBytes}B of body, ${attemptsAndNotes} attempt/note(s)` +
+            ` — cairn show ${ref} --full is ~${tokensToFetchFull} tokens\n`,
+        )
+      }
+    }
   },
 
   async projects() {

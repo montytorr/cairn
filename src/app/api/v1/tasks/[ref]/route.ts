@@ -5,14 +5,21 @@ import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/supabase/admin'
 import { diffTaskEvents, recordActivity } from '@/lib/api/activity'
 import { findTask, resolveParent } from '@/lib/api/tasks'
+import { buildDigest } from '@/lib/api/digest'
 import { isTerminal, updateTaskSchema, RESOLUTION_KINDS } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
 
 export const GET = route<{ ref: string }>({
-  handler: async ({ actor, params }) => {
+  handler: async ({ actor, params, url }) => {
     const task = await findTask(actor, params.ref)
     if (!task) return fail('not_found', `No task ${params.ref}.`)
+
+    // `full` stays the default so nothing already calling this changes
+    // behaviour. The CLI asks for the digest explicitly.
+    if (url.searchParams.get('view') === 'digest') {
+      return ok(await buildDigest(task))
+    }
     return ok(task)
   },
 })

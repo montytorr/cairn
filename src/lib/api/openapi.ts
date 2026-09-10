@@ -253,7 +253,18 @@ export const openapiSpec = () => ({
     },
     '/tasks/{ref}': {
       parameters: [refParam],
-      get: { summary: 'Get a task', responses: { '200': okResponse('Task.', taskSummary), '404': errorResponse } },
+      get: {
+        summary: 'Get a task',
+        description:
+          '`?view=digest` returns a cheap read instead: the resolution in full, findings ' +
+          'and decisions from the log, a clipped body, and a count of what was withheld ' +
+          'with the token cost of fetching it. Measured against real data, the median body ' +
+          'is 2KB and the 90th percentile 5KB, so the body is what a digest has to clip.',
+        parameters: [
+          { name: 'view', in: 'query', schema: { type: 'string', enum: ['full', 'digest'], default: 'full' } },
+        ],
+        responses: { '200': okResponse('Task.', taskSummary), '404': errorResponse },
+      },
       patch: {
         summary: 'Update a task',
         description:

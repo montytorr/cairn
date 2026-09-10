@@ -36,7 +36,8 @@ answered.** If it returns `#0`, the subject is new.
 
 ```bash
 cairn check "flaky auth redirect"   # index. cheap.
-cairn show CAI-42                   # full body, only for what matters
+cairn show CAI-42                   # digest: the answer, findings, a clipped body
+cairn show CAI-42 --full            # everything, when the digest is not enough
 cairn note CAI-42 "..."             # act, and record it
 ```
 
