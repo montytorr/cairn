@@ -83,17 +83,29 @@ export const Properties = ({
 }) => {
   const router = useRouter()
   const [pendingClose, setPendingClose] = useState<TaskStatus | null>(null)
-  const [saving, setSaving] = useState(false)
+  // An optimistic overlay, stamped with the version of the task it was applied
+  // to. When the refresh lands `updated_at` moves on and the overlay stops
+  // matching, so it retires itself without an effect clearing state.
+  const [optimistic, setOptimistic] = useState<{
+    at: string
+    values: Partial<Pick<Task, 'status' | 'priority' | 'type'>>
+  } | null>(null)
+
+  const shown =
+    optimistic && optimistic.at === task.updated_at ? { ...task, ...optimistic.values } : task
 
   const patch = async (body: Record<string, unknown>) => {
-    setSaving(true)
+    // Applied before the request so the icon moves on click. On a loaded host
+    // the round trip is over a second, and waiting for it reads as a dropped
+    // click.
+    setOptimistic({ at: task.updated_at, values: body as Partial<Task> })
     const res = await fetch(`/api/v1/tasks/${task.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    setSaving(false)
     if (res.ok) router.refresh()
+    else setOptimistic(null)
     return res.ok
   }
 
@@ -111,19 +123,17 @@ export const Properties = ({
     <aside className="border-border flex w-[220px] shrink-0 flex-col gap-5 border-l px-4 py-5">
       <Section title="Properties">
         <SelectRow
-          value={task.status}
+          value={shown.status}
           options={TASK_STATUSES}
           labels={STATUS_LABEL}
-          icon={<StatusIcon status={task.status} />}
+          icon={<StatusIcon status={shown.status} />}
           onChange={onStatus}
-          disabled={saving}
         />
         <SelectRow
-          value={task.priority}
+          value={shown.priority}
           options={TASK_PRIORITIES}
-          icon={<PriorityIcon priority={task.priority} />}
+          icon={<PriorityIcon priority={shown.priority} />}
           onChange={(v: TaskPriority) => void patch({ priority: v })}
-          disabled={saving}
         />
         <div className="flex h-[28px] items-center gap-2 px-0">
           {task.claimed_by ? (
@@ -150,10 +160,9 @@ export const Properties = ({
 
       <Section title="Type">
         <div className="hover:bg-surface-hover relative -mx-1.5 flex h-[28px] items-center rounded-md px-1.5">
-          <TypePill type={task.type} />
+          <TypePill type={shown.type} />
           <select
-            value={task.type}
-            disabled={saving}
+            value={shown.type}
             onChange={(e) => void patch({ type: e.target.value as TaskType })}
             className="absolute inset-0 cursor-pointer opacity-0"
             aria-label="Type"

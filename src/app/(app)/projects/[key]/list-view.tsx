@@ -8,6 +8,7 @@ import { cn, isClaimStale } from '@/lib/utils'
 import { TASK_STATUSES, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
 import { NewTaskButton } from '@/components/task-creation'
+import { BulkBar } from './bulk-bar'
 
 /** A group is a status, or the synthetic bucket the Recent tab renders into. */
 type GroupKey = TaskStatus | 'recent'
@@ -32,17 +33,51 @@ const Row = ({
   task,
   projectKey,
   showProject,
+  selected,
+  selecting,
+  onToggle,
 }: {
   task: TaskListItem & { project_key?: string }
   projectKey: string
   showProject?: boolean
+  selected: boolean
+  selecting: boolean
+  onToggle: (id: string, shiftKey: boolean) => void
 }) => (
+  <div
+    className={cn(
+      'group flex h-[36px] items-center transition-colors duration-75',
+      selected ? 'bg-accent-subtle' : 'hover:bg-surface-hover',
+    )}
+  >
+    {/* Sibling of the link, not inside it: a checkbox nested in an anchor
+        needs event gymnastics and still breaks middle-click. */}
+    <label
+      className={cn(
+        'grid h-[36px] w-[26px] shrink-0 cursor-pointer place-items-center pl-3',
+        selected || selecting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+      )}
+      onClick={(e) => {
+        e.preventDefault()
+        onToggle(task.id, e.shiftKey)
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        readOnly
+        tabIndex={-1}
+        aria-label={`Select ${task.title}`}
+        className="accent-accent size-[13px] cursor-pointer"
+      />
+    </label>
+
   <Link
     href={`/projects/${task.project_key ?? projectKey}/tasks/${task.number}`}
     // A 300-row list is mostly out of view, so Next's viewport prefetch does
     // not help. Prefetching on hover is what makes the click feel instant.
     prefetch
-    className="group hover:bg-surface-hover flex h-[36px] items-center gap-2 pr-4 pl-3 transition-colors duration-75"
+    className="flex h-[36px] min-w-0 flex-1 items-center gap-2 pr-4"
   >
     <PriorityIcon priority={task.priority} />
 
@@ -103,6 +138,7 @@ const Row = ({
       {shortDate(task.updated_at)}
     </span>
   </Link>
+  </div>
 )
 
 export const ListView = ({
@@ -117,7 +153,10 @@ export const ListView = ({
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const filterRef = useRef<HTMLInputElement>(null)
+  // Anchor for shift-click range selection, in the order the rows are shown.
+  const lastPicked = useRef<string | null>(null)
 
   // Keyboard shortcuts, in the spirit of the tool this is modelled on.
   // Deliberately inert while a field has focus — "/" is a character before it
@@ -138,6 +177,7 @@ export const ListView = ({
         e.preventDefault()
         filterRef.current?.focus()
       }
+      if (e.key === 'Escape') setSelected(new Set())
       if (e.key === '1') setTab('active')
       if (e.key === '2') setTab('backlog')
       if (e.key === '3') setTab('all')
@@ -184,6 +224,30 @@ export const ListView = ({
       })).filter((g) => g.items.length > 0)
     )
   }, [filtered, tasks, tab])
+
+  // The rows in display order, which is what a shift-click range means.
+  const ordered = useMemo(() => groups.flatMap((g) => g.items.map((t) => t.id)), [groups])
+
+  const onToggle = (id: string, shiftKey: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      const anchor = lastPicked.current
+      if (shiftKey && anchor && anchor !== id) {
+        const from = ordered.indexOf(anchor)
+        const to = ordered.indexOf(id)
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from < to ? [from, to] : [to, from]
+          // A range always selects: mixed states make shift-click a coin toss.
+          for (const rowId of ordered.slice(lo, hi + 1)) next.add(rowId)
+          return next
+        }
+      }
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    lastPicked.current = id
+  }
 
   const toggle = (status: string) =>
     setCollapsed((prev) => {
@@ -263,7 +327,14 @@ export const ListView = ({
               <ul className="divide-border divide-y">
                 {group.items.map((task) => (
                   <li key={task.id}>
-                    <Row task={task} projectKey={projectKey} showProject={showProject} />
+                    <Row
+                      task={task}
+                      projectKey={projectKey}
+                      showProject={showProject}
+                      selected={selected.has(task.id)}
+                      selecting={selected.size > 0}
+                      onToggle={onToggle}
+                    />
                   </li>
                 ))}
               </ul>
@@ -271,6 +342,13 @@ export const ListView = ({
           </section>
         )
       })}
+
+      {selected.size > 0 && (
+        <BulkBar
+          ids={ordered.filter((id) => selected.has(id))}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
     </div>
   )
 }
