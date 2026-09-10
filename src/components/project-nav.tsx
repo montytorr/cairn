@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
+import { Inbox, Search } from 'lucide-react'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -21,8 +22,37 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
     return projects.filter((p) => `${p.key} ${p.title}`.toLowerCase().includes(q))
   }, [projects, query])
 
+  const links = [
+    { href: '/', label: 'All tasks', icon: Inbox },
+    { href: '/search', label: 'Search', icon: Search },
+  ]
+
   return (
     <nav className="flex min-h-0 flex-1 flex-col px-2">
+      <ul className="-mx-0.5 mb-2">
+        {links.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                className={cn(
+                  'flex h-[28px] items-center gap-2 rounded-md px-2 text-[13px] transition-colors duration-75',
+                  active
+                    ? 'bg-surface-raised text-fg'
+                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                )}
+              >
+                <Icon size={13} aria-hidden />
+                {label}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+
+      <span className="text-fg-subtle px-2 pb-1 text-[11px] font-medium">Projects</span>
+
       {projects.length > 8 && (
         <input
           value={query}

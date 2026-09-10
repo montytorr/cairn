@@ -1,9 +1,16 @@
+'use client'
+
+import Link from 'next/link'
+import { useMemo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import type { Components } from 'react-markdown'
+import type { PluggableList } from 'unified'
 import { cn } from '@/lib/utils'
 import { CodeBlock } from '@/components/code-block'
+import { useProjectKeys } from '@/components/project-keys'
+import { remarkTaskRefs } from '@/lib/markdown/task-refs'
 
 /**
  * A hand-rolled component map rather than a prose plugin, so every element
@@ -18,14 +25,33 @@ const components: Components = {
   ul: (p) => <ul className="mb-3 ml-4 list-disc space-y-1 text-sm last:mb-0" {...p} />,
   ol: (p) => <ol className="mb-3 ml-4 list-decimal space-y-1 text-sm last:mb-0" {...p} />,
   li: (p) => <li className="leading-relaxed" {...p} />,
-  a: (p) => (
-    <a
-      className="text-accent underline decoration-1 underline-offset-2"
-      target="_blank"
-      rel="noreferrer noopener"
-      {...p}
-    />
-  ),
+  a: ({ href, children, ...rest }) => {
+    // A linkified task ref is in-app navigation, not an outbound link: opening
+    // it in a new tab would make following a chain of references unbearable.
+    const taskRef = (rest as Record<string, unknown>)['data-task-ref']
+    if (typeof taskRef === 'string' && href) {
+      return (
+        <Link
+          href={href}
+          prefetch
+          className="text-accent decoration-1 underline-offset-2 hover:underline"
+        >
+          {children}
+        </Link>
+      )
+    }
+    return (
+      <a
+        href={href}
+        className="text-accent underline decoration-1 underline-offset-2"
+        target="_blank"
+        rel="noreferrer noopener"
+        {...rest}
+      >
+        {children}
+      </a>
+    )
+  },
   blockquote: (p) => (
     <blockquote className="border-border text-fg-muted mb-3 border-l-2 pl-3 text-sm italic" {...p} />
   ),
@@ -87,20 +113,30 @@ const components: Components = {
   ),
 }
 
-export const MarkdownView = ({ children }: { children: string }) => (
-  <div className="text-fg">
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      // detect: false — only highlight blocks that declare a language.
-      // Guessing on an unlabelled block colours prose and log output as if it
-      // were code, which is worse than leaving it plain.
-      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
-      components={components}
-    >
-      {children}
-    </Markdown>
-  </div>
-)
+export const MarkdownView = ({ children }: { children: string }) => {
+  const keys = useProjectKeys()
+  // react-markdown re-parses whenever the plugin array changes identity, so
+  // this must not be rebuilt on every render.
+  const remarkPlugins = useMemo<PluggableList>(
+    () => [remarkGfm, [remarkTaskRefs, { keys }]],
+    [keys],
+  )
+
+  return (
+    <div className="text-fg">
+      <Markdown
+        remarkPlugins={remarkPlugins}
+        // detect: false — only highlight blocks that declare a language.
+        // Guessing on an unlabelled block colours prose and log output as if it
+        // were code, which is worse than leaving it plain.
+        rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+        components={components}
+      >
+        {children}
+      </Markdown>
+    </div>
+  )
+}
 
 /**
  * Three-line clamped preview for cards and list rows. Renders the markdown

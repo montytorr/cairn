@@ -137,6 +137,24 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
             {searchable ? 'Nothing found — this subject looks new.' : 'Type to search.'}
           </Command.Empty>
 
+          {searchable && (
+            <Command.Group heading="Search" className={groupClass}>
+              <Command.Item
+                value={`__all__ ${query}`}
+                onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
+                className={itemClass}
+              >
+                <SearchIcon size={13} className="text-fg-subtle" />
+                <span className="min-w-0 flex-1 truncate">
+                  All results for <span className="text-fg-muted">{query.trim()}</span>
+                </span>
+                <span className="text-fg-subtle shrink-0 text-[10px]">
+                  filters, resolutions, shareable link
+                </span>
+              </Command.Item>
+            </Command.Group>
+          )}
+
           {visibleHits.length > 0 && (
             <Command.Group heading="Tasks" className={groupClass}>
               {visibleHits.map((hit) => {

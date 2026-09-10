@@ -8,6 +8,7 @@ import { ProjectNav } from '@/components/project-nav'
 import { Avatar } from '@/components/icons'
 import { TaskCreationProvider } from '@/components/task-creation'
 import { Shortcuts } from '@/components/shortcuts'
+import { ProjectKeysProvider } from '@/components/project-keys'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const user = await currentUser()
@@ -21,6 +22,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const projectList = projects.map((p) => ({ key: p.key, title: p.title }))
 
   return (
+    <ProjectKeysProvider keys={projectList.map((p) => p.key)}>
     <TaskCreationProvider projects={projectList}>
     <div className="bg-bg flex h-dvh">
       <aside className="border-border bg-bg-elevated hidden w-[220px] shrink-0 flex-col border-r md:flex">
@@ -54,6 +56,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
       <Shortcuts />
     </div>
     </TaskCreationProvider>
+    </ProjectKeysProvider>
   )
 }
 
