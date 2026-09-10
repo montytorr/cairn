@@ -4,11 +4,22 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Plus } from 'lucide-react'
 import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
-import { cn, isClaimStale } from '@/lib/utils'
-import { TASK_STATUSES, type TaskStatus } from '@/schemas/task'
+import { cn } from '@/lib/utils'
+import { useRenderedClaimStale } from '@/lib/use-mounted'
+import { fullDateTime, shortDate } from '@/lib/dates'
+import {
+  TASK_PRIORITIES,
+  TASK_STATUSES,
+  TASK_TYPES,
+  type TaskPriority,
+  type TaskStatus,
+  type TaskType,
+} from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
 import { NewTaskButton } from '@/components/task-creation'
 import { BulkBar } from './bulk-bar'
+import { QuickSelect, useQuickPatch } from './quick-edit'
+import { LabelEditor } from './label-editor'
 
 /** A group is a status, or the synthetic bucket the Recent tab renders into. */
 type GroupKey = TaskStatus | 'recent'
@@ -25,9 +36,14 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 
 type Tab = 'active' | 'backlog' | 'all' | 'recent' | 'held'
 
-/** `Sep 10` — Linear shows a short date, never a timestamp, in a list. */
-const shortDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  backlog: 'Backlog',
+  todo: 'Todo',
+  doing: 'In Progress',
+  'in-review': 'In Review',
+  done: 'Done',
+  cancelled: 'Cancelled',
+}
 
 const Row = ({
   task,
@@ -36,6 +52,8 @@ const Row = ({
   selected,
   selecting,
   onToggle,
+  knownLabels,
+  projects,
 }: {
   task: TaskListItem & { project_key?: string }
   projectKey: string
@@ -43,117 +61,202 @@ const Row = ({
   selected: boolean
   selecting: boolean
   onToggle: (id: string, shiftKey: boolean) => void
-}) => (
-  <div
-    className={cn(
-      'group flex h-[36px] items-center transition-colors duration-75',
-      selected ? 'bg-accent-subtle' : 'hover:bg-surface-hover',
-    )}
-  >
-    {/* Sibling of the link, not inside it: a checkbox nested in an anchor
-        needs event gymnastics and still breaks middle-click. */}
-    <label
+  knownLabels: string[]
+  projects: { key: string; title: string }[]
+}) => {
+  const stale = useRenderedClaimStale(task.heartbeat_at)
+  const ownKey = task.project_key ?? projectKey
+  const ref = `${ownKey}-${task.number}`
+  const { patch, overlay, error, clearError } = useQuickPatch(ref, task.updated_at)
+
+  // The optimistic overlay wins until the refreshed row arrives.
+  const status = (overlay?.status as TaskStatus) ?? task.status
+  const priority = (overlay?.priority as TaskPriority) ?? task.priority
+  const type = (overlay?.type as TaskType) ?? task.type
+  const labels = (overlay?.labels as string[]) ?? task.labels
+
+  return (
+    <div
       className={cn(
-        'grid h-[36px] w-[26px] shrink-0 cursor-pointer place-items-center pl-3',
-        selected || selecting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        'group relative flex h-[36px] items-center transition-colors duration-75',
+        selected ? 'bg-accent-subtle' : 'hover:bg-surface-hover',
       )}
-      onClick={(e) => {
-        e.preventDefault()
-        onToggle(task.id, e.shiftKey)
-      }}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        readOnly
-        tabIndex={-1}
-        aria-label={`Select ${task.title}`}
-        className="accent-accent size-[13px] cursor-pointer"
+      {/* The whole row navigates, but the badges on it are controls. An
+          absolute link underneath, with the controls raised above it, is what
+          lets both be true — and keeps middle-click and cmd-click working. */}
+      <Link
+        href={`/projects/${ownKey}/tasks/${task.number}`}
+        // A 300-row list is mostly out of view, so Next's viewport prefetch
+        // does not help. Prefetching on hover is what makes the click instant.
+        prefetch
+        aria-label={task.title}
+        className="absolute inset-0 z-0"
       />
-    </label>
 
-  <Link
-    href={`/projects/${task.project_key ?? projectKey}/tasks/${task.number}`}
-    // A 300-row list is mostly out of view, so Next's viewport prefetch does
-    // not help. Prefetching on hover is what makes the click feel instant.
-    prefetch
-    className="flex h-[36px] min-w-0 flex-1 items-center gap-2 pr-4"
-  >
-    <PriorityIcon priority={task.priority} />
-
-    <code className="text-fg-subtle w-[72px] shrink-0 truncate text-[12px] tabular">
-      {task.external_ref ?? `${task.project_key ?? projectKey}-${task.number}`}
-    </code>
-
-    <StatusIcon status={task.status} />
-
-    <span className="text-fg min-w-0 flex-1 truncate text-[13px]">{task.title}</span>
-
-    {task.blocked_reason ? (
-      <span
-        className="text-danger shrink-0 text-[11px]"
-        title={`Blocked: ${task.blocked_reason}`}
+      <label
+        className={cn(
+          'relative z-10 grid h-[36px] w-[26px] shrink-0 cursor-pointer place-items-center pl-3',
+          selected || selecting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
+        onClick={(e) => {
+          e.preventDefault()
+          onToggle(task.id, e.shiftKey)
+        }}
       >
-        blocked
-      </span>
-    ) : null}
+        <input
+          type="checkbox"
+          checked={selected}
+          readOnly
+          tabIndex={-1}
+          aria-label={`Select ${task.title}`}
+          className="accent-accent size-[13px] cursor-pointer"
+        />
+      </label>
 
-    {task.has_resolution ? (
-      <span
-        className="bg-status-done size-[6px] shrink-0 rounded-full"
-        title="Has a recorded resolution"
-      />
-    ) : null}
+      <div className="pointer-events-none flex h-[36px] min-w-0 flex-1 items-center gap-2 pr-3 md:pr-4">
+        <QuickSelect
+          value={priority}
+          options={TASK_PRIORITIES}
+          title={`Priority: ${priority}`}
+          onChange={(next) => void patch({ priority: next })}
+          className="pointer-events-auto"
+        >
+          <PriorityIcon priority={priority} />
+        </QuickSelect>
 
-    {showProject ? (
-      <span className="text-fg-muted hidden shrink-0 items-center gap-1.5 text-[12px] md:flex">
-        <ProjectIcon size={12} projectKey={task.project_key} />
-        {task.project_key}
-      </span>
-    ) : null}
+        <code className="text-fg-subtle w-[62px] shrink-0 truncate text-[12px] tabular md:w-[72px]">
+          {task.external_ref ?? ref}
+        </code>
 
-    <span className="hidden shrink-0 items-center gap-1.5 lg:flex">
-      {task.labels.slice(0, 2).map((l) => (
-        <LabelPill key={l}>{l}</LabelPill>
-      ))}
-      <TypePill type={task.type} />
-    </span>
+        <QuickSelect
+          value={status}
+          options={TASK_STATUSES}
+          labels={STATUS_LABEL}
+          title={`Status: ${STATUS_LABEL[status]}`}
+          onChange={(next) => void patch({ status: next })}
+          className="pointer-events-auto"
+        >
+          <StatusIcon status={status} />
+        </QuickSelect>
 
-    {task.claimed_by ? (
-      <span
-        className={cn('shrink-0', isClaimStale(task.heartbeat_at) && 'opacity-40')}
-        title={
-          isClaimStale(task.heartbeat_at)
-            ? `${task.claimed_by} holds this but has gone quiet`
-            : `Held by ${task.claimed_by}`
-        }
-      >
-        <Avatar name={task.claimed_by} size={18} />
-      </span>
-    ) : (
-      <span className="border-border hidden size-[18px] shrink-0 rounded-full border border-dashed sm:block" />
-    )}
+        <span className="text-fg min-w-0 flex-1 truncate text-[13px]">{task.title}</span>
 
-    <span className="text-fg-subtle tabular hidden w-[46px] shrink-0 text-right text-[12px] md:block">
-      {shortDate(task.updated_at)}
-    </span>
-  </Link>
-  </div>
-)
+        {error ? (
+          <button
+            type="button"
+            onClick={clearError}
+            title={error}
+            className="text-danger pointer-events-auto shrink-0 text-[11px]"
+          >
+            refused
+          </button>
+        ) : null}
+
+        {task.blocked_reason ? (
+          <span
+            className="text-danger shrink-0 text-[11px]"
+            title={`Blocked: ${task.blocked_reason}`}
+          >
+            blocked
+          </span>
+        ) : null}
+
+        {task.has_resolution ? (
+          <span
+            className="bg-status-done size-[6px] shrink-0 rounded-full"
+            title="Has a recorded resolution"
+          />
+        ) : null}
+
+        {showProject && projects.length > 0 ? (
+          <QuickSelect
+            value={ownKey}
+            options={projects.map((p) => p.key)}
+            labels={Object.fromEntries(projects.map((p) => [p.key, p.title]))}
+            title={`Project: ${ownKey} — moving renumbers the task`}
+            onChange={(next) => void patch({ project: next })}
+            className="text-fg-muted pointer-events-auto hidden items-center gap-1.5 text-[12px] md:inline-flex"
+          >
+            <ProjectIcon size={12} projectKey={ownKey} />
+            {ownKey}
+          </QuickSelect>
+        ) : null}
+
+        <span className="hidden shrink-0 items-center gap-1.5 lg:flex">
+          <LabelEditor
+            taskRef={ref}
+            labels={labels}
+            known={knownLabels}
+            onChange={(next) => void patch({ labels: next })}
+          />
+          <QuickSelect
+            value={type}
+            options={TASK_TYPES}
+            title={`Type: ${type}`}
+            onChange={(next) => void patch({ type: next })}
+            className="pointer-events-auto"
+          >
+            <TypePill type={type} />
+          </QuickSelect>
+        </span>
+
+        {task.claimed_by ? (
+          <span
+            className={cn('shrink-0', stale && 'opacity-40')}
+            title={
+              stale
+                ? `${task.claimed_by} holds this but has gone quiet`
+                : `Held by ${task.claimed_by}`
+            }
+          >
+            <Avatar name={task.claimed_by} size={18} />
+          </span>
+        ) : (
+          <span className="border-border hidden size-[18px] shrink-0 rounded-full border border-dashed sm:block" />
+        )}
+
+        <time
+          dateTime={task.updated_at}
+          title={fullDateTime(task.updated_at)}
+          className="text-fg-subtle tabular hidden w-[46px] shrink-0 text-right text-[12px] md:block"
+        >
+          {shortDate(task.updated_at)}
+        </time>
+      </div>
+    </div>
+  )
+}
 
 export const ListView = ({
   tasks,
   projectKey,
   showProject,
+  projects = [],
 }: {
   tasks: (TaskListItem & { project_key?: string })[]
   projectKey: string
   showProject?: boolean
+  /** Offered when a row shows its project, so it can be moved from the list. */
+  projects?: { key: string; title: string }[]
 }) => {
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [knownLabels, setKnownLabels] = useState<string[]>([])
+
+  // Fetched once for the whole list. Offering what already exists is what
+  // keeps a fourth spelling of "database" from appearing.
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch('/api/v1/labels')
+      if (!res.ok) return
+      const json = await res.json().catch(() => null)
+      setKnownLabels(((json?.data ?? []) as { label: string }[]).map((l) => l.label))
+    }
+    void load()
+  }, [])
   const filterRef = useRef<HTMLInputElement>(null)
   // Anchor for shift-click range selection, in the order the rows are shown.
   const lastPicked = useRef<string | null>(null)
@@ -334,6 +437,8 @@ export const ListView = ({
                       selected={selected.has(task.id)}
                       selecting={selected.size > 0}
                       onToggle={onToggle}
+                      knownLabels={knownLabels}
+                      projects={projects}
                     />
                   </li>
                 ))}

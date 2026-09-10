@@ -12,7 +12,13 @@ import { Inbox, Search } from 'lucide-react'
  * Client-side only — the set is small and already in memory, and a round trip
  * per keystroke would be absurd.
  */
-export const ProjectNav = ({ projects }: { projects: { key: string; title: string }[] }) => {
+export const ProjectNav = ({
+  projects,
+  onNavigate,
+}: {
+  projects: { key: string; title: string }[]
+  onNavigate?: () => void
+}) => {
   const pathname = usePathname()
   const [query, setQuery] = useState('')
 
@@ -36,6 +42,7 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
             <li key={href}>
               <Link
                 href={href}
+                onClick={onNavigate}
                 className={cn(
                   'flex h-[28px] items-center gap-2 rounded-md px-2 text-[13px] transition-colors duration-75',
                   active
@@ -73,6 +80,7 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
             <li key={p.key}>
               <Link
                 href={href}
+                onClick={onNavigate}
                 className={cn(
                   'group flex h-[28px] items-center gap-2 rounded-md px-2 transition-colors duration-75',
                   active

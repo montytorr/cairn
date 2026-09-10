@@ -6,6 +6,7 @@ import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectMenu } from './project-menu'
+import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,28 +32,34 @@ const ProjectPage = async ({
     <div className="flex h-dvh flex-col">
       {/* Breadcrumb bar — fixed height, so the list below always starts in
           the same place regardless of project name length. */}
-      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-4">
-        <Link href="/" className="text-fg-muted hover:text-fg text-[13px] transition-colors">
+      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-2.5 md:px-4">
+        <MobileNavButton />
+        {/* The leading crumbs are the first thing to go on a phone: the project
+            name is already the page title, and the sidebar is a tap away. */}
+        <Link
+          href="/"
+          className="text-fg-muted hover:text-fg hidden text-[13px] transition-colors sm:block"
+        >
           Cairn
         </Link>
-        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
-        <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">
+        <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
+        <span className="text-fg-muted flex min-w-0 items-center gap-1.5 text-[13px]">
           <ProjectIcon size={13} projectKey={project.key} />
-          {project.title}
+          <span className="truncate">{project.title}</span>
         </span>
-        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
-        <span className="text-fg text-[13px]">Tasks</span>
+        <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
+        <span className="text-fg hidden text-[13px] sm:block">Tasks</span>
         {project.status === 'archived' && (
           <span className="border-border text-fg-subtle ml-1 rounded border px-1.5 py-px text-[10px] uppercase tracking-wide">
             Archived
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
           {closedHidden > 0 || includeClosed ? (
             <Link
               href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
-              className="text-fg-subtle hover:text-fg text-[12px] transition-colors"
+              className="text-fg-subtle hover:text-fg whitespace-nowrap text-[12px] transition-colors"
             >
               {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
             </Link>

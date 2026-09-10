@@ -17,3 +17,4 @@ export const isClaimStale = (heartbeatAt: string | null | undefined): boolean =>
   if (!heartbeatAt) return false
   return Date.now() - new Date(heartbeatAt).getTime() > CLAIM_LEASE_SECONDS * 1000
 }
+

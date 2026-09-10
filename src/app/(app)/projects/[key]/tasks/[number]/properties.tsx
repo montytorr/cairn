@@ -14,7 +14,8 @@ import {
   type TaskStatus,
   type TaskType,
 } from '@/schemas/task'
-import { cn, isClaimStale } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { useRenderedClaimStale } from '@/lib/use-mounted'
 import type { Task, Project, Relation } from '@/lib/data'
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -26,8 +27,16 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="flex flex-col gap-1.5">
+const Section = ({
+  title,
+  children,
+  className,
+}: {
+  title: string
+  children: React.ReactNode
+  className?: string
+}) => (
+  <div className={cn('flex flex-col gap-1.5', className)}>
     <span className="text-fg-subtle text-[11px] font-medium">{title}</span>
     {children}
   </div>
@@ -82,6 +91,7 @@ export const Properties = ({
   relations?: Relation[]
 }) => {
   const router = useRouter()
+  const stale = useRenderedClaimStale(task.heartbeat_at)
   const [pendingClose, setPendingClose] = useState<TaskStatus | null>(null)
   // An optimistic overlay, stamped with the version of the task it was applied
   // to. When the refresh lands `updated_at` moves on and the overlay stops
@@ -120,7 +130,9 @@ export const Properties = ({
   }
 
   return (
-    <aside className="border-border flex w-[220px] shrink-0 flex-col gap-5 border-l px-4 py-5">
+    <aside
+      className="border-border flex shrink-0 flex-row flex-wrap gap-x-5 gap-y-3 border-b px-4 py-3 lg:w-[220px] lg:flex-col lg:gap-5 lg:border-b-0 lg:border-l lg:px-4 lg:py-5"
+    >
       <Section title="Properties">
         <SelectRow
           value={shown.status}
@@ -142,11 +154,11 @@ export const Properties = ({
               <span
                 className={cn(
                   'text-[13px]',
-                  isClaimStale(task.heartbeat_at) ? 'text-fg-subtle' : 'text-fg',
+                  stale ? 'text-fg-subtle' : 'text-fg',
                 )}
               >
                 {task.claimed_by}
-                {isClaimStale(task.heartbeat_at) ? ' · stale' : ''}
+                {stale ? ' · stale' : ''}
               </span>
             </>
           ) : (
@@ -186,21 +198,23 @@ export const Properties = ({
 
       <DependencyEditor taskRef={`${project.key}-${task.number}`} relations={relations} />
 
+      <div className="hidden lg:block">
       <Section title="Project">
         <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">
           <ProjectIcon size={13} projectKey={project.key} />
           {project.title}
         </span>
       </Section>
+      </div>
 
       {task.external_ref && (
-        <Section title="Imported from">
+        <Section title="Imported from" className="hidden lg:flex">
           <code className="text-fg-subtle text-[12px]">{task.external_ref}</code>
         </Section>
       )}
 
       {task.attempt > 1 && (
-        <Section title="Attempts">
+        <Section title="Attempts" className="hidden lg:flex">
           <span className="text-fg-muted tabular text-[13px]">
             {task.attempt} claims
             <span className="text-fg-subtle"> — may be thrashing</span>

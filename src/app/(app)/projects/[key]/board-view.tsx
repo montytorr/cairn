@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { MarkdownPreview } from '@/components/markdown'
 import { Avatar, LabelPill, PriorityIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
-import { cn, isClaimStale } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type ResolutionKind, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
 

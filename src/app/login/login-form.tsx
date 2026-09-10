@@ -1,10 +1,11 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useSupabaseConfig } from '@/components/supabase-provider'
 import { Button, Input } from '@/components/ui/control'
+import { Spinner } from '@/components/spinner'
 
 /**
  * `?redirect=` comes from the URL bar, so it is attacker-controlled. Only a
@@ -24,13 +25,18 @@ export const LoginForm = () => {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  // The sign-in call is quick; rendering the first page is not. Without this
+  // the button reverted to "Sign in" the instant the token arrived and then
+  // nothing moved for a second or two, which reads exactly as broken.
+  const [navigating, startNavigation] = useTransition()
+  const busy = pending || navigating
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setPending(true)
     setError(null)
 
-    // Everything is inside try/finally so a thrown error surfaces instead of
+    // Everything is inside try/catch so a thrown error surfaces instead of
     // leaving the button stuck on "Signing in…" forever — which is exactly
     // how the build-time-env bug presented, and made it far harder to read
     // than it needed to be.
@@ -43,14 +49,18 @@ export const LoginForm = () => {
 
       if (signInError) {
         setError(signInError.message)
+        setPending(false)
         return
       }
 
-      router.replace(safeRedirect(params.get('redirect')))
-      router.refresh()
+      // Deliberately no setPending(false) on this path: the form stays busy
+      // until the destination has actually rendered.
+      startNavigation(() => {
+        router.replace(safeRedirect(params.get('redirect')))
+        router.refresh()
+      })
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : 'Sign-in failed.')
-    } finally {
       setPending(false)
     }
   }
@@ -70,6 +80,7 @@ export const LoginForm = () => {
               type="email"
               required
               autoComplete="username"
+              disabled={busy}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -81,6 +92,7 @@ export const LoginForm = () => {
               type="password"
               required
               autoComplete="current-password"
+              disabled={busy}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -103,10 +115,17 @@ export const LoginForm = () => {
           <Button
             type="submit"
             variant="primary"
-            disabled={pending || !configured}
+            disabled={busy || !configured}
             className="mt-2"
           >
-            {pending ? 'Signing in…' : 'Sign in'}
+            {busy ? (
+              <span className="inline-flex items-center gap-2">
+                <Spinner />
+                {navigating ? 'Loading your tasks…' : 'Signing in…'}
+              </span>
+            ) : (
+              'Sign in'
+            )}
           </Button>
         </form>
 

@@ -1,11 +1,14 @@
 'use client'
 
+import { RelativeTime } from '@/components/relative-time'
+
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
 import { Button, Select, Textarea } from '@/components/ui/control'
+import { Spinner } from '@/components/spinner'
 import type { Note } from '@/lib/data'
 
 const KIND_STYLE: Record<string, string> = {
@@ -15,6 +18,32 @@ const KIND_STYLE: Record<string, string> = {
   handoff: 'text-priority-high',
   note: 'text-fg-subtle',
 }
+
+/**
+ * The rail marker. Filled for the latest entry, hollow for the rest — so the
+ * eye lands on where the work got to without reading a single date.
+ */
+const RailMarker = ({
+  ordinal,
+  latest,
+  kind,
+}: {
+  ordinal: number
+  latest: boolean
+  kind: string
+}) => (
+  <span
+    className={cn(
+      'tabular relative z-10 grid size-[22px] shrink-0 place-items-center rounded-full border text-[10px] font-medium',
+      latest
+        ? 'border-accent bg-accent-subtle text-accent'
+        : 'border-border bg-bg text-fg-subtle',
+    )}
+    title={kind}
+  >
+    {latest ? <span className="bg-accent size-[7px] rounded-full" /> : ordinal}
+  </span>
+)
 
 /**
  * The work log, rendered dense and collapsed by default. This is the debugging
@@ -63,7 +92,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
         <span className="tabular text-fg-subtle">{notes.length}</span>
       </h2>
 
-      <div className="mb-3 flex gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Textarea
           rows={2}
           value={text}
@@ -74,12 +103,13 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
           placeholder="What did you try, find, or decide? Dead ends count."
           className="min-w-0 flex-1"
         />
-        <div className="flex w-28 shrink-0 flex-col gap-1.5">
+        <div className="flex shrink-0 gap-1.5 sm:w-28 sm:flex-col">
           <Select
             size="sm"
             value={kind}
             onChange={(e) => setKind(e.target.value as NoteKind)}
             aria-label="Note kind"
+            className="flex-1 sm:flex-none"
           >
             {NOTE_KINDS.map((k) => (
               <option key={k} value={k}>{k}</option>
@@ -90,61 +120,91 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
             variant="primary"
             onClick={submit}
             disabled={!text.trim() || pending}
+            className="flex-1 sm:flex-none"
           >
-            {pending ? '…' : 'Add note'}
+            {pending ? <Spinner /> : 'Add note'}
           </Button>
         </div>
       </div>
 
       {notes.length === 0 ? (
-        <p className="text-fg-subtle text-xs">
+        <p className="text-fg-subtle border-border rounded-md border border-dashed px-3 py-4 text-center text-[12px]">
           Nothing logged yet. Dead ends are worth recording too.
         </p>
       ) : (
-        <ul className="divide-border border-border divide-y overflow-hidden rounded-md border">
-          {notes.map((note) => {
+        <ol className="relative flex flex-col">
+          {/* One continuous line behind the markers, rather than a border per
+              row — a divided list of boxes reads as a table, and this is a
+              sequence. */}
+          <span
+            className="bg-border absolute top-[11px] bottom-[11px] left-[10.5px] w-px"
+            aria-hidden
+          />
+
+          {notes.map((note, index) => {
             const isOpen = expanded === note.id
-            const long = note.note.length > 140
+            const long = note.note.length > 180
+            // Numbered chronologically so an entry keeps its number as new
+            // ones arrive; the list itself stays newest-first for scanning.
+            const ordinal = notes.length - index
             return (
-              <li key={note.id} className="px-3 py-2">
-                <div className="mb-1 flex items-center gap-2 text-[11px]">
-                  <span className={cn('font-medium', KIND_STYLE[note.kind] ?? 'text-fg-subtle')}>
-                    {note.kind}
-                  </span>
-                  <span className={note.actor_type === 'agent' ? 'text-accent' : 'text-fg-subtle'}>
-                    {note.actor_type === 'agent' ? note.actor_id : 'you'}
-                  </span>
-                  <span className="text-fg-subtle tabular ml-auto">
-                    {note.created_at.slice(0, 16).replace('T', ' ')}
-                  </span>
-                </div>
+              <li key={note.id} className="group/note flex gap-2.5 pb-3.5 last:pb-0">
+                <RailMarker ordinal={ordinal} latest={index === 0} kind={note.kind} />
 
-                <div className={cn(!isOpen && long && 'line-clamp-2')}>
-                  <MarkdownView>{note.note}</MarkdownView>
-                </div>
+                <div className="min-w-0 flex-1 pt-[2px]">
+                  <div className="flex items-baseline gap-2 text-[11px]">
+                    <span
+                      className={cn('font-medium', KIND_STYLE[note.kind] ?? 'text-fg-subtle')}
+                    >
+                      {note.kind}
+                    </span>
+                    <span
+                      className={note.actor_type === 'agent' ? 'text-accent' : 'text-fg-subtle'}
+                    >
+                      {note.actor_type === 'agent' ? note.actor_id : 'you'}
+                    </span>
+                    <RelativeTime
+                      iso={note.created_at}
+                      className="text-fg-subtle tabular ml-auto shrink-0"
+                    />
+                  </div>
 
-                {long && (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(isOpen ? null : note.id)}
-                    className="text-fg-subtle hover:text-fg mt-1 text-[11px]"
+                  <div
+                    className={cn(
+                      'mt-0.5 text-[13px]',
+                      !isOpen && long && 'line-clamp-3',
+                    )}
                   >
-                    {isOpen ? 'less' : 'more'}
-                  </button>
-                )}
+                    <MarkdownView>{note.note}</MarkdownView>
+                  </div>
 
-                {note.facts && note.facts.length > 0 && (
-                  <ul className="text-fg-muted mt-1.5 ml-3 list-disc text-[12px]">
-                    {note.facts.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                )}
+                  {long && (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : note.id)}
+                      className="text-fg-subtle hover:text-fg mt-0.5 text-[11px] transition-colors"
+                    >
+                      {isOpen ? 'Show less' : 'Show more'}
+                    </button>
+                  )}
+
+                  {note.facts && note.facts.length > 0 && (
+                    <ul className="text-fg-muted mt-1.5 flex flex-col gap-0.5 text-[12px]">
+                      {note.facts.map((f) => (
+                        <li key={f} className="flex gap-1.5">
+                          <span className="text-fg-subtle select-none">·</span>
+                          <span className="min-w-0">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </li>
             )
           })}
-        </ul>
+        </ol>
       )}
+
     </section>
   )
 }

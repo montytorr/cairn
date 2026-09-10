@@ -16,6 +16,7 @@ import { CommentsPanel } from './comments-panel'
 import { AttachmentsPanel } from './attachments-panel'
 import { ActivityPanel } from './activity-panel'
 import { ChildrenPanel } from './children-panel'
+import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,39 +47,45 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-4">
-        <Link href="/" className="text-fg-muted hover:text-fg text-[13px] transition-colors">
+      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-2.5 md:px-4">
+        <MobileNavButton />
+        <Link
+          href="/"
+          className="text-fg-muted hover:text-fg hidden text-[13px] transition-colors lg:block"
+        >
           Cairn
         </Link>
-        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        <ChevronRight size={13} className="text-fg-subtle hidden lg:block" aria-hidden />
         <Link
           href={`/projects/${task.project.key}`}
-          className="text-fg-muted hover:text-fg flex items-center gap-1.5 text-[13px] transition-colors"
+          className="text-fg-muted hover:text-fg flex min-w-0 shrink items-center gap-1.5 text-[13px] transition-colors"
         >
           <ProjectIcon size={13} projectKey={task.project.key} />
-          {task.project.title}
+          <span className="truncate">{task.project.title}</span>
         </Link>
-        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        <ChevronRight size={13} className="text-fg-subtle hidden shrink-0 sm:block" aria-hidden />
         {parent ? (
           <>
             <Link
               href={`/projects/${parent.ref.slice(0, parent.ref.lastIndexOf('-'))}/tasks/${parent.ref.slice(parent.ref.lastIndexOf('-') + 1)}`}
               prefetch
-              className="text-fg-muted hover:text-fg max-w-[22ch] truncate text-[13px] transition-colors"
+              className="text-fg-muted hover:text-fg hidden max-w-[22ch] truncate text-[13px] transition-colors sm:block"
               title={parent.title}
             >
               {parent.title}
             </Link>
-            <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+            <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
           </>
         ) : null}
-        <span className="text-fg-subtle text-[13px] tabular">{ref}</span>
-        <span className="text-fg max-w-[38ch] truncate text-[13px]">{task.title}</span>
+        <span className="text-fg-subtle shrink-0 text-[13px] tabular">{ref}</span>
+        <span className="text-fg hidden max-w-[38ch] truncate text-[13px] sm:block">
+          {task.title}
+        </span>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[720px] px-8 py-8">
+          <div className="mx-auto max-w-[760px] px-4 py-6 sm:px-6 lg:px-8">
             <EditableTitle taskId={task.id} initial={task.title} />
 
             {/* First thing on the page when it applies: a reader who opens a

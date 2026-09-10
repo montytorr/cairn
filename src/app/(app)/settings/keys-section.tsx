@@ -1,5 +1,7 @@
 'use client'
 
+import { RelativeTime } from '@/components/relative-time'
+
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Check, Copy, KeyRound } from 'lucide-react'
@@ -18,15 +20,6 @@ export type KeyRow = {
 
 /** The three agents Cairn is built for, plus an escape hatch. */
 const AGENTS = ['claude-code', 'codex', 'openclaw', 'cli'] as const
-
-const ago = (iso: string | null) => {
-  if (!iso) return 'never'
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return `${Math.floor(seconds / 86400)}d ago`
-}
 
 export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
   const router = useRouter()
@@ -131,7 +124,7 @@ export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
                 )}
                 title={k.last_used_at ?? 'never used'}
               >
-                {ago(k.last_used_at)}
+                {k.last_used_at ? <RelativeTime iso={k.last_used_at} /> : 'never'}
               </span>
               <button
                 type="button"
@@ -187,7 +180,9 @@ export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
               <li key={k.id} className="flex gap-2">
                 <span className="w-24 truncate line-through">{k.agent_name}</span>
                 <code className="font-mono text-[10.5px]">{k.key_prefix}…</code>
-                <span className="ml-auto">revoked {ago(k.revoked_at)}</span>
+                <span className="ml-auto">
+                  revoked {k.revoked_at ? <RelativeTime iso={k.revoked_at} /> : ''}
+                </span>
               </li>
             ))}
           </ul>

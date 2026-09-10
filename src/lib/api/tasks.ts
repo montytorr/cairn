@@ -3,7 +3,7 @@ import type { Actor } from './auth'
 
 /** Columns returned by `show`. Kept explicit so responses stay predictable. */
 export const TASK_FIELDS =
-  'id, number, title, description, type, status, priority, labels, due_date, position, ' +
+  'id, project_id, number, title, description, type, status, priority, labels, due_date, position, ' +
   'actor_type, actor_id, claimed_by, claimed_at, heartbeat_at, attempt, ' +
   'checkpoint_summary, checkpoint_payload, checkpoint_at, blocked_reason, blocked_at, ' +
   'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, parent_id, ' +

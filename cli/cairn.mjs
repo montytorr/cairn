@@ -212,6 +212,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
   write
     cairn add "<title>" --project K [--type bug] [--priority high] [--body -]
     cairn update <ref> [--title T] [--status S] [--type T] [--priority P]
+    cairn update <ref> --project OTHER      moves it; the ref changes
     cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
     cairn comment <ref> "<text>"
     cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
@@ -403,6 +404,8 @@ const commands = {
     if (flags.kind) body.resolutionKind = flags.kind
     if (flags.parent) body.parentRef = flags.parent
     if (flags['no-parent']) body.parentRef = null
+    // Moving renumbers the task, so the response reports the new ref.
+    if (flags.project) body.project = flags.project
     if (flags['duplicate-of']) {
       body.duplicateOf = flags['duplicate-of']
       body.resolutionKind = 'duplicate'

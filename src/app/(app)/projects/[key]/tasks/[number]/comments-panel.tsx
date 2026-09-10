@@ -1,5 +1,7 @@
 'use client'
 
+import { RelativeTime } from '@/components/relative-time'
+
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
@@ -55,7 +57,7 @@ export const CommentsPanel = ({
                   {c.actor_type === 'agent' ? c.actor_id : 'you'}
                 </span>
                 <span className="text-fg-subtle tabular">
-                  {c.created_at.slice(0, 16).replace('T', ' ')}
+                  <RelativeTime iso={c.created_at} />
                 </span>
               </div>
               <MarkdownView>{c.content}</MarkdownView>

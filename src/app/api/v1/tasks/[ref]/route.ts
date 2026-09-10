@@ -10,6 +10,16 @@ import { isTerminal, updateTaskSchema, RESOLUTION_KINDS } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * PostgREST rejects a malformed uuid in an `or` filter outright, so a project
+ * *key* would break the lookup. Substituting a nil uuid keeps the clause
+ * well-formed and simply never matches.
+ */
+const UUID_OR_NULL = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : '00000000-0000-0000-0000-000000000000'
+
 export const GET = route<{ ref: string }>({
   handler: async ({ actor, params, url }) => {
     const task = await findTask(actor, params.ref)
@@ -122,7 +132,44 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       patch.heartbeat_at = null
     }
 
+    // Moving happens before the field update so a failure here does not leave
+    // half a change applied. It is its own operation, not a column: the
+    // number comes from the target project's counter.
+    let moved: { ref: string; from: string } | null = null
+    if (body.project) {
+      const { data: target } = await admin()
+        .from('projects')
+        .select('id, key')
+        .eq('owner_user_id', actor.userId)
+        .or(`key.eq.${body.project.toUpperCase()},id.eq.${UUID_OR_NULL(body.project)}`)
+        .maybeSingle()
+
+      if (!target) return fail('not_found', `No project ${body.project}.`)
+
+      const current = task.project as { key?: string } | { key?: string }[] | undefined
+      const from = (Array.isArray(current) ? current[0] : current)?.key ?? ''
+
+      if (target.id !== (task.project_id ?? null) && from !== target.key) {
+        const { data: result, error: moveError } = await admin().rpc('move_task', {
+          p_owner: actor.userId,
+          p_task: task.id,
+          p_project: target.id,
+        })
+        if (moveError) return fail('internal_error', moveError.message)
+        const row = (result as { number: number; project_key: string }[] | null)?.[0]
+        if (row) moved = { ref: `${row.project_key}-${row.number}`, from }
+      }
+    }
+
     if (Object.keys(patch).length === 0) {
+      if (moved) {
+        return ok({
+          ...task,
+          ref: moved.ref,
+          moved,
+          note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; anything referring to the old one is now stale.`,
+        })
+      }
       return fail('validation_failed', 'No fields to update.')
     }
 

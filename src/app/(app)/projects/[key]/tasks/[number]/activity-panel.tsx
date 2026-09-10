@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Avatar, StatusIcon } from '@/components/icons'
+import { RelativeTime } from '@/components/relative-time'
 import type { TaskStatus } from '@/schemas/task'
 import type { ActivityEntry } from '@/lib/data'
 
@@ -12,15 +13,6 @@ const STATUS_LABEL: Record<string, string> = {
   'in-review': 'In Review',
   done: 'Done',
   cancelled: 'Cancelled',
-}
-
-const when = (iso: string) => {
-  const then = new Date(iso)
-  const mins = Math.round((Date.now() - then.getTime()) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`
-  return then.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v))
@@ -117,13 +109,7 @@ export const ActivityPanel = ({ entries }: { entries: ActivityEntry[] }) => {
               <span className="text-fg-muted min-w-0 flex-1">
                 <span className="text-fg">{e.actor_id}</span> {describe(e)}
               </span>
-              <time
-                dateTime={e.created_at}
-                title={new Date(e.created_at).toLocaleString('en-GB')}
-                className="text-fg-subtle shrink-0 text-[11px]"
-              >
-                {when(e.created_at)}
-              </time>
+              <RelativeTime iso={e.created_at} className="text-fg-subtle shrink-0 text-[11px]" />
             </li>
           ))}
         </ol>

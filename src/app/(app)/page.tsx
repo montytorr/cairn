@@ -5,6 +5,7 @@ import { currentUser, listAllTasks, listProjects } from '@/lib/data'
 import { ListView } from './projects/[key]/list-view'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectIcon } from '@/components/icons'
+import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
 
   if (projects.length === 0) {
     return (
-      <div className="mx-auto flex h-dvh max-w-lg flex-col justify-center px-6">
+      <div className="mx-auto flex h-dvh max-w-lg flex-col justify-center px-5 sm:px-6">
         <h1 className="mb-2 text-[20px] font-semibold tracking-[-0.01em]">Nothing here yet</h1>
         <p className="text-fg-muted mb-5 text-[13px] leading-relaxed">
           A cairn is built one stone at a time. Create the first project from an agent, or from
@@ -48,16 +49,21 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="border-border flex h-[44px] shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-fg text-[13px] font-medium">All tasks</span>
-        <span className="text-fg-subtle text-[13px]">·</span>
-        <Stat label="open" value={tasks.filter((t) => !['done', 'cancelled'].includes(t.status)).length} />
-        <Stat label="total" value={counts.count ?? 0} />
-        {held > 0 ? <Stat label="held by an agent" value={held} /> : null}
+      <header className="border-border flex h-[44px] shrink-0 items-center gap-2 border-b px-2.5 md:px-4">
+        <MobileNavButton />
+        <span className="text-fg shrink-0 text-[13px] font-medium">All tasks</span>
+        <span className="text-fg-subtle hidden text-[13px] sm:block">·</span>
+        {/* The counts are the first thing to go on a phone — the list itself
+            says more than a tally of it. */}
+        <span className="hidden items-center gap-2 sm:flex">
+          <Stat label="open" value={tasks.filter((t) => !['done', 'cancelled'].includes(t.status)).length} />
+          <Stat label="total" value={counts.count ?? 0} />
+          {held > 0 ? <Stat label="held by an agent" value={held} /> : null}
+        </span>
 
         <Link
           href={includeClosed ? '/' : '/?closed=1'}
-          className="text-fg-subtle hover:text-fg ml-auto text-[12px] transition-colors"
+          className="text-fg-subtle hover:text-fg ml-auto shrink-0 whitespace-nowrap text-[12px] transition-colors"
         >
           {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
         </Link>
@@ -66,7 +72,12 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Cross-project, so each row carries its project. Same component as
             the per-project list — one list implementation, not two. */}
-        <ListView tasks={tasks} projectKey="" showProject />
+        <ListView
+          tasks={tasks}
+          projectKey=""
+          showProject
+          projects={projects.map((p) => ({ key: p.key, title: p.title }))}
+        />
 
         <section className="border-border mt-6 border-t px-4 py-4">
           <h2 className="text-fg-muted mb-2 text-[11px] font-medium">Projects</h2>

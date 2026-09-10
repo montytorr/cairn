@@ -269,7 +269,9 @@ export const openapiSpec = () => ({
         summary: 'Update a task',
         description:
           'Omitted fields are left alone. Moving to `done` or `cancelled` requires ' +
-          '`resolution`, otherwise the request is refused with `resolution_required`.',
+          '`resolution`, otherwise the request is refused with `resolution_required`. ' +
+          '`project` moves the task: per-project numbering means it is renumbered and ' +
+          'its ref changes, so anything referring to the old ref goes stale.',
         requestBody: body(json(updateTaskSchema)),
         responses: {
           '200': okResponse('Updated.', taskSummary),

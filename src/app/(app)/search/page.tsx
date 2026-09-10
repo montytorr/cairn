@@ -6,6 +6,7 @@ import { searchTasks, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
 import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { SearchControls } from './search-controls'
+import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -93,14 +94,18 @@ const SearchPage = async ({
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-4">
-        <Link href="/" className="text-fg-muted hover:text-fg text-[13px] transition-colors">
+      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-2.5 md:px-4">
+        <MobileNavButton />
+        <Link
+          href="/"
+          className="text-fg-muted hover:text-fg hidden text-[13px] transition-colors sm:block"
+        >
           Cairn
         </Link>
-        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
         <span className="text-fg text-[13px]">Search</span>
         {rows.length > 0 && (
-          <span className="text-fg-subtle ml-auto text-[12px]">
+          <span className="text-fg-subtle ml-auto hidden text-[12px] sm:block">
             {rows.length} {rows.length === 1 ? 'result' : 'results'}
             {resolved > 0 ? ` · ${resolved} with a recorded answer` : ''}
             {widened ? ' · loose match' : ''}

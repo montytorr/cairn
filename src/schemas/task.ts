@@ -95,6 +95,11 @@ export const updateTaskSchema = taskFields.partial().extend({
   duplicateOf: z.string().min(2).max(60).nullable().optional(),
   /** Re-parent, or `null` to lift it back to the top level. */
   parentRef: z.string().min(2).max(60).nullable().optional(),
+  /**
+   * Move the task to another project, by key or uuid. Per-project numbering
+   * means the ref changes, so this is handled apart from the field updates.
+   */
+  project: z.string().min(1).max(60).optional(),
 })
 
 export const createNoteSchema = z.object({
