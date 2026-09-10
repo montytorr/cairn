@@ -362,40 +362,48 @@ export const ListView = ({
 
   const tabClass = (t: Tab) =>
     cn(
-      'rounded-md px-2.5 py-1 text-[12px] transition-colors',
+      'shrink-0 rounded-md px-2.5 py-1 text-[12px] whitespace-nowrap transition-colors',
       tab === t ? 'bg-surface-raised text-fg' : 'text-fg-muted hover:text-fg',
     )
 
   return (
     <div>
-      <div className="border-border flex items-center gap-1 border-b px-3 py-2">
-        <button type="button" onClick={() => setTab('active')} className={tabClass('active')}>
-          Active
-        </button>
-        <button type="button" onClick={() => setTab('backlog')} className={tabClass('backlog')}>
-          Backlog
-        </button>
-        <button type="button" onClick={() => setTab('all')} className={tabClass('all')}>
-          All
-        </button>
-        <button type="button" onClick={() => setTab('recent')} className={tabClass('recent')}>
-          Recent
-        </button>
-        {tasks.some((t) => t.claimed_by) && (
-          <button type="button" onClick={() => setTab('held')} className={tabClass('held')}>
-            Held
+      {/* Two rows on a phone, one on a desktop. Five tabs plus a filter plus a
+          button does not fit in 390px, and cramming them ran the filter off
+          the right edge. */}
+      <div className="border-border flex flex-col gap-1.5 border-b px-3 py-2 sm:flex-row sm:items-center sm:gap-1">
+        <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button type="button" onClick={() => setTab('active')} className={tabClass('active')}>
+            Active
           </button>
-        )}
-        <input
-          ref={filterRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter…   /"
-          aria-label="Filter tasks"
-          className="placeholder:text-fg-subtle ml-2 min-w-32 flex-1 bg-transparent px-1 text-[12px] outline-none"
-        />
-        <span className="text-fg-subtle tabular text-[11px]">{filtered.length}</span>
-        <NewTaskButton />
+          <button type="button" onClick={() => setTab('backlog')} className={tabClass('backlog')}>
+            Backlog
+          </button>
+          <button type="button" onClick={() => setTab('all')} className={tabClass('all')}>
+            All
+          </button>
+          <button type="button" onClick={() => setTab('recent')} className={tabClass('recent')}>
+            Recent
+          </button>
+          {tasks.some((t) => t.claimed_by) && (
+            <button type="button" onClick={() => setTab('held')} className={tabClass('held')}>
+              Held
+            </button>
+          )}
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <input
+            ref={filterRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter…"
+            aria-label="Filter tasks"
+            className="placeholder:text-fg-subtle border-border focus:border-accent min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 text-[12px] outline-none transition-colors sm:border-transparent sm:px-1 sm:py-0"
+          />
+          <span className="text-fg-subtle tabular shrink-0 text-[11px]">{filtered.length}</span>
+          <NewTaskButton />
+        </div>
       </div>
 
       {groups.length === 0 && (

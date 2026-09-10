@@ -5,6 +5,7 @@ import { PasswordSection } from './password-section'
 import { KeysSection, type KeyRow } from './keys-section'
 import { ArchivedSection, type ArchivedProject } from './archived-section'
 import { LabelsSection, type LabelRow } from './labels-section'
+import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,10 +30,15 @@ const SettingsPage = async () => {
   const { data: labels } = await admin().rpc('list_labels', { p_owner: user.id })
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
-      <header className="mb-8">
-        <h1 className="font-display text-2xl leading-none">Settings</h1>
-        <p className="text-fg-subtle mt-2 text-[12px]">{user.email}</p>
+    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
+      <header className="mb-8 flex items-start gap-2">
+        <span className="-ml-1.5 md:hidden">
+          <MobileNavButton />
+        </span>
+        <div>
+          <h1 className="font-display text-2xl leading-none">Settings</h1>
+          <p className="text-fg-subtle mt-2 text-[12px]">{user.email}</p>
+        </div>
       </header>
 
       <div className="flex flex-col gap-10">

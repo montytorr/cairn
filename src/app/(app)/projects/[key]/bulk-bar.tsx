@@ -122,7 +122,7 @@ export const BulkBar = ({
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4">
-        <div className="border-border bg-surface pointer-events-auto flex items-center gap-1 rounded-lg border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+        <div className="border-border bg-surface pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
           <span className="text-fg tabular px-1.5 text-[12px] font-medium">
             {progress === null
               ? `${ids.length} selected`

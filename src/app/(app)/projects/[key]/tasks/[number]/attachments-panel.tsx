@@ -77,8 +77,12 @@ export const AttachmentsPanel = ({
           const file = e.dataTransfer.files[0]
           if (file) void upload(file)
         }}
-        className={`border-border mb-2 rounded-md border border-dashed p-3 text-center transition-colors ${
-          dragging ? 'border-accent bg-accent-subtle' : ''
+        className={`border-border mb-2 rounded-md border border-dashed text-center transition-all ${
+          dragging
+            ? 'border-accent bg-accent-subtle p-3'
+            : attachments.length === 0
+              ? 'border-transparent p-0 text-left'
+              : 'p-2'
         }`}
       >
         <input

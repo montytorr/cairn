@@ -82,7 +82,7 @@ export const ActivityPanel = ({ entries }: { entries: ActivityEntry[] }) => {
   if (entries.length === 0) return null
 
   return (
-    <section className="border-border border-t pt-5">
+    <section>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

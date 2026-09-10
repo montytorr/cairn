@@ -24,7 +24,7 @@ const Filter = ({
   placeholder: string
   options: { value: string; label: string }[]
 }) => (
-  <div className="relative">
+  <div className="relative shrink-0">
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -108,7 +108,7 @@ export const SearchControls = ({
   const cleared = !q && !project && !type && !status
 
   return (
-    <div className="border-border flex h-[42px] shrink-0 items-center gap-2 border-b px-4">
+    <div className="border-border flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:h-[42px] sm:flex-row sm:items-center sm:px-4 sm:py-0">
       <input
         ref={inputRef}
         value={draft}
@@ -120,6 +120,7 @@ export const SearchControls = ({
         aria-label="Search tasks"
         className="text-fg placeholder:text-fg-subtle min-w-0 flex-1 bg-transparent text-[13px] outline-none"
       />
+      <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
       <Filter
         value={project}
         onChange={(v) => push({ project: v })}
@@ -146,11 +147,12 @@ export const SearchControls = ({
             committed.current = ''
             router.replace('/search')
           }}
-          className="text-fg-subtle hover:text-fg text-[12px] transition-colors"
+          className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-[12px] transition-colors"
         >
           Clear
         </button>
       )}
+      </div>
     </div>
   )
 }

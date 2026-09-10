@@ -85,7 +85,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
 
       <div className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[760px] px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[820px] px-4 py-6 sm:px-6 lg:px-8">
             <EditableTitle taskId={task.id} initial={task.title} />
 
             {/* First thing on the page when it applies: a reader who opens a
@@ -129,19 +129,24 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
               </div>
             ) : null}
 
-            <div className="mb-10">
+            <div className="mb-6">
               <MarkdownEditor taskId={task.id} initial={task.description ?? ''} />
             </div>
 
-            <div className="flex flex-col gap-10">
-              <AttachmentsPanel taskId={task.id} attachments={attachments} />
-              <NotesPanel taskId={task.id} notes={notes} />
-              <CommentsPanel taskId={task.id} comments={comments} />
+            {/* Ruled rather than spaced. Five panels separated by 40px of air
+                was most of the dead space on this page; a divider does the
+                same job of separating them and reads as structure. Ordered by
+                what a reader wants next: the split, then the evidence, then
+                the conversation, then the audit trail. */}
+            <div className="divide-border flex flex-col divide-y [&>*]:py-5">
               <ChildrenPanel
                 taskRef={`${task.project.key}-${task.number}`}
                 projectKey={task.project.key}
                 items={children}
               />
+              <AttachmentsPanel taskId={task.id} attachments={attachments} />
+              <NotesPanel taskId={task.id} notes={notes} />
+              <CommentsPanel taskId={task.id} comments={comments} />
               <ActivityPanel entries={activity} />
             </div>
           </div>

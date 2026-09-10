@@ -66,7 +66,7 @@ export const ChildrenPanel = ({
   }
 
   return (
-    <section className="border-border border-t pt-5">
+    <section>
       <div className="mb-2 flex items-center gap-2">
         <h2 className="text-fg-subtle text-[11px] font-medium">
           Sub-tasks{items.length > 0 ? ` · ${closed}/${items.length}` : ''}
