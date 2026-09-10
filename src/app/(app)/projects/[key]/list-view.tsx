@@ -369,8 +369,15 @@ export const ListView = ({
   const ordered = useMemo(() => groups.flatMap((g) => g.items.map((t) => t.id)), [groups])
 
   const onToggle = (id: string, shiftKey: boolean) => {
-    setSelected((prev) => applySelection(prev, ordered, id, { shiftKey, anchor: lastPicked.current }))
+    // Read the anchor BEFORE moving it. A state updater runs when React
+    // processes the update, not when it is queued — so reading
+    // `lastPicked.current` inside the updater saw the row just clicked, the
+    // `anchor !== id` guard rejected it, and every shift-click quietly
+    // degraded to a plain toggle. The pure function was right the whole time;
+    // the wiring was not, which is why unit tests could not see it.
+    const anchor = lastPicked.current
     lastPicked.current = id
+    setSelected((prev) => applySelection(prev, ordered, id, { shiftKey, anchor }))
   }
 
   const toggle = (status: string) =>
