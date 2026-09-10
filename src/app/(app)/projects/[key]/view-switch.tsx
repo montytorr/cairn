@@ -42,29 +42,33 @@ export const ViewSwitch = ({
       aria-pressed={view === value}
       title={label}
       className={cn(
-        'grid size-6 place-items-center rounded transition-all duration-100',
+        'grid size-[22px] place-items-center rounded transition-all duration-100',
         view === value
-          ? 'bg-surface text-fg shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+          ? 'bg-surface text-fg shadow-[0_1px_2px_rgba(0,0,0,0.10)]'
           : 'text-fg-subtle hover:text-fg',
       )}
     >
-      <Icon size={14} />
+      <Icon size={13} />
     </button>
   )
 
-  return (
+  // Rendered inside the list's own toolbar rather than in a band of its own:
+  // two rows of chrome above one list was 88px spent before a single task.
+  const toggle = (
+    <span className="bg-surface-raised flex shrink-0 items-center gap-0.5 rounded-md p-0.5">
+      {button('list', List, 'List view')}
+      {button('board', Columns3, 'Board view')}
+    </span>
+  )
+
+  return view === 'board' ? (
     <div>
-      <div className="border-border flex items-center gap-1 border-b px-3 py-1.5">
-        {button('list', List, 'List view')}
-        {button('board', Columns3, 'Board view')}
+      <div className="border-border flex items-center gap-1 border-b px-3 py-2">{toggle}</div>
+      <div className="p-3">
+        <BoardView tasks={tasks} projectKey={projectKey} />
       </div>
-      {view === 'board' ? (
-        <div className="p-3">
-          <BoardView tasks={tasks} projectKey={projectKey} />
-        </div>
-      ) : (
-        <ListView tasks={tasks} projectKey={projectKey} />
-      )}
     </div>
+  ) : (
+    <ListView tasks={tasks} projectKey={projectKey} toolbarExtra={toggle} />
   )
 }

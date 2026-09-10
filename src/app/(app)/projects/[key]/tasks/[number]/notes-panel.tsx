@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
-import { Button, Select, Textarea } from '@/components/ui/control'
+import { Button } from '@/components/ui/control'
 import { Spinner } from '@/components/spinner'
 import type { Note } from '@/lib/data'
 
@@ -60,7 +60,21 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
   const [text, setText] = useState('')
   const [kind, setKind] = useState<NoteKind>('note')
   const [pending, setPending] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
+  // A set, not one id. Holding a single id meant expanding one entry
+  // collapsed whichever was already open — reading two findings side by side
+  // was impossible, which is the main thing anyone does with a work log.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const allLong = notes.filter((n) => n.note.length > 180).map((n) => n.id)
+  const anyCollapsed = allLong.some((id) => !expanded.has(id))
 
   const submit = async () => {
     if (!text.trim() || pending) return
@@ -90,10 +104,23 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
       <h2 className="text-fg-muted mb-2.5 flex items-center gap-2 text-[11px] font-medium">
         Work log
         <span className="tabular text-fg-subtle">{notes.length}</span>
+        {allLong.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(anyCollapsed ? new Set(allLong) : new Set())}
+            className="text-fg-subtle hover:text-fg ml-auto font-normal transition-colors"
+          >
+            {anyCollapsed ? 'Expand all' : 'Collapse all'}
+          </button>
+        )}
       </h2>
 
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <Textarea
+      {/* One bordered box with its own footer, rather than a textarea, a
+          select and a button sitting side by side in three different shapes.
+          The border lives on the wrapper and lifts on focus-within, so the
+          whole composer reads as a single control. */}
+      <div className="border-border bg-surface focus-within:border-accent focus-within:ring-ring/30 mb-4 overflow-hidden rounded-lg border transition-[border-color,box-shadow] focus-within:ring-2">
+        <textarea
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -101,26 +128,48 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
           }}
           placeholder="What did you try, find, or decide? Dead ends count."
-          className="min-w-0 flex-1"
+          className="text-fg placeholder:text-fg-subtle block max-h-[40vh] min-h-[58px] w-full resize-y bg-transparent px-3 py-2.5 text-[13px] leading-relaxed outline-none"
         />
-        <div className="flex shrink-0 gap-1.5 sm:w-28 sm:flex-col">
-          <Select
-            size="sm"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as NoteKind)}
-            aria-label="Note kind"
-            className="flex-1 sm:flex-none"
-          >
-            {NOTE_KINDS.map((k) => (
-              <option key={k} value={k}>{k}</option>
-            ))}
-          </Select>
+
+        <div className="border-border/70 flex items-center gap-2 border-t px-2 py-1.5">
+          <div className="relative">
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as NoteKind)}
+              aria-label="Note kind"
+              className={cn(
+                'hover:bg-surface-raised cursor-pointer appearance-none rounded-md border border-transparent bg-transparent py-1 pr-5 pl-1.5 text-[12px] outline-none transition-colors [-webkit-appearance:none]',
+                KIND_STYLE[kind] ?? 'text-fg-muted',
+              )}
+            >
+              {NOTE_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            <svg
+              className="text-fg-subtle pointer-events-none absolute top-1/2 right-1 -translate-y-1/2"
+              width="9"
+              height="9"
+              viewBox="0 0 9 9"
+              aria-hidden
+            >
+              <path d="M1.5 3.2L4.5 6 7.5 3.2" stroke="currentColor" strokeWidth="1.3" fill="none" />
+            </svg>
+          </div>
+
+          <span className="text-fg-subtle ml-auto hidden text-[11px] sm:block">
+            <kbd className="kbd inline-flex">⌘</kbd>
+            <kbd className="kbd ml-0.5 inline-flex">↵</kbd>
+          </span>
+
           <Button
             size="sm"
             variant="primary"
             onClick={submit}
             disabled={!text.trim() || pending}
-            className="flex-1 sm:flex-none"
+            className="w-auto px-3"
           >
             {pending ? <Spinner /> : 'Add note'}
           </Button>
@@ -142,7 +191,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
           />
 
           {notes.map((note, index) => {
-            const isOpen = expanded === note.id
+            const isOpen = expanded.has(note.id)
             const long = note.note.length > 180
             // Numbered chronologically so an entry keeps its number as new
             // ones arrive; the list itself stays newest-first for scanning.
@@ -181,7 +230,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
                   {long && (
                     <button
                       type="button"
-                      onClick={() => setExpanded(isOpen ? null : note.id)}
+                      onClick={() => toggleExpanded(note.id)}
                       className="text-fg-subtle hover:text-fg mt-0.5 text-[11px] transition-colors"
                     >
                       {isOpen ? 'Show less' : 'Show more'}

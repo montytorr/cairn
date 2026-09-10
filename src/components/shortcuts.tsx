@@ -79,7 +79,7 @@ export const Shortcuts = () => {
                   <li key={label} className="flex items-center gap-2 text-[12.5px]">
                     <span className="text-fg-muted flex-1">{label}</span>
                     {keys.map((k) => (
-                      <kbd key={k} className="kbd">{k}</kbd>
+                      <kbd key={k} className="kbd inline-flex">{k}</kbd>
                     ))}
                   </li>
                 ))}

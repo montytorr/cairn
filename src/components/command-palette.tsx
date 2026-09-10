@@ -28,7 +28,7 @@ const Keys = ({ keys }: { keys: string[] }) => (
           then
         </span>
       ) : (
-        <kbd key={i} className="kbd">
+        <kbd key={i} className="kbd inline-flex">
           {k}
         </kbd>
       ),
@@ -128,7 +128,7 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
           {loading ? (
             <span className="text-fg-subtle shrink-0 text-[11px]">…</span>
           ) : (
-            <kbd className="kbd shrink-0">esc</kbd>
+            <kbd className="kbd inline-flex shrink-0">esc</kbd>
           )}
         </div>
 

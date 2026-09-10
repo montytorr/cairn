@@ -18,6 +18,7 @@ import {
 import type { TaskListItem } from '@/lib/data'
 import { NewTaskButton } from '@/components/task-creation'
 import { BulkBar } from './bulk-bar'
+import { applySelection } from '@/lib/selection'
 import { QuickSelect, useQuickPatch } from './quick-edit'
 import { LabelEditor } from './label-editor'
 
@@ -79,6 +80,9 @@ const Row = ({
     <div
       className={cn(
         'group relative flex h-[36px] items-center transition-colors duration-75',
+        // Shift-click paints a text selection across the rows it passes
+        // otherwise, which looks like a mistake on every range.
+        'select-none',
         selected ? 'bg-accent-subtle' : 'hover:bg-surface-hover',
       )}
     >
@@ -94,27 +98,57 @@ const Row = ({
         className="absolute inset-0 z-0"
       />
 
-      <label
-        className={cn(
-          'relative z-10 grid h-[36px] w-[26px] shrink-0 cursor-pointer place-items-center pl-3',
-          selected || selecting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-        )}
+      {/* A button, not a <label> around a checkbox.
+          A label activates the control it wraps, so the click landed twice —
+          once from the label's own handler and once from the forwarded
+          activation — and the two toggles cancelled. The selection only
+          appeared to move when the *next* row was clicked, which is exactly
+          how it was reported. Drawing the box also lets it be sized for a
+          finger.
+
+          Always visible where there is no hover: on a touch screen a control
+          revealed by `group-hover` can never be reached at all. */}
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={`Select ${task.title}`}
         onClick={(e) => {
           e.preventDefault()
+          e.stopPropagation()
           onToggle(task.id, e.shiftKey)
         }}
+        className={cn(
+          'relative z-10 grid h-[36px] w-[30px] shrink-0 place-items-center pl-3 transition-opacity',
+          selected || selecting
+            ? 'opacity-100'
+            : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100',
+        )}
       >
-        <input
-          type="checkbox"
-          checked={selected}
-          readOnly
-          tabIndex={-1}
-          aria-label={`Select ${task.title}`}
-          className="accent-accent size-[13px] cursor-pointer"
-        />
-      </label>
+        <span
+          className={cn(
+            'grid size-[14px] place-items-center rounded-[4px] border transition-colors',
+            selected
+              ? 'border-accent bg-accent text-accent-fg'
+              : 'border-border-strong bg-surface hover:border-accent',
+          )}
+        >
+          {selected && (
+            <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
+              <path
+                d="M1.5 5.2l2.2 2.2L8.5 2.6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </svg>
+          )}
+        </span>
+      </button>
 
-      <div className="pointer-events-none flex h-[36px] min-w-0 flex-1 items-center gap-2 pr-3 md:pr-4">
+      <div className="pointer-events-none flex h-[36px] min-w-0 flex-1 items-center gap-2 pl-1.5 pr-3 md:pr-4">
         <QuickSelect
           value={priority}
           options={TASK_PRIORITIES}
@@ -125,7 +159,7 @@ const Row = ({
           <PriorityIcon priority={priority} />
         </QuickSelect>
 
-        <code className="text-fg-subtle w-[62px] shrink-0 truncate text-[12px] tabular md:w-[72px]">
+        <code className="text-fg-subtle hidden w-[62px] shrink-0 truncate text-[12px] tabular sm:block md:w-[72px]">
           {task.external_ref ?? ref}
         </code>
 
@@ -233,12 +267,15 @@ export const ListView = ({
   projectKey,
   showProject,
   projects = [],
+  toolbarExtra,
 }: {
   tasks: (TaskListItem & { project_key?: string })[]
   projectKey: string
   showProject?: boolean
   /** Offered when a row shows its project, so it can be moved from the list. */
   projects?: { key: string; title: string }[]
+  /** The view toggle, so it does not need a band of its own above the list. */
+  toolbarExtra?: React.ReactNode
 }) => {
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
@@ -332,23 +369,7 @@ export const ListView = ({
   const ordered = useMemo(() => groups.flatMap((g) => g.items.map((t) => t.id)), [groups])
 
   const onToggle = (id: string, shiftKey: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      const anchor = lastPicked.current
-      if (shiftKey && anchor && anchor !== id) {
-        const from = ordered.indexOf(anchor)
-        const to = ordered.indexOf(id)
-        if (from !== -1 && to !== -1) {
-          const [lo, hi] = from < to ? [from, to] : [to, from]
-          // A range always selects: mixed states make shift-click a coin toss.
-          for (const rowId of ordered.slice(lo, hi + 1)) next.add(rowId)
-          return next
-        }
-      }
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setSelected((prev) => applySelection(prev, ordered, id, { shiftKey, anchor: lastPicked.current }))
     lastPicked.current = id
   }
 
@@ -373,6 +394,8 @@ export const ListView = ({
           the right edge. */}
       <div className="border-border flex flex-col gap-1.5 border-b px-3 py-2 sm:flex-row sm:items-center sm:gap-1">
         <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {toolbarExtra}
+          {toolbarExtra ? <span className="bg-border mx-1 h-[16px] w-px shrink-0" aria-hidden /> : null}
           <button type="button" onClick={() => setTab('active')} className={tabClass('active')}>
             Active
           </button>

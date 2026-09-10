@@ -17,10 +17,10 @@ import { cn } from '@/lib/utils'
  */
 
 const base =
-  'w-full rounded-md border border-border bg-surface text-fg transition-colors ' +
+  'w-full rounded-md border border-border bg-surface text-fg transition-[color,background-color,border-color,box-shadow] duration-100 ' +
   'placeholder:text-fg-subtle ' +
-  'hover:border-border-strong ' +
-  'focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring/40 ' +
+  'hover:border-border-strong hover:bg-surface-raised ' +
+  'focus:border-accent focus:bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40 ' +
   'disabled:cursor-not-allowed disabled:opacity-50'
 
 const sizes = {
@@ -59,8 +59,10 @@ export const Select = forwardRef<HTMLSelectElement, WithSize<React.ComponentProp
       className={cn(
         base,
         sizes[size],
-        // Room for the chevron; appearance-none also drops Safari's inner shadow.
-        'cursor-pointer appearance-none pr-7',
+        // Both spellings. Tailwind's `appearance-none` emits the unprefixed
+        // property only, and without the prefixed one WebKit keeps drawing its
+        // own arrow — which showed up as two chevrons side by side.
+        'cursor-pointer appearance-none [-webkit-appearance:none] pr-7',
         className,
       )}
       {...props}
@@ -80,6 +82,8 @@ const buttonVariants = {
   primary: 'bg-accent text-accent-fg hover:opacity-90',
   secondary: 'border border-border bg-surface text-fg hover:bg-surface-raised hover:border-border-strong',
   ghost: 'text-fg-muted hover:bg-surface-raised hover:text-fg',
+  quiet:
+    'border border-transparent text-fg-muted hover:border-border hover:bg-surface-raised hover:text-fg',
   danger: 'text-danger hover:bg-danger-subtle',
 } as const
 

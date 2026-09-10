@@ -173,7 +173,9 @@
 @layer utilities {
   /* A keyboard hint, as it appears in the command palette. */
   .kbd {
-    display: inline-flex;
+    /* Not `display: inline-flex`: this class sits after Tailwind's utilities,
+       so it beat `hidden` and the shortcut badge could never be hidden on a
+       device with no keyboard. Layout comes from the utility instead. */
     align-items: center;
     justify-content: center;
     min-width: 18px;

@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { Avatar } from '@/components/icons'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { SignOut } from '@/components/sign-out'
 import { ProjectNav } from '@/components/project-nav'
+import { UserMenu } from '@/components/user-menu'
 
 /**
  * One sidebar, two homes: the fixed rail on a wide screen and the drawer on a
@@ -36,20 +36,6 @@ export const AppSidebar = ({
 
     <ProjectNav projects={projects} onNavigate={onNavigate} />
 
-    <div className="border-border text-fg-subtle flex items-center gap-2 border-t px-3 py-2 text-[11px]">
-      <span className="truncate" title={email}>
-        {email}
-      </span>
-      <span className="ml-auto flex items-center gap-1">
-        <Link
-          href="/settings"
-          onClick={onNavigate}
-          className="hover:text-fg hover:bg-surface-hover rounded px-1.5 py-1 transition-colors"
-        >
-          Settings
-        </Link>
-        <SignOut />
-      </span>
-    </div>
+    <UserMenu email={email} onNavigate={onNavigate} />
   </>
 )
