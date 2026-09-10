@@ -6,6 +6,15 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useSupabaseConfig } from '@/components/supabase-provider'
 import { Button, Input } from '@/components/ui/control'
 
+/**
+ * `?redirect=` comes from the URL bar, so it is attacker-controlled. Only a
+ * same-site path is honoured — `//host` and `https://host` are absolute
+ * despite the leading slash, and would turn the login page into an open
+ * redirect.
+ */
+const safeRedirect = (value: string | null) =>
+  value && value.startsWith('/') && !value.startsWith('//') ? value : '/'
+
 export const LoginForm = () => {
   const router = useRouter()
   const { url, anonKey } = useSupabaseConfig()
@@ -37,7 +46,7 @@ export const LoginForm = () => {
         return
       }
 
-      router.replace(params.get('redirect') ?? '/')
+      router.replace(safeRedirect(params.get('redirect')))
       router.refresh()
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : 'Sign-in failed.')

@@ -40,8 +40,13 @@ export const middleware = async (req: NextRequest) => {
 
   if (!user && !isLoginRoute) {
     const url = req.nextUrl.clone()
+    // Carry the whole destination, query included, and clear the rest: keeping
+    // the original params meant /search?q=x came back as a bare /search, and
+    // leaked them onto the login URL besides.
+    const target = `${req.nextUrl.pathname}${req.nextUrl.search}`
     url.pathname = '/login'
-    url.searchParams.set('redirect', req.nextUrl.pathname)
+    url.search = ''
+    url.searchParams.set('redirect', target)
     return NextResponse.redirect(url)
   }
 
