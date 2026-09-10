@@ -6,7 +6,8 @@ export default defineConfig({
     alias: { '@': resolve(__dirname, './src') },
   },
   test: {
-    environment: 'node',
+    // jsdom, because Tiptap's Editor needs a DOM even headless.
+    environment: 'jsdom',
     include: ['src/**/*.test.ts'],
   },
 })
