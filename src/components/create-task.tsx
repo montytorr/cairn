@@ -39,6 +39,20 @@ export const CreateTask = ({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [similar, setSimilar] = useState<{ ref: string; title: string; status: string }[]>([])
+  const [labels, setLabels] = useState('')
+  // Existing labels, offered as suggestions. Offering what is already in use
+  // is the only thing that stops a fourth spelling of "database" appearing.
+  const [known, setKnown] = useState<string[]>([])
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await fetch('/api/v1/labels')
+      if (!res.ok) return
+      const json = await res.json().catch(() => null)
+      setKnown(((json?.data ?? []) as { label: string }[]).map((l) => l.label))
+    }
+    void load()
+  }, [])
 
   // Focus only. State is NOT reset here: the parent remounts this component
   // on each open (via key), so it always starts fresh without an effect
@@ -85,6 +99,10 @@ export const CreateTask = ({
         title: title.trim(),
         description: body.trim() || undefined,
         type, status, priority,
+        labels: labels
+          .split(',')
+          .map((l) => l.trim())
+          .filter(Boolean),
       }),
     })
     const payload = await res.json().catch(() => null)
@@ -221,6 +239,22 @@ export const CreateTask = ({
             >
               {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
+          </label>
+
+          <label className="relative">
+            <input
+              value={labels}
+              onChange={(e) => setLabels(e.target.value)}
+              list="cairn-known-labels"
+              placeholder="labels…"
+              aria-label="Labels, comma separated"
+              className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[26px] w-[130px] rounded-md border px-2 text-[12px] outline-none"
+            />
+            <datalist id="cairn-known-labels">
+              {known.map((l) => (
+                <option key={l} value={l} />
+              ))}
+            </datalist>
           </label>
 
           <button

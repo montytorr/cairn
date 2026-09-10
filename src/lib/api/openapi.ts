@@ -418,6 +418,28 @@ export const openapiSpec = () => ({
       get: { summary: 'Get an attachment with fresh signed URLs', responses: { '200': okResponse('Attachment.') } },
       delete: { summary: 'Delete an attachment', responses: { '200': okResponse('Deleted.') } },
     },
+    '/labels': {
+      get: {
+        summary: 'Every label in use, with a task count',
+        responses: { '200': okResponse('Labels, busiest first.') },
+      },
+      patch: {
+        summary: 'Rename, merge or delete a label across every task',
+        description:
+          'Renaming onto a label that already exists merges the two. `to: null` deletes ' +
+          'the label instead. Returns how many tasks changed — a rename that matched ' +
+          'nothing otherwise looks identical to one that worked.',
+        requestBody: body({
+          type: 'object',
+          properties: {
+            from: { type: 'string' },
+            to: { type: ['string', 'null'] },
+          },
+          required: ['from', 'to'],
+        }),
+        responses: { '200': okResponse('Applied.'), '400': errorResponse },
+      },
+    },
     '/keys': {
       get: { summary: 'List API keys (never the hash)', responses: { '200': okResponse('Keys.') } },
       post: {

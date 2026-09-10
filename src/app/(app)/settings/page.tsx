@@ -4,6 +4,7 @@ import { currentUser } from '@/lib/data'
 import { PasswordSection } from './password-section'
 import { KeysSection, type KeyRow } from './keys-section'
 import { ArchivedSection, type ArchivedProject } from './archived-section'
+import { LabelsSection, type LabelRow } from './labels-section'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,8 @@ const SettingsPage = async () => {
     .eq('status', 'archived')
     .order('title')
 
+  const { data: labels } = await admin().rpc('list_labels', { p_owner: user.id })
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       <header className="mb-8">
@@ -35,6 +38,7 @@ const SettingsPage = async () => {
       <div className="flex flex-col gap-10">
         <PasswordSection />
         <KeysSection keys={(data ?? []) as KeyRow[]} />
+        <LabelsSection labels={(labels ?? []) as LabelRow[]} />
         <ArchivedSection projects={(archived ?? []) as ArchivedProject[]} />
       </div>
     </div>

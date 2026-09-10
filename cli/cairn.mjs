@@ -225,6 +225,11 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn blockedby <ref> <other>           mark <ref> as blocked by <other>
     cairn unblockedby <ref> <other>         remove that link
 
+  labels
+    cairn labels                            every label in use, busiest first
+    cairn labels rename <from> <to>         renaming onto an existing label merges them
+    cairn labels remove <label>
+
   projects
     cairn projects [--archived]                  --archived includes retired ones
     cairn project rename <KEY> "<title>"
@@ -511,6 +516,28 @@ const commands = {
     const other = need(positional[1], 'the blocking task ref is required')
     const q = new URLSearchParams({ ref: other, direction: 'blocked-by' })
     emit(await request('DELETE', `/api/v1/tasks/${ref}/dependencies?${q}`))
+  },
+
+  async labels() {
+    const sub = positional[0]
+    if (sub === 'rename' || sub === 'merge') {
+      const from = need(positional[1], 'usage: cairn labels rename <from> <to>')
+      const to = need(positional[2], 'a new label name is required')
+      emit(await request('PATCH', '/api/v1/labels', { from, to }))
+      return
+    }
+    if (sub === 'remove' || sub === 'delete') {
+      const from = need(positional[1], 'usage: cairn labels remove <label>')
+      emit(await request('PATCH', '/api/v1/labels', { from, to: null }))
+      return
+    }
+    if (sub) die(`unknown subcommand "${sub}" — expected rename or remove`)
+
+    const data = await request('GET', '/api/v1/labels')
+    emit(data, {
+      rows: (d) => d.map((l) => ({ label: l.label, tasks: l.task_count })),
+      columns: ['label', 'tasks'],
+    })
   },
 
   async project() {
