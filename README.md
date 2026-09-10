@@ -156,3 +156,24 @@ Note Codex rejects a literal `bearer_token`; for an HTTP transport it wants
 
 Issue **one key per agent** so writes are attributable and any single agent can be
 revoked without disturbing the others.
+
+## Trimming the Supabase stack
+
+The upstream self-hosted compose starts eleven services. Cairn uses five: `db`, `auth`,
+`rest`, `storage`, `api-gw`.
+
+On a shared host the other six are not free — measured here, Studio, imgproxy, edge
+functions, postgres-meta, realtime and the pooler burned **107% CPU between them, more
+than the five actually in use**, while the app container itself sat at 0.00%.
+
+`docker-compose.cairn.yml` puts them behind a `optional` profile, which cuts the stack's
+CPU by roughly 70%. Two `depends_on` edges have to be reset for that to work: `api-gw`
+is ordered behind Studio, and `storage` behind imgproxy.
+
+Re-enable any of them when a feature needs it:
+
+```bash
+docker compose --profile optional up -d realtime   # live sync
+docker compose --profile optional up -d imgproxy   # image transforms
+docker compose --profile optional up -d studio     # admin UI
+```
