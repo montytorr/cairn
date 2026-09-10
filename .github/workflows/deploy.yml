@@ -1,0 +1,72 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. A second push mid-build would otherwise race the
+# first for the same container name.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Runs on the box it deploys to, so there is no registry and no secrets
+    # in transit — the image is built where it runs.
+    runs-on: [self-hosted, cairn]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: link runtime configuration
+        # Secrets live outside the workspace, owned by the runner user, and
+        # are never checked out. The compose file reads .env.local for the
+        # container and .env for label interpolation.
+        run: |
+          set -euo pipefail
+          test -f "$HOME/cairn-secrets/app.env" || { echo "missing app.env"; exit 1; }
+          install -m 600 "$HOME/cairn-secrets/app.env" .env.local
+          cat > .env <<ENV
+          CAIRN_DOMAIN=${{ vars.CAIRN_DOMAIN || 'tasks.montytorr.com' }}
+          CAIRN_PROXY_NETWORK=${{ vars.CAIRN_PROXY_NETWORK || 'trading-v2-network' }}
+          GIT_SHA=${GITHUB_SHA::7}
+          ENV
+          cp docker-compose.example.yml docker-compose.yml
+
+      - name: build
+        run: docker compose build --quiet
+
+      - name: deploy
+        run: docker compose up -d --remove-orphans
+
+      - name: wait for health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            state=$(docker inspect cairn --format '{{.State.Health.Status}}' 2>/dev/null || echo starting)
+            [ "$state" = "healthy" ] && { echo "healthy after ${i}0s"; exit 0; }
+            sleep 10
+          done
+          echo "never became healthy"
+          docker compose logs --tail=40 cairn
+          exit 1
+
+      - name: smoke test
+        # Through the public URL, so this exercises Traefik and TLS too — a
+        # container that is healthy but unreachable is still a failed deploy.
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://tasks.montytorr.com/api/v1/health)
+          [ "$code" = "200" ] || { echo "health endpoint returned $code"; exit 1; }
+          echo "deployed $GITHUB_SHA"
+
+      - name: roll back on failure
+        if: failure()
+        # The previous image is still on the host; restarting the last known
+        # good container beats leaving the site down while someone reads logs.
+        run: |
+          echo "deploy failed — restarting the previous container"
+          docker compose up -d --no-build || true
