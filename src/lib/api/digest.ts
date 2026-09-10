@@ -22,12 +22,40 @@ const BODY_BUDGET = 800
  * matters while it is happening and rarely afterwards — findings and decisions
  * are what a later reader came for.
  */
+/** `CAI-42` for a task id, or null. Refs are addressable; uuids are not. */
+const refOf = async (id: unknown): Promise<string | null> => {
+  if (typeof id !== 'string') return null
+  const { data } = await admin()
+    .from('tasks')
+    .select('number, project:projects!inner(key)')
+    .eq('id', id)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as unknown as { number: number; project: { key: string } | { key: string }[] }
+  const project = Array.isArray(row.project) ? row.project[0] : row.project
+  return `${project?.key}-${row.number}`
+}
+
 export const buildDigest = async (task: Record<string, unknown>) => {
-  const { data: notes } = await admin()
-    .from('task_notes')
-    .select('kind, note, actor_id, created_at')
-    .eq('task_id', task.id as string)
-    .order('created_at')
+  const [{ data: notes }, { count: childCount }, { count: childClosed }, duplicateOf, parent] =
+    await Promise.all([
+      admin()
+        .from('task_notes')
+        .select('kind, note, actor_id, created_at')
+        .eq('task_id', task.id as string)
+        .order('created_at'),
+      admin()
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_id', task.id as string),
+      admin()
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('parent_id', task.id as string)
+        .in('status', ['done', 'cancelled']),
+      refOf(task.duplicate_of),
+      refOf(task.parent_id),
+    ])
 
   const all = (notes ?? []) as { kind: string; note: string; actor_id: string; created_at: string }[]
   const durable = all.filter((n) => n.kind === 'finding' || n.kind === 'decision')
@@ -36,8 +64,11 @@ export const buildDigest = async (task: Record<string, unknown>) => {
   const description = (task.description as string | null) ?? null
   const clipped = description && description.length > BODY_BUDGET
 
+  const embedded = task.project as { key?: string } | { key?: string }[] | undefined
+  const own = Array.isArray(embedded) ? embedded[0] : embedded
+
   return {
-    ref: task.ref ?? null,
+    ref: own?.key ? `${own.key}-${task.number}` : null,
     number: task.number,
     title: task.title,
     type: task.type,
@@ -62,6 +93,12 @@ export const buildDigest = async (task: Record<string, unknown>) => {
 
     checkpoint: task.checkpoint_summary,
     blockedReason: task.blocked_reason,
+
+    // Both belong in the cheapest view there is. A digest that hides "the real
+    // work is over there" hands the reader an answer to the wrong question.
+    duplicateOf,
+    parent,
+    children: childCount ? { total: childCount, closed: childClosed ?? 0 } : null,
 
     /** What this view withheld, and what asking for it costs. */
     omitted: {
