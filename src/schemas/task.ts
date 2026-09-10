@@ -79,6 +79,8 @@ export const createTaskSchema = taskFields.partial().extend({
   status: taskStatus.default('backlog'),
   priority: taskPriority.default('medium'),
   labels: z.array(z.string().min(1).max(50)).max(20).default([]),
+  /** File it under an existing task. A ref (`CAI-42`) or uuid. */
+  parentRef: z.string().min(2).max(60).optional(),
 })
 
 /** Partial update. No defaults, so absent fields stay absent. */
@@ -91,6 +93,8 @@ export const updateTaskSchema = taskFields.partial().extend({
    * `null` clears it.
    */
   duplicateOf: z.string().min(2).max(60).nullable().optional(),
+  /** Re-parent, or `null` to lift it back to the top level. */
+  parentRef: z.string().min(2).max(60).nullable().optional(),
 })
 
 export const createNoteSchema = z.object({

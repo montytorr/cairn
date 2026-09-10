@@ -212,6 +212,11 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn done <ref> --duplicate-of CAI-31 --resolution "…"   points at the original
     cairn attach <ref> <file>      |   cairn files <ref>
 
+  sub-tasks
+    cairn add "<title>" --project K --parent CAI-42   file it under an existing task
+    cairn children <ref>                    the direct split
+    cairn update <ref> --parent CAI-42 | --no-parent
+
   history
     cairn history <ref>                     what changed, when, and who changed it
 
@@ -356,6 +361,7 @@ const commands = {
     if (flags.body) body.description = await resolveValue(flags.body)
     for (const k of ['type', 'status', 'priority']) if (flags[k]) body[k] = flags[k]
     if (flags.label) body.labels = String(flags.label).split(',')
+    if (flags.parent) body.parentRef = flags.parent
     emit(await request('POST', `/api/v1/projects/${project}/tasks`, body))
   },
 
@@ -370,6 +376,8 @@ const commands = {
     // how in one call — without it the API rightly refuses the move.
     if (flags.resolution) body.resolution = await resolveValue(flags.resolution)
     if (flags.kind) body.resolutionKind = flags.kind
+    if (flags.parent) body.parentRef = flags.parent
+    if (flags['no-parent']) body.parentRef = null
     if (flags['duplicate-of']) {
       body.duplicateOf = flags['duplicate-of']
       body.resolutionKind = 'duplicate'
@@ -439,6 +447,20 @@ const commands = {
         })),
       columns: ['id', 'name', 'type', 'bytes', 'by'],
     })
+  },
+
+  async children() {
+    const ref = need(positional[0], 'usage: cairn children <ref>')
+    const data = await request('GET', `/api/v1/tasks/${ref}/children`)
+    emit(data.children, {
+      rows: (d) => d.map((t) => ({ ref: t.ref, status: t.status, title: truncate(t.title, 62) })),
+      columns: ['ref', 'status', 'title'],
+    })
+    if (FORMAT === 'tsv') {
+      process.stderr.write(
+        data.count === 0 ? 'no sub-tasks\n' : `${data.closed}/${data.count} closed\n`,
+      )
+    }
   },
 
   async history() {

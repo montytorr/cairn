@@ -6,7 +6,7 @@ export const TASK_FIELDS =
   'id, number, title, description, type, status, priority, labels, due_date, position, ' +
   'actor_type, actor_id, claimed_by, claimed_at, heartbeat_at, attempt, ' +
   'checkpoint_summary, checkpoint_payload, checkpoint_at, blocked_reason, blocked_at, ' +
-  'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, ' +
+  'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, parent_id, ' +
   'memory_session_id, observation_ids, created_at, updated_at, ' +
   'project:projects!inner(id, key, title, owner_user_id)'
 
@@ -48,4 +48,31 @@ export const findTask = async (actor: Actor, raw: string, fields = TASK_FIELDS) 
 
   if (error || !data) return null
   return data as unknown as Record<string, unknown> & { id: string }
+}
+
+/**
+ * Resolves a would-be parent and refuses anything that would close a loop.
+ *
+ * The self-check lives in the database; a -> b -> a does not, because it needs
+ * a walk. `task_is_descendant` does that walk in one round trip so the API and
+ * the database cannot disagree about what a cycle is.
+ */
+export const resolveParent = async (
+  actor: Actor,
+  childId: string,
+  raw: string,
+): Promise<{ id: string } | { error: string }> => {
+  const parent = await findTask(actor, raw, 'id, number, title')
+  if (!parent) return { error: `No task ${raw}.` }
+  if (parent.id === childId) return { error: 'A task cannot be its own parent.' }
+
+  const { data, error } = await admin().rpc('task_is_descendant', {
+    p_candidate: parent.id,
+    p_ancestor: childId,
+  })
+  if (error) return { error: error.message }
+  if (data === true) {
+    return { error: `${raw} is already nested beneath this task — that would be a loop.` }
+  }
+  return { id: parent.id }
 }

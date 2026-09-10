@@ -4,7 +4,7 @@ import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/supabase/admin'
 import { diffTaskEvents, recordActivity } from '@/lib/api/activity'
-import { findTask } from '@/lib/api/tasks'
+import { findTask, resolveParent } from '@/lib/api/tasks'
 import { isTerminal, updateTaskSchema, RESOLUTION_KINDS } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -74,6 +74,16 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       patch.resolved_at = new Date().toISOString()
       patch.resolved_by = actor.actorId
       if (!body.resolutionKind && !task.resolution_kind) patch.resolution_kind = 'fixed'
+    }
+
+    if (body.parentRef !== undefined) {
+      if (body.parentRef === null) {
+        patch.parent_id = null
+      } else {
+        const parent = await resolveParent(actor, task.id, body.parentRef)
+        if ('error' in parent) return fail('validation_failed', parent.error)
+        patch.parent_id = parent.id
+      }
     }
 
     if (body.duplicateOf !== undefined) {

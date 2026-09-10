@@ -3,7 +3,7 @@ import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/supabase/admin'
-import { TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { findTask, TASK_LIST_FIELDS } from '@/lib/api/tasks'
 import { createTaskSchema, TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -63,10 +63,20 @@ export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
     const project = await resolveProject(actor.userId, params.id)
     if (!project) return fail('not_found', `No project ${params.id}.`)
 
+    // A new task has no id yet, so it cannot be its own ancestor — the cycle
+    // walk that re-parenting needs is unnecessary here.
+    let parentId: string | null = null
+    if (body.parentRef) {
+      const parent = await findTask(actor, body.parentRef, 'id')
+      if (!parent) return fail('not_found', `No task ${body.parentRef}.`)
+      parentId = parent.id
+    }
+
     const { data, error } = await admin()
       .from('tasks')
       .insert({
         project_id: project.id,
+        parent_id: parentId,
         title: body.title,
         description: body.description ?? null,
         type: body.type,

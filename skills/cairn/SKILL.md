@@ -124,7 +124,19 @@ Naming the original is the point. `--kind duplicate` on its own records *that* i
 duplicate and leaves the reader to go and find *what* — which is the work the resolution
 was supposed to save.
 
-## 9. What already happened
+## 9. Splitting work up
+
+```bash
+cairn add "write the migration" --project CAI --parent CAI-42
+cairn children CAI-42                 # the split, and how much of it is closed
+cairn update CAI-7 --no-parent        # lift it back to the top level
+```
+
+Sub-tasks are *containment*; `blockedby` is *ordering*. Use a parent when one task is
+too big for a single resolution, and a blocker when two separate things have to happen
+in an order.
+
+## 10. What already happened
 
 ```bash
 cairn history CAI-42     # status moves, claims, renames, resolutions — with who and when

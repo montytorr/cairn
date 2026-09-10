@@ -30,6 +30,7 @@ export type Task = {
   external_url: string | null
   has_resolution: boolean
   duplicate_of: string | null
+  parent_id: string | null
   created_at: string
   updated_at: string
 }
@@ -188,6 +189,51 @@ export const getDuplicateOf = async (
     number: number
     title: string
     status: string
+    project: { key: string } | { key: string }[]
+  }
+  const project = Array.isArray(row.project) ? row.project[0] : row.project
+  return { ref: `${project?.key}-${row.number}`, title: row.title, status: row.status }
+}
+
+export type ChildTask = {
+  id: string
+  number: number
+  title: string
+  status: TaskStatus
+  type: TaskType
+  priority: TaskPriority
+  project_key: string
+}
+
+/** Direct children only. A tree view of a two-level split is noise. */
+export const listChildren = async (taskId: string): Promise<ChildTask[]> => {
+  const { data } = await admin()
+    .from('tasks')
+    .select('id, number, title, status, type, priority, project:projects!inner(key)')
+    .eq('parent_id', taskId)
+    .order('created_at')
+  return ((data ?? []) as unknown as (Omit<ChildTask, 'project_key'> & {
+    project: { key: string } | { key: string }[]
+  })[]).map((row) => {
+    const project = Array.isArray(row.project) ? row.project[0] : row.project
+    return { ...row, project_key: project?.key ?? '' }
+  })
+}
+
+/** The parent's ref and title, for the breadcrumb on a child. */
+export const getParent = async (
+  taskId: string,
+): Promise<{ ref: string; title: string; status: TaskStatus } | null> => {
+  const { data } = await admin()
+    .from('tasks')
+    .select('number, title, status, project:projects!inner(key)')
+    .eq('id', taskId)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as unknown as {
+    number: number
+    title: string
+    status: TaskStatus
     project: { key: string } | { key: string }[]
   }
   const project = Array.isArray(row.project) ? row.project[0] : row.project

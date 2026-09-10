@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
-  currentUser, getDuplicateOf, getTask, listActivity, listAttachments, listComments,
-  listNotes, listRelations,
+  currentUser, getDuplicateOf, getParent, getTask, listActivity, listAttachments,
+  listChildren, listComments, listNotes, listRelations,
 } from '@/lib/data'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { MarkdownView } from '@/components/markdown'
@@ -15,6 +15,7 @@ import { NotesPanel } from './notes-panel'
 import { CommentsPanel } from './comments-panel'
 import { AttachmentsPanel } from './attachments-panel'
 import { ActivityPanel } from './activity-panel'
+import { ChildrenPanel } from './children-panel'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,13 +30,16 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
   const task = await getTask(user.id, key, parsed)
   if (!task) notFound()
 
-  const [notes, comments, attachments, relations, duplicateOf, activity] = await Promise.all([
+  const [notes, comments, attachments, relations, duplicateOf, activity, children, parent] =
+    await Promise.all([
     listNotes(task.id),
     listComments(task.id),
     listAttachments(task.id),
     listRelations(task.id),
     task.duplicate_of ? getDuplicateOf(task.duplicate_of) : Promise.resolve(null),
     listActivity(task.id),
+    listChildren(task.id),
+    task.parent_id ? getParent(task.parent_id) : Promise.resolve(null),
   ])
 
   const ref = task.external_ref ?? `${task.project.key}-${task.number}`
@@ -55,6 +59,19 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           {task.project.title}
         </Link>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        {parent ? (
+          <>
+            <Link
+              href={`/projects/${parent.ref.slice(0, parent.ref.lastIndexOf('-'))}/tasks/${parent.ref.slice(parent.ref.lastIndexOf('-') + 1)}`}
+              prefetch
+              className="text-fg-muted hover:text-fg max-w-[22ch] truncate text-[13px] transition-colors"
+              title={parent.title}
+            >
+              {parent.title}
+            </Link>
+            <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+          </>
+        ) : null}
         <span className="text-fg-subtle text-[13px] tabular">{ref}</span>
         <span className="text-fg max-w-[38ch] truncate text-[13px]">{task.title}</span>
       </header>
@@ -113,6 +130,11 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
               <AttachmentsPanel taskId={task.id} attachments={attachments} />
               <NotesPanel taskId={task.id} notes={notes} />
               <CommentsPanel taskId={task.id} comments={comments} />
+              <ChildrenPanel
+                taskRef={`${task.project.key}-${task.number}`}
+                projectKey={task.project.key}
+                items={children}
+              />
               <ActivityPanel entries={activity} />
             </div>
           </div>

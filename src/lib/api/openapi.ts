@@ -306,6 +306,16 @@ export const openapiSpec = () => ({
         responses: { '200': okResponse('Updated.') },
       },
     },
+    '/tasks/{ref}/children': {
+      parameters: [refParam],
+      get: {
+        summary: 'Direct sub-tasks, with a closed/total rollup',
+        description:
+          'Counts closed rather than done: a cancelled sub-task is decided, and a parent ' +
+          'reported as permanently incomplete because one piece was dropped is useless.',
+        responses: { '200': okResponse('{count, closed, children}.'), '404': errorResponse },
+      },
+    },
     '/tasks/{ref}/activity': {
       parameters: [refParam],
       get: {
