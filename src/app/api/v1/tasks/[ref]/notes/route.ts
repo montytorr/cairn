@@ -59,7 +59,7 @@ export const POST = route<{ ref: string }, z.infer<typeof createNoteSchema>>({
         },
         { onConflict: 'task_id,content_hash', ignoreDuplicates: true },
       )
-      .select('id, kind, note, created_at')
+      .select('id, kind, note, facts, actor_type, actor_id, created_at')
       .maybeSingle()
 
     if (error) return fail('internal_error', error.message)

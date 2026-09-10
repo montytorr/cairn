@@ -4,10 +4,19 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import type { Comment } from '@/lib/data'
+import { Button, Textarea } from '@/components/ui/control'
 
 /** Conversation aimed at the human, kept separate from the agent work log. */
-export const CommentsPanel = ({ taskId, comments }: { taskId: string; comments: Comment[] }) => {
+export const CommentsPanel = ({
+  taskId,
+  comments: initial,
+}: {
+  taskId: string
+  comments: Comment[]
+}) => {
   const router = useRouter()
+  // Appended locally; see the note in notes-panel.tsx.
+  const [comments, setComments] = useState(initial)
   const [text, setText] = useState('')
   const [pending, setPending] = useState(false)
 
@@ -20,10 +29,14 @@ export const CommentsPanel = ({ taskId, comments }: { taskId: string; comments: 
       body: JSON.stringify({ content: text.trim() }),
     })
     setPending(false)
-    if (res.ok) {
-      setText('')
-      router.refresh()
-    }
+    if (!res.ok) return
+
+    const payload = await res.json().catch(() => null)
+    const created = payload?.data
+    setText('')
+
+    if (created?.id) setComments((current) => [...current, created as Comment])
+    else router.refresh()
   }
 
   return (
@@ -52,7 +65,7 @@ export const CommentsPanel = ({ taskId, comments }: { taskId: string; comments: 
       )}
 
       <div className="flex gap-2">
-        <textarea
+        <Textarea
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -60,16 +73,17 @@ export const CommentsPanel = ({ taskId, comments }: { taskId: string; comments: 
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
           }}
           placeholder="Add a comment…"
-          className="border-border bg-bg focus:border-accent min-w-0 flex-1 resize-none rounded-md border px-2.5 py-2 text-[13px] outline-none transition-colors"
+          className="min-w-0 flex-1"
         />
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="primary"
           onClick={submit}
           disabled={!text.trim() || pending}
-          className="bg-accent text-accent-fg self-end rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+          className="w-auto self-end px-3"
         >
           {pending ? '…' : 'Post'}
-        </button>
+        </Button>
       </div>
     </section>
   )

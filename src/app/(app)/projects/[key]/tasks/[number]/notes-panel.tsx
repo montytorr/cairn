@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
+import { Button, Select, Textarea } from '@/components/ui/control'
 import type { Note } from '@/lib/data'
 
 const KIND_STYLE: Record<string, string> = {
@@ -20,8 +21,13 @@ const KIND_STYLE: Record<string, string> = {
  * trail — attempts and dead ends included, because "tried X, no difference" is
  * what stops the next agent repeating it.
  */
-export const NotesPanel = ({ taskId, notes }: { taskId: string; notes: Note[] }) => {
+export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: Note[] }) => {
   const router = useRouter()
+  // Appended locally on submit rather than re-rendering the whole page.
+  // router.refresh() re-runs every server component on the route, which is
+  // needless work for "add one row to a list" and very noticeable when the
+  // host is under load.
+  const [notes, setNotes] = useState(initial)
   const [text, setText] = useState('')
   const [kind, setKind] = useState<NoteKind>('note')
   const [pending, setPending] = useState(false)
@@ -36,9 +42,17 @@ export const NotesPanel = ({ taskId, notes }: { taskId: string; notes: Note[] })
       body: JSON.stringify({ note: text.trim(), kind }),
     })
     setPending(false)
-    if (res.ok) {
-      setText('')
-      router.refresh()
+    if (!res.ok) return
+
+    const payload = await res.json().catch(() => null)
+    const created = payload?.data
+    setText('')
+
+    if (created?.duplicate) return // identical note already recorded
+    if (created?.id) {
+      setNotes((current) => [created as Note, ...current])
+    } else {
+      router.refresh() // unexpected shape; fall back to a reload
     }
   }
 
@@ -50,35 +64,35 @@ export const NotesPanel = ({ taskId, notes }: { taskId: string; notes: Note[] })
       </h2>
 
       <div className="mb-3 flex gap-2">
-        <textarea
+        <Textarea
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
           }}
-          placeholder="What did you try, find, or decide?"
-          className="border-border bg-bg focus:border-accent min-w-0 flex-1 resize-none rounded-md border px-2.5 py-2 text-[13px] outline-none transition-colors"
+          placeholder="What did you try, find, or decide? Dead ends count."
+          className="min-w-0 flex-1"
         />
-        <div className="flex flex-col gap-1.5">
-          <select
+        <div className="flex w-28 shrink-0 flex-col gap-1.5">
+          <Select
+            size="sm"
             value={kind}
             onChange={(e) => setKind(e.target.value as NoteKind)}
-            className="border-border bg-bg rounded-md border px-1.5 py-1 text-[11px]"
             aria-label="Note kind"
           >
             {NOTE_KINDS.map((k) => (
               <option key={k} value={k}>{k}</option>
             ))}
-          </select>
-          <button
-            type="button"
+          </Select>
+          <Button
+            size="sm"
+            variant="primary"
             onClick={submit}
             disabled={!text.trim() || pending}
-            className="bg-accent text-accent-fg rounded-md px-2 py-1 text-[11px] font-medium disabled:opacity-50"
           >
-            {pending ? '…' : 'Add'}
-          </button>
+            {pending ? '…' : 'Add note'}
+          </Button>
         </div>
       </div>
 

@@ -39,7 +39,7 @@ export const POST = route<{ ref: string }, z.infer<typeof createComment>>({
         actor_id: actor.actorId,
         content: body.content,
       })
-      .select('id, content, created_at')
+      .select('id, content, comment_type, actor_type, actor_id, created_at')
       .single()
 
     if (error) return fail('internal_error', error.message)

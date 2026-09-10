@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { RESOLUTION_KINDS, type ResolutionKind, type TaskStatus } from '@/schemas/task'
+import { Button, Select, Textarea } from '@/components/ui/control'
 
 /**
  * Closing a task requires saying how it ended, so this is the friction point
@@ -62,7 +63,7 @@ export const ResolutionDialog = ({
           asks whether this was already solved.
         </p>
 
-        <textarea
+        <Textarea
           ref={ref}
           rows={4}
           value={value}
@@ -71,7 +72,7 @@ export const ResolutionDialog = ({
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
           }}
           placeholder="raised supavisor pool_size to 40; the default 15 was the cap"
-          className="border-border bg-bg focus:border-accent mt-3 w-full resize-none rounded-md border px-2.5 py-2 text-sm outline-none transition-colors"
+          className="mt-3"
         />
 
         {suggestion && value === suggestion && (
@@ -81,10 +82,11 @@ export const ResolutionDialog = ({
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <select
+          <Select
+            size="sm"
             value={kind}
             onChange={(e) => setKind(e.target.value as ResolutionKind)}
-            className="border-border bg-bg rounded-md border px-2 py-1.5 text-xs"
+            className="w-40"
             aria-label="Resolution kind"
           >
             {RESOLUTION_KINDS.map((k) => (
@@ -92,24 +94,21 @@ export const ResolutionDialog = ({
                 {k}
               </option>
             ))}
-          </select>
+          </Select>
 
           <div className="ml-auto flex gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-fg-muted hover:bg-surface-raised rounded-md px-3 py-1.5 text-xs transition-colors"
-            >
+            <Button size="sm" variant="ghost" onClick={onCancel} className="w-auto px-3">
               Cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
               onClick={submit}
               disabled={!value.trim() || pending}
-              className="bg-accent text-accent-fg rounded-md px-3 py-1.5 text-xs font-medium transition-opacity disabled:opacity-50"
+              className="w-auto px-3"
             >
               {pending ? 'Saving…' : status === 'cancelled' ? 'Cancel task' : 'Close task'}
-            </button>
+            </Button>
           </div>
         </div>
         <p className="text-fg-subtle mt-2 text-[11px]">⌘↵ to save</p>

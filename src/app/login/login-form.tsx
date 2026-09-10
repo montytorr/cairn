@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useSupabaseConfig } from '@/components/supabase-provider'
+import { Button, Input } from '@/components/ui/control'
 
 export const LoginForm = () => {
   const router = useRouter()
@@ -56,25 +57,23 @@ export const LoginForm = () => {
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
             <span className="text-fg-muted text-xs font-medium">Email</span>
-            <input
+            <Input
               type="email"
               required
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="border-border bg-surface focus:border-accent rounded-md border px-3 py-2 text-sm outline-none transition-colors"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-fg-muted text-xs font-medium">Password</span>
-            <input
+            <Input
               type="password"
               required
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="border-border bg-surface focus:border-accent rounded-md border px-3 py-2 text-sm outline-none transition-colors"
             />
           </label>
 
@@ -92,13 +91,14 @@ export const LoginForm = () => {
             </p>
           ) : null}
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={pending || !configured}
-            className="bg-accent text-accent-fg mt-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+            className="mt-2"
           >
             {pending ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
         </form>
 
         <p className="text-fg-subtle mt-6 text-xs leading-relaxed">

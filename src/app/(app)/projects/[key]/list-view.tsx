@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { ClaimChip, Label, PriorityBadge, StatusBadge, TypeBadge } from '@/components/badges'
 import { cn, isClaimStale } from '@/lib/utils'
+import { Input, Select } from '@/components/ui/control'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
 import type { Task } from '@/lib/data'
 
@@ -51,36 +52,52 @@ export const ListView = ({ tasks, projectKey }: { tasks: Task[]; projectKey: str
       .filter((g) => g.items.length > 0)
   }, [filtered, groupBy])
 
-  const select =
-    'border-border bg-bg rounded-md border px-2 py-1 text-xs outline-none focus:border-accent'
-
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input
+        <Input
+          size="sm"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter…"
-          className={cn(select, 'min-w-40 flex-1')}
+          placeholder="Filter tasks…"
+          className="min-w-40 flex-1"
         />
-        <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} className={select} aria-label="Group by">
+        <Select
+          size="sm"
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+          className="w-36"
+          aria-label="Group by"
+        >
           <option value="status">Group: status</option>
           <option value="type">Group: type</option>
           <option value="priority">Group: priority</option>
           <option value="none">No grouping</option>
-        </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus | 'all')} className={select} aria-label="Status">
+        </Select>
+        <Select
+          size="sm"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as TaskStatus | 'all')}
+          className="w-32"
+          aria-label="Status"
+        >
           <option value="all">Any status</option>
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
-        <select value={type} onChange={(e) => setType(e.target.value as TaskType | 'all')} className={select} aria-label="Type">
+        </Select>
+        <Select
+          size="sm"
+          value={type}
+          onChange={(e) => setType(e.target.value as TaskType | 'all')}
+          className="w-32"
+          aria-label="Type"
+        >
           <option value="all">Any type</option>
           {TASK_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
-        </select>
+        </Select>
         <label className="text-fg-muted flex items-center gap-1.5 text-xs">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} className="accent-accent" />
           closed

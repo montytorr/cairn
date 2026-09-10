@@ -4,17 +4,15 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES, isTerminal, type TaskStatus } from '@/schemas/task'
 import { ResolutionDialog } from '../../resolution-dialog'
+import { Select } from '@/components/ui/control'
 import type { Task } from '@/lib/data'
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="flex items-center gap-2 py-1">
-    <span className="text-fg-subtle w-20 shrink-0 text-[11px]">{label}</span>
+  <div className="grid grid-cols-[4.5rem_1fr] items-center gap-2 py-1">
+    <span className="text-fg-subtle text-[11px]">{label}</span>
     {children}
   </div>
 )
-
-const select =
-  'border-border bg-bg focus:border-accent flex-1 rounded-md border px-2 py-1 text-xs outline-none transition-colors'
 
 export const TaskMeta = ({ task }: { task: Task }) => {
   const router = useRouter()
@@ -46,45 +44,45 @@ export const TaskMeta = ({ task }: { task: Task }) => {
   return (
     <div className="flex flex-col">
       <Row label="Status">
-        <select
+        <Select
+          size="sm"
           value={task.status}
           onChange={(e) => onStatus(e.target.value as TaskStatus)}
           disabled={saving}
-          className={select}
           aria-label="Status"
         >
           {TASK_STATUSES.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
+        </Select>
       </Row>
 
       <Row label="Type">
-        <select
+        <Select
+          size="sm"
           value={task.type}
           onChange={(e) => void patch({ type: e.target.value })}
           disabled={saving}
-          className={select}
           aria-label="Type"
         >
           {TASK_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
-        </select>
+        </Select>
       </Row>
 
       <Row label="Priority">
-        <select
+        <Select
+          size="sm"
           value={task.priority}
           onChange={(e) => void patch({ priority: e.target.value })}
           disabled={saving}
-          className={select}
           aria-label="Priority"
         >
           {TASK_PRIORITIES.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
-        </select>
+        </Select>
       </Row>
 
       <Row label="Labels">
