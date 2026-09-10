@@ -212,6 +212,9 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn done <ref> --duplicate-of CAI-31 --resolution "…"   points at the original
     cairn attach <ref> <file>      |   cairn files <ref>
 
+  history
+    cairn history <ref>                     what changed, when, and who changed it
+
   dependencies
     cairn deps <ref>                        what blocks this, and what it blocks
     cairn blockedby <ref> <other>           mark <ref> as blocked by <other>
@@ -254,6 +257,19 @@ const closeTask = async (status, defaultKind) => {
     body.resolutionKind = 'duplicate'
   }
   emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
+}
+
+/** `from -> to`, or the raw keys, kept to one short cell. */
+const summariseEvent = (data) => {
+  if (!data || typeof data !== 'object') return ''
+  if ('from' in data || 'to' in data) {
+    const from = Array.isArray(data.from) ? data.from.join('|') : (data.from ?? '')
+    const to = Array.isArray(data.to) ? data.to.join('|') : (data.to ?? '')
+    return `${from} -> ${to}`
+  }
+  return Object.entries(data)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(' ')
 }
 
 const commands = {
@@ -423,6 +439,22 @@ const commands = {
         })),
       columns: ['id', 'name', 'type', 'bytes', 'by'],
     })
+  },
+
+  async history() {
+    const ref = need(positional[0], 'usage: cairn history <ref>')
+    const data = await request('GET', `/api/v1/tasks/${ref}/activity`)
+    emit(data, {
+      rows: (d) =>
+        d.map((e) => ({
+          when: e.created_at.slice(0, 16).replace('T', ' '),
+          who: e.actor_id,
+          event: e.event,
+          detail: summariseEvent(e.data),
+        })),
+      columns: ['when', 'who', 'event', 'detail'],
+    })
+    if (FORMAT === 'tsv' && data.length === 0) process.stderr.write('no recorded activity\n')
   },
 
   async deps() {

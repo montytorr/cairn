@@ -6,7 +6,7 @@ export const TASK_FIELDS =
   'id, number, title, description, type, status, priority, labels, due_date, position, ' +
   'actor_type, actor_id, claimed_by, claimed_at, heartbeat_at, attempt, ' +
   'checkpoint_summary, checkpoint_payload, checkpoint_at, blocked_reason, blocked_at, ' +
-  'resolution, resolution_kind, resolved_at, resolved_by, ' +
+  'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, ' +
   'memory_session_id, observation_ids, created_at, updated_at, ' +
   'project:projects!inner(id, key, title, owner_user_id)'
 

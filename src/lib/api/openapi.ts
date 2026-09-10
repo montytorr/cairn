@@ -306,6 +306,17 @@ export const openapiSpec = () => ({
         responses: { '200': okResponse('Updated.') },
       },
     },
+    '/tasks/{ref}/activity': {
+      parameters: [refParam],
+      get: {
+        summary: 'The audit trail: what changed, when, and who changed it',
+        description:
+          'Distinct from /notes, which is what an agent chose to say. This is what ' +
+          'actually happened, whether anyone narrated it or not. Newest first.',
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 100 } }],
+        responses: { '200': okResponse('Events.'), '404': errorResponse },
+      },
+    },
     '/tasks/{ref}/dependencies': {
       parameters: [refParam],
       get: {

@@ -124,6 +124,16 @@ Naming the original is the point. `--kind duplicate` on its own records *that* i
 duplicate and leaves the reader to go and find *what* — which is the work the resolution
 was supposed to save.
 
+## 9. What already happened
+
+```bash
+cairn history CAI-42     # status moves, claims, renames, resolutions — with who and when
+```
+
+Different from `cairn log`, which is what an agent *said*. `history` is what actually
+happened, recorded whether anyone narrated it or not. Reach for it when a task is in a
+state nobody explained.
+
 ## Output
 
 TSV by default: a `#count` line, one header row, then rows; nulls omitted. `--json` to

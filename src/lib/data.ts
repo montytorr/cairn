@@ -194,6 +194,26 @@ export const getDuplicateOf = async (
   return { ref: `${project?.key}-${row.number}`, title: row.title, status: row.status }
 }
 
+export type ActivityEntry = {
+  id: string
+  event: string
+  data: Record<string, unknown> | null
+  actor_type: string
+  actor_id: string
+  created_at: string
+}
+
+/** The audit trail for one task, newest first. */
+export const listActivity = async (taskId: string): Promise<ActivityEntry[]> => {
+  const { data } = await admin()
+    .from('task_activity_events')
+    .select('id, event, data, actor_type, actor_id, created_at')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  return (data ?? []) as ActivityEntry[]
+}
+
 export type Note = {
   id: string
   kind: string

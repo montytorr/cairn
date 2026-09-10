@@ -3,6 +3,7 @@ import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/supabase/admin'
+import { diffTaskEvents, recordActivity } from '@/lib/api/activity'
 import { findTask } from '@/lib/api/tasks'
 import { isTerminal, updateTaskSchema, RESOLUTION_KINDS } from '@/schemas/task'
 
@@ -125,15 +126,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       })
     }
 
-    if (body.status && body.status !== task.status) {
-      await admin().from('task_activity_events').insert({
-        task_id: task.id,
-        actor_type: actor.actorType,
-        actor_id: actor.actorId,
-        event: 'status_changed',
-        data: { from: task.status, to: body.status },
-      })
-    }
+    await recordActivity(diffTaskEvents(actor, task.id, task, patch))
 
     return ok(data)
   },
