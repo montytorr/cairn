@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { RESOLUTION_KINDS, type ResolutionKind, type TaskStatus } from '@/schemas/task'
-import { Button, Select, Textarea } from '@/components/ui/control'
+import { Button, Select, Textarea, InlineInput } from '@/components/ui/control'
 
 /**
  * Closing a task requires saying how it ended, so this is the friction point
@@ -118,7 +118,7 @@ export const ResolutionDialog = ({
           </Select>
 
           {needsOriginal && (
-            <input
+            <InlineInput
               value={duplicateOf}
               onChange={(e) => setDuplicateOf(e.target.value)}
               onKeyDown={(e) => {
@@ -126,7 +126,7 @@ export const ResolutionDialog = ({
               }}
               placeholder="duplicate of… CAI-31"
               aria-label="The task this duplicates"
-              className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[28px] w-[150px] rounded-md border px-2 text-[12.5px] outline-none"
+              className="w-[150px]"
             />
           )}
 

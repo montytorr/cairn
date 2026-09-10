@@ -29,7 +29,7 @@ const Filter = ({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={placeholder}
-      className={`border-border bg-bg hover:bg-surface-hover h-[26px] cursor-pointer appearance-none rounded-md border pr-6 pl-2 text-[12px] outline-none transition-colors ${
+      className={`border-border bg-bg hover:bg-surface-hover h-[26px] cursor-pointer appearance-none [-webkit-appearance:none] rounded-md border pr-6 pl-2 text-[12px] outline-none transition-colors ${
         value ? 'text-fg' : 'text-fg-subtle'
       }`}
     >

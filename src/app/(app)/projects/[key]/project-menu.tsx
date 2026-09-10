@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
@@ -64,7 +66,7 @@ const DeleteDialog = ({
         <label className="text-fg-subtle mt-4 block text-[11px] font-medium">
           Type {projectKey} to confirm
         </label>
-        <input
+        <InlineInput
           autoFocus
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -72,7 +74,7 @@ const DeleteDialog = ({
             if (e.key === 'Enter') void submit()
             if (e.key === 'Escape') onClose()
           }}
-          className="border-border bg-bg text-fg focus:border-danger mt-1.5 h-[30px] w-full rounded-md border px-2 text-[13px] outline-none"
+          className="focus:border-danger focus:ring-danger/25 mt-1.5 h-[30px] text-[13px]"
           aria-label={`Type ${projectKey} to confirm deletion`}
         />
         {error && <p className="text-danger mt-2 text-[12px]">{error}</p>}
@@ -162,7 +164,7 @@ export const ProjectMenu = ({
 
   if (renaming) {
     return (
-      <input
+      <InlineInput
         autoFocus
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -175,7 +177,7 @@ export const ProjectMenu = ({
           }
         }}
         aria-label="Project name"
-        className="border-border bg-bg text-fg focus:border-accent h-[26px] w-[220px] rounded-md border px-2 text-[13px] outline-none"
+        className="w-[220px] text-[13px]"
       />
     )
   }

@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -107,7 +109,7 @@ const Picker = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <input
+      <InlineInput
         ref={inputRef}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -118,7 +120,7 @@ const Picker = ({
         }}
         placeholder={PLACEHOLDER[direction]}
         aria-label={PLACEHOLDER[direction]}
-        className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[26px] rounded-md border px-2 text-[12.5px] outline-none"
+        className=""
       />
       {q.length >= 2 && (
         <div className="flex flex-col">

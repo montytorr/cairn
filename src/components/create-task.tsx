@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
@@ -242,13 +244,13 @@ export const CreateTask = ({
           </label>
 
           <label className="relative">
-            <input
+            <InlineInput
               value={labels}
               onChange={(e) => setLabels(e.target.value)}
               list="cairn-known-labels"
               placeholder="labels…"
               aria-label="Labels, comma separated"
-              className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[26px] w-[130px] rounded-md border px-2 text-[12px] outline-none"
+              className="w-[130px] text-[12px]"
             />
             <datalist id="cairn-known-labels">
               {known.map((l) => (

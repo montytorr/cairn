@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LabelPill } from '@/components/icons'
@@ -62,7 +64,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
             <li key={l.label} className="flex min-h-[38px] items-center gap-2 px-3 py-1.5">
               {editing === l.label ? (
                 <>
-                  <input
+                  <InlineInput
                     autoFocus
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
@@ -71,7 +73,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
                       if (e.key === 'Escape') setEditing(null)
                     }}
                     aria-label={`Rename ${l.label}`}
-                    className="border-border bg-bg text-fg focus:border-accent h-[26px] min-w-0 flex-1 rounded-md border px-2 text-[12.5px] outline-none"
+                    className="min-w-0 flex-1"
                   />
                   {existing.has(draft.trim()) && draft.trim() !== l.label && (
                     <span className="text-fg-subtle shrink-0 text-[11px]">merges</span>

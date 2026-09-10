@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -126,7 +128,7 @@ export const ChildrenPanel = ({
       )}
 
       {adding && (
-        <input
+        <InlineInput
           autoFocus
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -136,7 +138,7 @@ export const ChildrenPanel = ({
           }}
           placeholder="What is the next piece?"
           aria-label="New sub-task title"
-          className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent mt-2 h-[30px] w-full rounded-md border px-2.5 text-[12.5px] outline-none"
+          className="mt-2"
         />
       )}
 

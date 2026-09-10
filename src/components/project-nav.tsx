@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
-import { Inbox, Search } from 'lucide-react'
+import { Inbox, Search, X } from 'lucide-react'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -61,15 +61,30 @@ export const ProjectNav = ({
       <span className="text-fg-subtle px-2 pb-1 text-[11px] font-medium">Projects</span>
 
       {projects.length > 8 && (
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Find a project…"
-          aria-label="Filter projects"
-          className={
-            "placeholder:text-fg-subtle mb-1 rounded-md bg-transparent px-2 py-1 text-[12px] outline-none focus:bg-surface"
-          }
-        />
+        <div className="relative mb-1">
+          <Search
+            size={11}
+            aria-hidden
+            className="text-fg-subtle pointer-events-none absolute top-1/2 left-2 -translate-y-1/2"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find a project…"
+            aria-label="Filter projects"
+            className="placeholder:text-fg-subtle hover:bg-surface focus:bg-surface focus:ring-ring/30 w-full rounded-md border border-transparent bg-transparent py-1 pr-2 pl-6 text-[12px] outline-none transition-colors focus:ring-2"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear the project filter"
+              className="text-fg-subtle hover:text-fg absolute top-1/2 right-1.5 -translate-y-1/2"
+            >
+              <X size={11} aria-hidden />
+            </button>
+          )}
+        </div>
       )}
 
       <ul className="-mx-0.5 flex-1 overflow-y-auto pb-2">

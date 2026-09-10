@@ -115,3 +115,26 @@ export const Field = ({ label, children }: { label: string; children: React.Reac
     {children}
   </label>
 )
+
+/**
+ * The small inline input used inside popovers, pickers and rows.
+ *
+ * The same class string was hand-written in seven places, so they had drifted
+ * apart on height, radius and focus treatment. One definition means one look.
+ */
+export const InlineInput = forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
+  ({ className, ...props }, ref) => (
+    <input
+      ref={ref}
+      className={cn(
+        'border-border bg-bg text-fg placeholder:text-fg-subtle h-[28px] w-full rounded-md border px-2 text-[12.5px] outline-none',
+        'transition-[border-color,box-shadow] duration-100',
+        'hover:border-border-strong focus:border-accent focus:ring-ring/30 focus:ring-2',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  ),
+)
+InlineInput.displayName = 'InlineInput'

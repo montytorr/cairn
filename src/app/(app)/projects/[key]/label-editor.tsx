@@ -1,5 +1,7 @@
 'use client'
 
+import { InlineInput } from '@/components/ui/control'
+
 import { useEffect, useRef, useState } from 'react'
 import { LabelPill } from '@/components/icons'
 
@@ -112,7 +114,7 @@ export const LabelEditor = ({
           </div>
 
           <div className="border-border mt-1 border-t px-1.5 pt-1.5">
-            <input
+            <InlineInput
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -120,7 +122,7 @@ export const LabelEditor = ({
               }}
               placeholder="New label…"
               aria-label="New label"
-              className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[24px] w-full rounded border px-1.5 text-[12px] outline-none"
+              className="h-[26px] text-[12px]"
             />
           </div>
         </div>
