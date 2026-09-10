@@ -47,11 +47,14 @@ export const SignOut = () => {
       type="button"
       onClick={() => void signOut()}
       disabled={busy}
+      aria-label="Sign out"
       title={failed ? 'Signed out locally; the server call failed' : 'Sign out'}
       className="text-fg-subtle hover:text-fg hover:bg-surface-hover flex items-center gap-1.5 rounded px-1.5 py-1 transition-colors disabled:opacity-60"
     >
-      {busy ? <Spinner size={11} /> : <LogOut size={11} aria-hidden />}
-      <span>{busy ? 'Signing out…' : 'Sign out'}</span>
+      {busy ? <Spinner size={12} /> : <LogOut size={12} aria-hidden />}
+      {/* Label only where there is room: at 220px it wrapped to "Sign / out",
+          which looked broken. The button is still named for a screen reader. */}
+      <span className="sr-only">{busy ? 'Signing out…' : 'Sign out'}</span>
     </button>
   )
 }

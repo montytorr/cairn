@@ -15,6 +15,8 @@ import {
   type TaskType,
 } from '@/schemas/task'
 import { cn } from '@/lib/utils'
+import { shortDateWithYear } from '@/lib/dates'
+import { RelativeTime } from '@/components/relative-time'
 import { useRenderedClaimStale } from '@/lib/use-mounted'
 import type { Task, Project, Relation } from '@/lib/data'
 
@@ -212,6 +214,30 @@ export const Properties = ({
           <code className="text-fg-subtle text-[12px]">{task.external_ref}</code>
         </Section>
       )}
+
+      <Section title="Dates" className="hidden lg:flex">
+        <dl className="flex flex-col gap-1">
+          {(
+            [
+              ['Created', task.created_at],
+              ['Updated', task.updated_at],
+              ['Resolved', task.resolved_at],
+              ['Due', task.due_date],
+            ] as const
+          )
+            .filter(([, value]) => Boolean(value))
+            .map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-2">
+                <dt className="text-fg-subtle text-[12px]">{label}</dt>
+                <dd className="text-fg-muted text-[12px]">
+                  {label === 'Due' ? shortDateWithYear(value as string) : (
+                    <RelativeTime iso={value as string} />
+                  )}
+                </dd>
+              </div>
+            ))}
+        </dl>
+      </Section>
 
       {task.attempt > 1 && (
         <Section title="Attempts" className="hidden lg:flex">
