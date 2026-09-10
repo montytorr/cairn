@@ -1,14 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
-import { Avatar, LabelPill, PriorityIcon, StatusIcon, TypePill } from '@/components/icons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Clock, Plus } from 'lucide-react'
+import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { cn, isClaimStale } from '@/lib/utils'
 import { TASK_STATUSES, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
+/** A group is a status, or the synthetic bucket the Recent tab renders into. */
+type GroupKey = TaskStatus | 'recent'
+
+const GROUP_LABEL: Record<GroupKey, string> = {
+  recent: 'Recently touched',
   backlog: 'Backlog',
   todo: 'Todo',
   doing: 'In Progress',
@@ -17,21 +21,29 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-type Tab = 'active' | 'backlog' | 'all'
+type Tab = 'active' | 'backlog' | 'all' | 'recent' | 'held'
 
 /** `Sep 10` — Linear shows a short date, never a timestamp, in a list. */
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 
-const Row = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) => (
+const Row = ({
+  task,
+  projectKey,
+  showProject,
+}: {
+  task: TaskListItem & { project_key?: string }
+  projectKey: string
+  showProject?: boolean
+}) => (
   <Link
-    href={`/projects/${projectKey}/tasks/${task.number}`}
+    href={`/projects/${task.project_key ?? projectKey}/tasks/${task.number}`}
     className="group hover:bg-surface-hover flex h-[36px] items-center gap-2 pr-4 pl-3 transition-colors duration-75"
   >
     <PriorityIcon priority={task.priority} />
 
     <code className="text-fg-subtle w-[72px] shrink-0 truncate text-[12px] tabular">
-      {task.external_ref ?? `${projectKey}-${task.number}`}
+      {task.external_ref ?? `${task.project_key ?? projectKey}-${task.number}`}
     </code>
 
     <StatusIcon status={task.status} />
@@ -52,6 +64,13 @@ const Row = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) =
         className="bg-status-done size-[6px] shrink-0 rounded-full"
         title="Has a recorded resolution"
       />
+    ) : null}
+
+    {showProject ? (
+      <span className="text-fg-muted hidden shrink-0 items-center gap-1.5 text-[12px] md:flex">
+        <ProjectIcon size={12} />
+        {task.project_key}
+      </span>
     ) : null}
 
     <span className="hidden shrink-0 items-center gap-1.5 lg:flex">
@@ -85,18 +104,51 @@ const Row = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) =
 export const ListView = ({
   tasks,
   projectKey,
+  showProject,
 }: {
-  tasks: TaskListItem[]
+  tasks: (TaskListItem & { project_key?: string })[]
   projectKey: string
+  showProject?: boolean
 }) => {
   const [tab, setTab] = useState<Tab>('all')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const filterRef = useRef<HTMLInputElement>(null)
+
+  // Keyboard shortcuts, in the spirit of the tool this is modelled on.
+  // Deliberately inert while a field has focus — "/" is a character before it
+  // is a command.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement
+      if (
+        el instanceof HTMLElement &&
+        (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      ) {
+        if (e.key === 'Escape') el.blur()
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      if (e.key === '/') {
+        e.preventDefault()
+        filterRef.current?.focus()
+      }
+      if (e.key === '1') setTab('active')
+      if (e.key === '2') setTab('backlog')
+      if (e.key === '3') setTab('all')
+      if (e.key === '4') setTab('recent')
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const filtered = useMemo(() => {
     const byTab = tasks.filter((t) => {
-      if (tab === 'active') return t.status === 'doing' || t.status === 'in-review' || t.status === 'todo'
+      if (tab === 'active')
+        return t.status === 'doing' || t.status === 'in-review' || t.status === 'todo'
       if (tab === 'backlog') return t.status === 'backlog'
+      if (tab === 'held') return Boolean(t.claimed_by)
       return true
     })
     if (!query) return byTab
@@ -108,15 +160,26 @@ export const ListView = ({
     )
   }, [tasks, tab, query])
 
-  const groups = useMemo(
-    () =>
+  const groups = useMemo(() => {
+    if (tab === 'recent') {
+      return [
+        {
+          status: 'recent' as GroupKey,
+          items: [...filtered]
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+            .slice(0, 50),
+          total: filtered.length,
+        },
+      ]
+    }
+    return (
       TASK_STATUSES.map((status) => ({
-        status,
+        status: status as GroupKey,
         items: filtered.filter((t) => t.status === status),
         total: tasks.filter((t) => t.status === status).length,
-      })).filter((g) => g.items.length > 0),
-    [filtered, tasks],
-  )
+      })).filter((g) => g.items.length > 0)
+    )
+  }, [filtered, tasks, tab])
 
   const toggle = (status: string) =>
     setCollapsed((prev) => {
@@ -142,12 +205,21 @@ export const ListView = ({
           Backlog
         </button>
         <button type="button" onClick={() => setTab('all')} className={tabClass('all')}>
-          All tasks
+          All
         </button>
+        <button type="button" onClick={() => setTab('recent')} className={tabClass('recent')}>
+          Recent
+        </button>
+        {tasks.some((t) => t.claimed_by) && (
+          <button type="button" onClick={() => setTab('held')} className={tabClass('held')}>
+            Held
+          </button>
+        )}
         <input
+          ref={filterRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter…"
+          placeholder="Filter…   /"
           aria-label="Filter tasks"
           className="placeholder:text-fg-subtle ml-2 min-w-32 flex-1 bg-transparent px-1 text-[12px] outline-none"
         />
@@ -167,9 +239,13 @@ export const ListView = ({
               onClick={() => toggle(group.status)}
               className="bg-bg-elevated border-border hover:bg-surface-hover sticky top-0 z-10 flex h-[34px] w-full items-center gap-2 border-b px-3 text-left transition-colors"
             >
-              <StatusIcon status={group.status} size={13} />
+              {group.status === 'recent' ? (
+                <Clock size={13} className="text-fg-subtle" />
+              ) : (
+                <StatusIcon status={group.status} size={13} />
+              )}
               <span className="text-fg text-[12px] font-medium">
-                {STATUS_LABEL[group.status]}
+                {GROUP_LABEL[group.status]}
               </span>
               <span className="text-fg-subtle tabular text-[12px]">
                 {group.items.length}
@@ -182,7 +258,7 @@ export const ListView = ({
               <ul className="divide-border divide-y">
                 {group.items.map((task) => (
                   <li key={task.id}>
-                    <Row task={task} projectKey={projectKey} />
+                    <Row task={task} projectKey={projectKey} showProject={showProject} />
                   </li>
                 ))}
               </ul>

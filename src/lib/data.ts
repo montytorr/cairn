@@ -214,3 +214,47 @@ export const listAttachments = async (taskId: string): Promise<Attachment[]> => 
     .order('created_at')
   return (data ?? []) as Attachment[]
 }
+
+
+/**
+ * Every task the user owns, across all projects.
+ *
+ * The single most-missed view: with 34 projects, "what is open anywhere?"
+ * cannot be answered by visiting each one. Same lightweight projection as the
+ * per-project list — no descriptions — plus the project key, which is the
+ * column that only matters when the list spans projects.
+ */
+export const listAllTasks = async (
+  userId: string,
+  {
+    includeClosed = false,
+    limit = 500,
+  }: { includeClosed?: boolean; limit?: number } = {},
+): Promise<{ tasks: (TaskListItem & { project_key: string })[]; closedHidden: number }> => {
+  const closed = ['done', 'cancelled']
+
+  let q = admin()
+    .from('tasks')
+    .select(`${LIST_COLUMNS}, project:projects!inner(key, owner_user_id)`)
+    .eq('projects.owner_user_id', userId)
+
+  if (!includeClosed) q = q.not('status', 'in', `(${closed.join(',')})`)
+
+  const [rows, totals] = await Promise.all([
+    q.order('updated_at', { ascending: false }).limit(limit),
+    admin()
+      .from('tasks')
+      .select('id, project:projects!inner(owner_user_id)', { count: 'exact', head: true })
+      .eq('projects.owner_user_id', userId)
+      .in('status', closed),
+  ])
+
+  type Row = TaskListItem & { project: { key: string } | { key: string }[] }
+  const tasks = ((rows.data ?? []) as unknown as Row[]).map((t) => ({
+    ...t,
+    preview: t.preview ? t.preview.slice(0, PREVIEW_CHARS) : null,
+    project_key: (Array.isArray(t.project) ? t.project[0]?.key : t.project?.key) ?? '',
+  }))
+
+  return { tasks, closedHidden: includeClosed ? 0 : (totals.count ?? 0) }
+}
