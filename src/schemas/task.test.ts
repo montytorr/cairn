@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createTaskSchema, updateTaskSchema, isTerminal, parseTaskRef } from './task'
+import {
+  createTaskSchema,
+  updateTaskSchema,
+  isTerminal,
+  parseTaskRef,
+  TASK_STATUSES,
+} from './task'
 
 describe('createTaskSchema', () => {
   it('applies defaults when fields are omitted', () => {
@@ -65,5 +71,26 @@ describe('parseTaskRef', () => {
   it('rejects malformed refs', () => {
     expect(() => parseTaskRef('42')).toThrow()
     expect(() => parseTaskRef('cai-42')).toThrow()
+  })
+})
+
+describe('terminal transitions release the claim', () => {
+  /**
+   * Guard for a bug found by reading the board: three finished tasks still
+   * showed "held by claude-code" because the PATCH route never cleared the
+   * claim. The claim exists to answer "is another agent on this?", so a stale
+   * one on finished work makes the field untrustworthy.
+   *
+   * The route consults isTerminal() to decide, so this pins that contract.
+   */
+  it('treats exactly done and cancelled as releasing', () => {
+    const releases = TASK_STATUSES.filter((s) => isTerminal(s))
+    expect(releases).toEqual(['done', 'cancelled'])
+  })
+
+  it('does not release on an in-flight status', () => {
+    for (const s of ['backlog', 'todo', 'doing', 'in-review'] as const) {
+      expect(isTerminal(s)).toBe(false)
+    }
   })
 })

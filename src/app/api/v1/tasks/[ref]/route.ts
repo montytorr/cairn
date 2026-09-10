@@ -75,6 +75,15 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       if (!body.resolutionKind && !task.resolution_kind) patch.resolution_kind = 'fixed'
     }
 
+    // Finishing a task releases it. Without this the claim outlives the work,
+    // and a board where done tasks still show a holder makes the one field an
+    // agent checks before picking something up untrustworthy.
+    if (body.status && isTerminal(body.status) && task.claimed_by) {
+      patch.claimed_by = null
+      patch.claimed_at = null
+      patch.heartbeat_at = null
+    }
+
     if (Object.keys(patch).length === 0) {
       return fail('validation_failed', 'No fields to update.')
     }
