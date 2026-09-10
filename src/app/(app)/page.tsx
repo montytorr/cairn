@@ -92,7 +92,7 @@ const Home = async () => {
               >
                 <Link
                   href={`/projects/${keyOf(r)}/tasks/${r.number}`}
-                  className="flex h-row items-center gap-2.5 px-3 transition-colors duration-100 hover:bg-surface-raised"
+                  className="flex h-[36px] items-center gap-2.5 px-3 transition-colors duration-100 hover:bg-surface-raised"
                 >
                   <StatusIcon status={r.status} />
                   <span className="min-w-0 flex-1 truncate text-[13px]">{r.title}</span>

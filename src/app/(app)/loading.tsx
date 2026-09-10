@@ -5,7 +5,7 @@
  * layout does not jump when content lands.
  */
 const Row = ({ delay }: { delay: number }) => (
-  <div className="flex h-row items-center gap-2.5 px-3" style={{ animationDelay: `${delay}ms` }}>
+  <div className="flex h-[36px] items-center gap-2.5 px-3" style={{ animationDelay: `${delay}ms` }}>
     <span className="bg-border size-1.5 shrink-0 rounded-full" />
     <span
       className="bg-border h-2 rounded-full"

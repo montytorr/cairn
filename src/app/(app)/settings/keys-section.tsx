@@ -118,7 +118,7 @@ export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
       {active.length > 0 && (
         <ul className="border-border divide-border mb-4 overflow-hidden rounded-md border divide-y">
           {active.map((k) => (
-            <li key={k.id} className="group flex h-row items-center gap-2.5 px-3">
+            <li key={k.id} className="group flex h-[36px] items-center gap-2.5 px-3">
               <KeyRound size={12} className="text-fg-subtle shrink-0" />
               <span className="w-24 shrink-0 truncate text-[12.5px]">{k.agent_name}</span>
               <code className="text-fg-subtle shrink-0 font-mono text-[10.5px]">

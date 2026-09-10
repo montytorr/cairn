@@ -52,9 +52,9 @@
   --priority-medium: #8a8f98;
   --priority-low:    #8a8f98;
 
-  /* rhythm */
-  --row: 36px;
-  --row-compact: 32px;
+  /* Row heights are applied directly in the markup: a --spacing-* theme token
+     does not generate an `h-*` utility, and the silent fallback to content
+     height cost a round trip to notice. */
 
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
@@ -124,9 +124,6 @@
   --radius-md: var(--radius);
   --radius-lg: 8px;
   --radius-sm: 4px;
-
-  --spacing-row: var(--row);
-  --spacing-rowc: var(--row-compact);
 
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
