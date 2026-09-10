@@ -13,7 +13,11 @@ let cached: SupabaseClient | null = null
 export const admin = (): SupabaseClient => {
   if (cached) return cached
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // Server-side calls prefer an internal address when one is configured, so
+  // they reach the gateway directly instead of leaving the host and coming
+  // back in through the reverse proxy. The public URL stays the fallback, and
+  // remains what the browser uses.
+  const url = process.env.SUPABASE_INTERNAL_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set')
