@@ -37,7 +37,7 @@ const ProjectPage = async ({
         </Link>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
         <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">
-          <ProjectIcon size={13} />
+          <ProjectIcon size={13} projectKey={project.key} />
           {project.title}
         </span>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />

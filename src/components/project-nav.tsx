@@ -80,7 +80,7 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
                     : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
                 )}
               >
-                <ProjectIcon size={13} />
+                <ProjectIcon size={13} projectKey={p.key} />
                 <span className="truncate text-[13px]">{p.title}</span>
                 <code className="text-fg-subtle ml-auto shrink-0 text-[10px]">{p.key}</code>
               </Link>

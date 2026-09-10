@@ -107,7 +107,7 @@ const Row = ({
 
     {showProject ? (
       <span className="text-fg-muted hidden shrink-0 items-center gap-1.5 text-[12px] md:flex">
-        <ProjectIcon size={12} />
+        <ProjectIcon size={12} projectKey={task.project_key} />
         {task.project_key}
       </span>
     ) : null}

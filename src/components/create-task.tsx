@@ -128,7 +128,7 @@ export const CreateTask = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-4 pt-3.5">
-          <ProjectIcon size={12} />
+          <ProjectIcon size={12} projectKey={project || undefined} />
           <span className="text-fg-subtle text-[11px]">New task in {project || '—'}</span>
         </div>
 
@@ -171,7 +171,7 @@ export const CreateTask = ({
 
         <div className="border-border flex flex-wrap items-center gap-1.5 border-t px-4 py-2.5">
           <label className={chip}>
-            <ProjectIcon size={12} />
+            <ProjectIcon size={12} projectKey={project || undefined} />
             {project}
             <select
               value={project}

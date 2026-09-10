@@ -238,9 +238,7 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
                       onSelect={() => go(`/projects/${p.key}`)}
                       className={itemClass}
                     >
-                      <span className="text-fg-subtle">
-                        <ProjectIcon size={13} />
-                      </span>
+                      <ProjectIcon size={13} projectKey={p.key} />
                       <span className="min-w-0 flex-1 truncate">{p.title}</span>
                       <code className="text-fg-subtle shrink-0 text-[10px]">{p.key}</code>
                     </Command.Item>

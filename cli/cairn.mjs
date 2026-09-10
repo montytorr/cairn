@@ -208,6 +208,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
     cairn comment <ref> "<text>"
     cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
+    cairn cancel <ref> --resolution "<why it is being dropped>" [--kind wont-fix]
     cairn attach <ref> <file>      |   cairn files <ref>
 
   dependencies
@@ -234,6 +235,22 @@ const HELP = `cairn — agent-first task tracker and shared memory
 `
 
 const need = (v, msg) => (v === undefined || v === true ? die(msg) : v)
+
+/** Shared by `done` and `cancel`: both close, and both must say how. */
+const closeTask = async (status, defaultKind) => {
+  const verb = status === 'done' ? 'done' : 'cancel'
+  const ref = need(positional[0], `usage: cairn ${verb} <ref> --resolution "<why>"`)
+  const resolution = await resolveValue(
+    need(flags.resolution, 'a --resolution is required: say what was actually done, and why'),
+  )
+  emit(
+    await request('PATCH', `/api/v1/tasks/${ref}`, {
+      status,
+      resolution,
+      resolutionKind: flags.kind ?? defaultKind,
+    }),
+  )
+}
 
 const commands = {
   async check() {
@@ -328,17 +345,23 @@ const commands = {
     if (flags.body) body.description = await resolveValue(flags.body)
     for (const k of ['type', 'status', 'priority']) if (flags[k]) body[k] = flags[k]
     if (flags.label) body.labels = String(flags.label).split(',')
+    // Passed through so a single update can move to a closing status and say
+    // how in one call — without it the API rightly refuses the move.
+    if (flags.resolution) body.resolution = await resolveValue(flags.resolution)
+    if (flags.kind) body.resolutionKind = flags.kind
     emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
   },
 
   async done() {
-    const ref = need(positional[0], 'usage: cairn done <ref> --resolution "<what was done>"')
-    const resolution = await resolveValue(
-      need(flags.resolution, 'a --resolution is required: say what was actually done, and why'),
-    )
-    const body = { status: 'done', resolution }
-    if (flags.kind) body.resolutionKind = flags.kind
-    emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
+    return closeTask('done', 'fixed')
+  },
+
+  /**
+   * Cancelling is closing too. Without this the CLI could reach five of the
+   * six statuses, and a task dropped on purpose had to be edited by hand.
+   */
+  async cancel() {
+    return closeTask('cancelled', 'wont-fix')
   },
 
   async note() {

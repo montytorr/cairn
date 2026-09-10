@@ -47,7 +47,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           href={`/projects/${task.project.key}`}
           className="text-fg-muted hover:text-fg flex items-center gap-1.5 text-[13px] transition-colors"
         >
-          <ProjectIcon size={13} />
+          <ProjectIcon size={13} projectKey={task.project.key} />
           {task.project.title}
         </Link>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />

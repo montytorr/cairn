@@ -220,14 +220,49 @@ export const Avatar = ({ name, size = 18 }: { name: string; size?: number }) => 
   )
 }
 
-/** The hexagon Linear uses for a project. */
-export const ProjectIcon = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden>
+/**
+ * A wider palette than the avatars use: 33 projects through 7 colours puts
+ * near-neighbours in the sidebar on the same hue, which defeats the point.
+ */
+const PROJECT_COLORS = [
+  '#5e6ad2', '#4cb782', '#f2994a', '#eb5757', '#bb87fc', '#4ea7fc', '#26b5a2',
+  '#d4a72c', '#e06c9f', '#7b8794', '#6ec7c0', '#a3874f',
+]
+
+/** Stable across renders, machines and reloads — it is derived, not stored. */
+export const projectColor = (key: string) => {
+  let hash = 0
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+  return PROJECT_COLORS[hash % PROJECT_COLORS.length] as string
+}
+
+/**
+ * The hexagon Linear uses for a project.
+ *
+ * Given a project key it takes that project's colour, filled rather than only
+ * stroked: at 12-13px a 1.3px outline in a mid grey is close to invisible, and
+ * the whole point is telling one project's rows from another's at a glance.
+ */
+export const ProjectIcon = ({ size = 13, projectKey }: { size?: number; projectKey?: string }) => {
+  const color = projectKey ? projectColor(projectKey) : undefined
+  return (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className="shrink-0"
+    style={color ? { color } : undefined}
+    aria-hidden
+  >
     <path
       d="M8 1.5l5.2 3v6l-5.2 3-5.2-3v-6l5.2-3z"
       stroke="currentColor"
       strokeWidth="1.3"
       strokeLinejoin="round"
+      fill={color ? 'currentColor' : 'none'}
+      fillOpacity={color ? 0.24 : 0}
     />
   </svg>
-)
+  )
+}

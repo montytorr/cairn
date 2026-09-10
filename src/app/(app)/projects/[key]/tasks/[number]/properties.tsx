@@ -188,7 +188,7 @@ export const Properties = ({
 
       <Section title="Project">
         <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">
-          <ProjectIcon size={13} />
+          <ProjectIcon size={13} projectKey={project.key} />
           {project.title}
         </span>
       </Section>

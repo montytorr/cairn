@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { currentUser, listProjects } from '@/lib/data'
 import { searchTasks, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
-import { PriorityIcon, StatusIcon, TypePill } from '@/components/icons'
+import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { SearchControls } from './search-controls'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +32,7 @@ const Result = ({ row }: { row: SearchRow }) => {
         <StatusIcon status={row.status as TaskStatus} />
         <span className="text-fg min-w-0 flex-1 truncate text-[13px]">{row.title}</span>
         <TypePill type={row.type as TaskType} />
+        <ProjectIcon size={12} projectKey={row.project_key} />
         <code className="text-fg-subtle tabular w-[80px] shrink-0 truncate text-right text-[12px]">
           {ref}
         </code>

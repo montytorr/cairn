@@ -77,7 +77,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
                   href={`/projects/${p.key}`}
                   className="border-border text-fg-muted hover:bg-surface-hover hover:text-fg flex h-[26px] items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors"
                 >
-                  <ProjectIcon size={12} />
+                  <ProjectIcon size={12} projectKey={p.key} />
                   {p.title}
                   <span className="text-fg-subtle tabular">{p.task_counter}</span>
                 </Link>

@@ -6,8 +6,9 @@ A cairn is a stack of stones travellers leave to mark a path for whoever comes n
 is the idea: agents add to the pile as they work, and anyone who follows — human or agent —
 can read the trail instead of re-walking it.
 
-> Status: early. The schema, agent contract and deployment shape are settled; the UI and
-> API are being built. Not yet usable end to end.
+> Status: in daily use, single-tenant. The schema, agent contract, API, CLI and UI are
+> all in place. Multi-user is not: every RLS policy resolves to a single owner, so it is
+> built for one person and their agents, not a team.
 
 ---
 
@@ -31,14 +32,34 @@ Cairn makes the tracker the memory:
 
 ## Features
 
-- Projects and tasks with human-readable refs (`CAI-42`)
+**Tracking**
+
+- Projects and tasks with human-readable refs (`CAI-42`), per-project numbering
 - Task **types** (`feature · bug · improvement · chore · spike · docs`) and a six-state
   workflow (`backlog · todo · doing · in-review · done · cancelled`)
-- Markdown task bodies with a rich editor and preview
-- Comments, an append-only agent work log, and file attachments
-- Full-text search across titles, bodies, notes and resolutions
-- A claim/heartbeat/checkpoint protocol so several agents can cooperate without collisions
-- REST API with bearer API keys, plus a CLI, an agent skill and an MCP server
+- Priorities, labels, due dates, and blocked-by / blocks **dependencies** with cycle
+  rejection
+- Markdown bodies in a WYSIWYG editor, rendered with syntax-highlighted code, GFM tables
+  and task lists; bare refs like `CAI-42` become links
+- Comments for humans, an append-only work log for agents, and file attachments
+- List and board views, bulk edit with shift-click ranges, a cross-project home, and
+  live updates over SSE
+
+**Memory**
+
+- Postgres full-text search across titles, bodies, notes *and* resolutions, ranked in the
+  database by `ts_rank` — closed work is included on purpose
+- Results come back as an index with a `~tokens` estimate per row, so an agent can budget
+  what it opens instead of pulling bodies it will never read
+- Resolutions are mandatory on close, and carry a kind
+  (`fixed · wont-fix · duplicate · not-reproducible · superseded · answered`)
+
+**Coordination**
+
+- A claim / heartbeat / checkpoint protocol so several agents can work a backlog without
+  collisions, with lease stealing when a holder goes quiet
+- Every write is attributed to the API key that made it
+- REST API with hashed bearer keys, plus a CLI, an agent skill and an MCP server
 
 ## Agent access
 
@@ -52,6 +73,71 @@ implementation:
 | MCP server | Native tool-calling; a thin facade over the CLI, holding no logic |
 
 Start with [`AGENTS.md`](./AGENTS.md) — it is the contract every agent should read.
+
+## The CLI
+
+One implementation, wrapped by the skill and the MCP server so behaviour cannot diverge.
+Output is TSV by default — a `#count` line, a header row, then rows — with `--json` to
+parse and `--pretty` to read.
+
+| | |
+|---|---|
+| `cairn check "<subject>"` | **Start here.** Prior work on a subject, open and closed, with a `~tokens` cost per row |
+| `cairn show <ref>` · `cairn list` · `cairn projects` | Read one, many, or the project index |
+| `cairn add "<title>" --project K` | File work. Warns if something similar already exists |
+| `cairn update <ref> --status S --priority P` | Change fields |
+| `cairn done <ref> --resolution "…"` | Close. The resolution is required |
+| `cairn cancel <ref> --resolution "…"` | Drop it, and say why |
+| `cairn note <ref> "…" --kind attempt` | Append to the work log — `note · attempt · finding · decision` |
+| `cairn log <ref>` | Read that log back |
+| `cairn comment <ref> "…"` | Leave something for the human |
+| `cairn attach <ref> <file>` · `cairn files <ref>` | Attachments |
+| `cairn deps <ref>` | What blocks this, and what it blocks |
+| `cairn blockedby <ref> <other>` · `cairn unblockedby` | Link and unlink |
+| `cairn claim <ref>` | Take it. **Exit code 9** means another agent holds it |
+| `cairn beat <ref>` · `cairn release <ref>` | Keep a claim alive, or drop it |
+| `cairn checkpoint <ref> --summary "…"` | Where work stopped, for whoever resumes |
+| `cairn block <ref> "<reason>"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
+| `cairn project rename\|delete <KEY>` | Deleting takes every task in it, and demands the key back |
+
+`cairn --help` is the full reference.
+
+## API
+
+`GET /api/v1/openapi.json` serves an OpenAPI 3.1 document generated from the same Zod
+schemas the routes validate against, so it cannot drift. Browsable at `/api-docs`.
+
+```
+/health                         unauthenticated probe
+/search                         the read half of Cairn-as-memory
+/projects  /projects/{id}       list, create, read, rename, delete
+/projects/{id}/tasks            list and create within a project
+/tasks/{ref}                    read, update, close
+/tasks/{ref}/notes              the work log
+/tasks/{ref}/comments           for the human
+/tasks/{ref}/attachments        upload; /attachments/{id} to fetch
+/tasks/{ref}/dependencies       blocked-by / blocks
+/tasks/{ref}/claim  /beat  /release  /checkpoint  /block
+/keys  /keys/{id}               issue and revoke agent keys
+```
+
+Authenticate with `Authorization: Bearer sk_live_…`. Keys are stored as a sha256 hash —
+the plaintext is shown once, at creation, and never again. Issue **one key per agent** so
+writes are attributable and any single agent can be revoked without disturbing the others.
+
+Every response is enveloped: `{"success":true,"data":…}` or
+`{"success":false,"error":"…","code":"…"}`.
+
+## Keyboard
+
+| | |
+|---|---|
+| `⌘K` | Search and jump |
+| `C` | New task |
+| `/` | Focus the list filter |
+| `1` `2` `3` `4` | Active · Backlog · All · Recent |
+| `?` | Every shortcut |
+| `Esc` | Close, or leave a field |
 
 ## Self-hosting
 
@@ -76,6 +162,29 @@ docker compose up -d --build
 The example assumes a Traefik instance already running on an external Docker network with
 a Let's Encrypt resolver. Adapt the labels for nginx/Caddy as needed.
 
+### The first user
+
+There is no sign-up page — a single-tenant tracker does not need one, and an open
+registration form on a public host is a liability. Create the account against your
+Supabase Auth instance directly:
+
+```bash
+curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"…","email_confirm":true}'
+```
+
+`email_confirm: true` matters: without SMTP configured there is no confirmation mail to
+click, and an unconfirmed user cannot sign in. Then issue an agent key from **Settings**
+once you are in.
+
+> `NEXT_PUBLIC_*` values are inlined at **build** time. If you build an image once and
+> configure it per environment at run time, they will be empty in the browser — Cairn
+> passes them through a runtime provider instead, which is why the root layout is
+> `force-dynamic`.
+
 ### A note on secrets
 
 `.env*` is gitignored except `.env.example`, and `docker-compose.override.yml` /
@@ -93,10 +202,6 @@ repository. `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — keep it server-side onl
 See [`docs/`](./docs) for the design notes, and
 [`supabase/migrations/001_initial.sql`](./supabase/migrations/001_initial.sql) — it is
 commented and is the best description of the data model.
-
-## Licence
-
-MIT
 
 ## Backups
 
@@ -177,3 +282,15 @@ docker compose --profile optional up -d realtime   # live sync
 docker compose --profile optional up -d imgproxy   # image transforms
 docker compose --profile optional up -d studio     # admin UI
 ```
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md). In short: `npm run lint`, `npx tsc --noEmit`
+and `npm test` all have to pass, and the domain vocabulary lives in
+[`src/schemas/task.ts`](./src/schemas/task.ts) — types, statuses, priorities and
+resolution kinds are defined there once and flow into the API, the OpenAPI document, the
+CLI and the UI.
+
+## Licence
+
+MIT
