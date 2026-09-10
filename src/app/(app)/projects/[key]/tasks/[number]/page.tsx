@@ -67,8 +67,6 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
           {/* The resolution sits above the body: when a future agent opens a
               closed task, the answer is the thing it came for. */}
           {task.resolution ? (
-            {/* Sits above the body on purpose: when a future agent opens a
-                closed task, the answer is what it came for. */}
             <div className="border-status-done/30 bg-status-done/[0.06] mb-6 rounded-md border-l-2 border-l-status-done py-2.5 pr-3 pl-3.5">
               <p className="text-status-done mb-1 text-[10.5px] font-medium tracking-[0.06em] uppercase">
                 Resolution{task.resolution_kind ? ` · ${task.resolution_kind}` : ''}
