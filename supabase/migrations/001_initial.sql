@@ -119,14 +119,24 @@ create table tasks (
 
   constraint tasks_number_unique unique (project_id, number),
 
-  -- Search weighting is deliberate: a task's title and its resolution are the
-  -- two highest-value pieces of text in the system, because they are what a
-  -- future agent needs when asking "has this already been solved?".
+  -- Two volatility rules bite here, and both were found by the database
+  -- rejecting this column rather than by reading the docs:
+  --
+  --  1. The ::regconfig cast is required, not cosmetic. to_tsvector(text, text)
+  --     is only STABLE, because the config name resolves through search_path at
+  --     runtime, whereas to_tsvector(regconfig, text) is IMMUTABLE. Generated
+  --     columns demand IMMUTABLE.
+  --  2. `labels` is deliberately absent. array_to_string(anyarray, text) is
+  --     also only STABLE, so it cannot appear here at all. No loss: labels have
+  --     their own GIN index below, which is the right way to filter them.
+  --
+  -- Weighting is deliberate: a task's title and its resolution are the two
+  -- highest-value pieces of text in the system, because they are what a future
+  -- agent needs when asking "has this already been solved?".
   search_vector tsvector generated always as (
-    setweight(to_tsvector('english', coalesce(title, '')),       'A') ||
-    setweight(to_tsvector('english', coalesce(resolution, '')),  'A') ||
-    setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-    setweight(to_tsvector('english', array_to_string(labels, ' ')), 'C')
+    setweight(to_tsvector('english'::regconfig, coalesce(title, '')),       'A') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(resolution, '')),  'A') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(description, '')), 'B')
   ) stored
 );
 
@@ -163,7 +173,7 @@ create table task_notes (
 create index task_notes_task_idx on task_notes(task_id, created_at desc);
 create index task_notes_kind_idx on task_notes(task_id, kind);
 create index task_notes_search_idx on task_notes
-  using gin(to_tsvector('english', coalesce(note, '')));
+  using gin(to_tsvector('english'::regconfig, coalesce(note, '')));
 
 -- ---------------------------------------------------------------------------
 -- task_comments
@@ -183,7 +193,7 @@ create table task_comments (
 
 create index task_comments_task_idx on task_comments(task_id, created_at);
 create index task_comments_search_idx on task_comments
-  using gin(to_tsvector('english', coalesce(content, '')));
+  using gin(to_tsvector('english'::regconfig, coalesce(content, '')));
 
 -- ---------------------------------------------------------------------------
 -- task_attachments
