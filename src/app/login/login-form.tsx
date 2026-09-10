@@ -2,10 +2,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import { browserClient } from '@/lib/supabase/browser'
+import { createBrowserClient } from '@supabase/ssr'
+import { useSupabaseConfig } from '@/components/supabase-provider'
 
 export const LoginForm = () => {
   const router = useRouter()
+  const { url, anonKey } = useSupabaseConfig()
+  const configured = Boolean(url && anonKey)
   const params = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,19 +20,29 @@ export const LoginForm = () => {
     setPending(true)
     setError(null)
 
-    const { error: signInError } = await browserClient().auth.signInWithPassword({
-      email,
-      password,
-    })
+    // Everything is inside try/finally so a thrown error surfaces instead of
+    // leaving the button stuck on "Signing in…" forever — which is exactly
+    // how the build-time-env bug presented, and made it far harder to read
+    // than it needed to be.
+    try {
+      const supabase = createBrowserClient(url, anonKey)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (signInError) {
-      setError(signInError.message)
+      if (signInError) {
+        setError(signInError.message)
+        return
+      }
+
+      router.replace(params.get('redirect') ?? '/')
+      router.refresh()
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : 'Sign-in failed.')
+    } finally {
       setPending(false)
-      return
     }
-
-    router.replace(params.get('redirect') ?? '/')
-    router.refresh()
   }
 
   return (
@@ -65,6 +78,14 @@ export const LoginForm = () => {
             />
           </label>
 
+          {!configured ? (
+            <p className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-xs leading-relaxed">
+              This instance is misconfigured: <code>NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are not reaching the server. Check the
+              container environment.
+            </p>
+          ) : null}
+
           {error ? (
             <p className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-xs" role="alert">
               {error}
@@ -73,7 +94,7 @@ export const LoginForm = () => {
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !configured}
             className="bg-accent text-accent-fg mt-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
           >
             {pending ? 'Signing in…' : 'Sign in'}
