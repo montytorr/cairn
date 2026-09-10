@@ -27,8 +27,8 @@ const ProjectPage = async ({
     <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8">
       <header className="mb-6">
         <div className="flex flex-wrap items-baseline gap-2.5">
-          <code className="text-fg-subtle text-xs">{project.key}</code>
-          <h1 className="text-lg font-semibold tracking-tight">{project.title}</h1>
+          <code className="text-fg-subtle text-[11px]">{project.key}</code>
+          <h1 className="font-display text-[22px] leading-none">{project.title}</h1>
           <span className="text-fg-subtle tabular ml-auto text-xs">
             {tasks.length} shown · {total} total
           </span>
