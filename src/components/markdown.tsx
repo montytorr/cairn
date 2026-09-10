@@ -1,7 +1,9 @@
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 import type { Components } from 'react-markdown'
 import { cn } from '@/lib/utils'
+import { CodeBlock } from '@/components/code-block'
 
 /**
  * A hand-rolled component map rather than a prose plugin, so every element
@@ -49,23 +51,23 @@ const components: Components = {
       </code>
     )
   },
-  pre: (p) => (
-    <pre
-      className="bg-surface-raised border-border mb-3 overflow-x-auto rounded-md border p-3 last:mb-0"
-      {...p}
-    />
-  ),
+  pre: (p) => <CodeBlock {...p} />,
   table: (p) => (
-    // Tables get their own scroll container so the page body never scrolls
-    // sideways on a narrow screen.
-    <div className="mb-3 overflow-x-auto">
-      <table className="w-full border-collapse text-sm" {...p} />
+    // Its own scroll container, so a wide table never makes the page body
+    // scroll sideways.
+    <div className="border-border mb-3 overflow-x-auto rounded-md border">
+      <table className="w-full border-collapse text-[12.5px]" {...p} />
     </div>
   ),
   th: (p) => (
-    <th className="border-border text-fg-muted border-b px-2 py-1.5 text-left text-xs font-medium" {...p} />
+    <th
+      className="border-border bg-surface-raised text-fg-muted border-b px-2.5 py-1.5 text-left text-[11px] font-medium"
+      {...p}
+    />
   ),
-  td: (p) => <td className="border-border border-b px-2 py-1.5" {...p} />,
+  td: (p) => (
+    <td className="border-border border-b px-2.5 py-1.5 align-top last:border-0" {...p} />
+  ),
   input: (p) => (
     // GFM task list checkboxes. Read-only here: the body is edited in the
     // editor, not by clicking through the rendered view.
@@ -87,7 +89,14 @@ const components: Components = {
 
 export const MarkdownView = ({ children }: { children: string }) => (
   <div className="text-fg">
-    <Markdown remarkPlugins={[remarkGfm]} components={components}>
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      // detect: false — only highlight blocks that declare a language.
+      // Guessing on an unlabelled block colours prose and log output as if it
+      // were code, which is worse than leaving it plain.
+      rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
+      components={components}
+    >
       {children}
     </Markdown>
   </div>

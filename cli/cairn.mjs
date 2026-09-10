@@ -210,6 +210,15 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
     cairn attach <ref> <file>      |   cairn files <ref>
 
+  dependencies
+    cairn deps <ref>                        what blocks this, and what it blocks
+    cairn blockedby <ref> <other>           mark <ref> as blocked by <other>
+    cairn unblockedby <ref> <other>         remove that link
+
+  projects
+    cairn project rename <KEY> "<title>"
+    cairn project delete <KEY> --confirm <KEY>   deletes every task in it
+
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
     cairn beat <ref>               keep a claim alive
@@ -382,6 +391,68 @@ const commands = {
         })),
       columns: ['id', 'name', 'type', 'bytes', 'by'],
     })
+  },
+
+  async deps() {
+    const ref = need(positional[0], 'usage: cairn deps <ref>')
+    const data = await request('GET', `/api/v1/tasks/${ref}/dependencies`)
+    emit(data, {
+      rows: (d) =>
+        d.map((r) => ({
+          direction: r.direction,
+          ref: r.ref,
+          status: r.status,
+          title: truncate(r.title, 62),
+        })),
+      columns: ['direction', 'ref', 'status', 'title'],
+    })
+    if (FORMAT === 'tsv' && data.length === 0) {
+      process.stderr.write('no dependencies\n')
+    }
+  },
+
+  async blockedby() {
+    const ref = need(positional[0], 'usage: cairn blockedby <ref> <other-ref>')
+    const other = need(positional[1], 'the blocking task ref is required')
+    emit(await request('POST', `/api/v1/tasks/${ref}/dependencies`, {
+      ref: other,
+      direction: 'blocked-by',
+    }))
+  },
+
+  async unblockedby() {
+    const ref = need(positional[0], 'usage: cairn unblockedby <ref> <other-ref>')
+    const other = need(positional[1], 'the blocking task ref is required')
+    emit(await request('DELETE', `/api/v1/tasks/${ref}/dependencies`, {
+      ref: other,
+      direction: 'blocked-by',
+    }))
+  },
+
+  async project() {
+    const sub = need(positional[0], 'usage: cairn project <rename|delete> <KEY> [...]')
+    const key = need(positional[1], 'a project key is required')
+
+    if (sub === 'rename') {
+      const title = need(positional[2], 'usage: cairn project rename <KEY> "<new title>"')
+      emit(await request('PATCH', `/api/v1/projects/${key}`, { title }))
+      return
+    }
+    if (sub === 'delete') {
+      // Deleting a project removes every task in it. The API demands the key
+      // back as confirmation; require it here too rather than passing it
+      // silently on the caller's behalf.
+      if (flags.confirm !== key) {
+        const info = await request('GET', `/api/v1/projects/${key}`)
+        die(
+          `This would delete ${info.task_count} task(s) in ${key} and everything ` +
+            `attached to them, permanently.\nRe-run with --confirm ${key} if that is what you want.`,
+        )
+      }
+      emit(await request('DELETE', `/api/v1/projects/${key}?confirm=${encodeURIComponent(key)}`))
+      return
+    }
+    die(`unknown subcommand "${sub}" — expected rename or delete`)
   },
 
   async claim() {

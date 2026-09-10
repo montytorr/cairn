@@ -195,6 +195,34 @@ const TOOLS = [
     run: (a) => ['done', a.ref, '--resolution', a.resolution, ...(a.kind ? ['--kind', a.kind] : [])],
   },
   {
+    name: 'cairn_deps',
+    description:
+      'What blocks this task, and what it blocks. Check before claiming — a task ' +
+      'with open blockers is not ready to start whatever its status says.',
+    inputSchema: {
+      type: 'object',
+      properties: { ref: { type: 'string' } },
+      required: ['ref'],
+    },
+    run: (a) => ['deps', a.ref],
+  },
+  {
+    name: 'cairn_link',
+    description:
+      'Record that one task must finish before another. Prefer this over writing ' +
+      '"waiting on CAI-40" in a note: a link is visible from both tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string' },
+        blockedBy: { type: 'string', description: 'The task that must finish first.' },
+        remove: { type: 'boolean', description: 'Remove the link instead of adding it.' },
+      },
+      required: ['ref', 'blockedBy'],
+    },
+    run: (a) => [a.remove ? 'unblockedby' : 'blockedby', a.ref, a.blockedBy],
+  },
+  {
     name: 'cairn_comment',
     description: 'Leave a comment for the human. Findings for other agents go in the work log.',
     inputSchema: {

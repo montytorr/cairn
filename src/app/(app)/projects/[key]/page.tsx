@@ -5,6 +5,7 @@ import { currentUser, getProject, listTasks } from '@/lib/data'
 import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
 import { LiveUpdates } from '@/components/live-updates'
+import { ProjectMenu } from './project-menu'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,14 +43,21 @@ const ProjectPage = async ({
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
         <span className="text-fg text-[13px]">Tasks</span>
 
-        {closedHidden > 0 || includeClosed ? (
-          <Link
-            href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
-            className="text-fg-subtle hover:text-fg ml-auto text-[12px] transition-colors"
-          >
-            {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-          </Link>
-        ) : null}
+        <div className="ml-auto flex items-center gap-3">
+          {closedHidden > 0 || includeClosed ? (
+            <Link
+              href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
+              className="text-fg-subtle hover:text-fg text-[12px] transition-colors"
+            >
+              {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
+            </Link>
+          ) : null}
+          <ProjectMenu
+            projectKey={project.key}
+            title={project.title}
+            taskCount={tasks.length + closedHidden}
+          />
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

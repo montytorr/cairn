@@ -197,3 +197,75 @@
     * { transition-duration: 1ms !important; }
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting.
+
+   Tokens are mapped onto the app's own palette rather than importing a
+   highlight.js theme, so a code block reads as part of the interface instead
+   of a pasted screenshot. Only blocks that declare a language are coloured —
+   guessing on unlabelled blocks colours prose and log output as if it were
+   code, which is worse than leaving it plain.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --code-keyword:  #a074e8;
+  --code-string:   #4a9e5c;
+  --code-number:   #b8762e;
+  --code-comment:  #8a8f98;
+  --code-function: #3d7fd4;
+  --code-type:     #1f9c95;
+  --code-variable: #c05a2e;
+}
+
+:root.dark {
+  --code-keyword:  #c9a6ff;
+  --code-string:   #8fd694;
+  --code-number:   #f0b072;
+  --code-comment:  #5c6066;
+  --code-function: #7db3ff;
+  --code-type:     #6ad4c8;
+  --code-variable: #f0947a;
+}
+
+@layer base {
+  .hljs-comment,
+  .hljs-quote { color: var(--code-comment); font-style: italic; }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-doctag,
+  .hljs-meta .hljs-keyword { color: var(--code-keyword); }
+
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition,
+  .hljs-attribute,
+  .hljs-meta .hljs-string { color: var(--code-string); }
+
+  .hljs-number,
+  .hljs-symbol,
+  .hljs-bullet { color: var(--code-number); }
+
+  .hljs-title,
+  .hljs-section,
+  .hljs-title.function_,
+  .hljs-selector-id { color: var(--code-function); }
+
+  .hljs-type,
+  .hljs-class .hljs-title,
+  .hljs-title.class_,
+  .hljs-built_in,
+  .hljs-selector-class { color: var(--code-type); }
+
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-attr,
+  .hljs-property,
+  .hljs-params { color: var(--code-variable); }
+
+  .hljs-emphasis { font-style: italic; }
+  .hljs-strong { font-weight: 600; }
+  .hljs-deletion { color: var(--danger); }
+}

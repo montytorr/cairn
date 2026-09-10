@@ -96,6 +96,24 @@ cairn add "title" --project CAI --body -     # long markdown body from stdin
 
 `add` warns if similar work already exists — read the warning before continuing.
 
+## 7. Dependencies
+
+Before claiming, check whether something has to land first. A task with open blockers
+is not ready to start, no matter what its status says.
+
+```bash
+cairn deps CAI-42                    # what blocks this, and what it blocks
+cairn blockedby CAI-42 CAI-40        # CAI-40 must finish before CAI-42
+cairn unblockedby CAI-42 CAI-40
+```
+
+Use this instead of writing "waiting on CAI-40" in a note: a note is prose nobody
+queries, a dependency shows up on both tasks and in `cairn deps`.
+
+`cairn block CAI-42 "reason"` is a different thing — it flags a task as stuck on
+something outside Cairn (an unavailable credential, a third party). Reach for
+`blockedby` when the blocker is another task.
+
 ## Output
 
 TSV by default: a `#count` line, one header row, then rows; nulls omitted. `--json` to

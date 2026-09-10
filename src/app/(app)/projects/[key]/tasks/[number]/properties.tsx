@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from '../../resolution-dialog'
+import { DependencyEditor } from './dependency-editor'
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -14,7 +15,6 @@ import {
   type TaskType,
 } from '@/schemas/task'
 import { cn, isClaimStale } from '@/lib/utils'
-import Link from 'next/link'
 import type { Task, Project, Relation } from '@/lib/data'
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -175,32 +175,7 @@ export const Properties = ({
         </Section>
       )}
 
-      {relations.length > 0 && (
-        <>
-          {(['blocked-by', 'blocks'] as const).map((dir) => {
-            const items = relations.filter((r) => r.direction === dir)
-            if (items.length === 0) return null
-            return (
-              <Section key={dir} title={dir === 'blocked-by' ? 'Blocked by' : 'Blocks'}>
-                <div className="flex flex-col gap-1">
-                  {items.map((r) => (
-                    <Link
-                      key={r.id}
-                      href={`/projects/${r.project_key}/tasks/${r.number}`}
-                      className="hover:bg-surface-hover -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors"
-                    >
-                      <StatusIcon status={r.status as TaskStatus} size={13} />
-                      <span className="text-fg-muted min-w-0 truncate text-[12.5px]">
-                        {r.title}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </Section>
-            )
-          })}
-        </>
-      )}
+      <DependencyEditor taskRef={`${project.key}-${task.number}`} relations={relations} />
 
       <Section title="Project">
         <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">

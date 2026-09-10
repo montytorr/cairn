@@ -39,6 +39,9 @@ const Row = ({
 }) => (
   <Link
     href={`/projects/${task.project_key ?? projectKey}/tasks/${task.number}`}
+    // A 300-row list is mostly out of view, so Next's viewport prefetch does
+    // not help. Prefetching on hover is what makes the click feel instant.
+    prefetch
     className="group hover:bg-surface-hover flex h-[36px] items-center gap-2 pr-4 pl-3 transition-colors duration-75"
   >
     <PriorityIcon priority={task.priority} />

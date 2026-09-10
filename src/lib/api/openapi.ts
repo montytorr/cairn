@@ -193,6 +193,35 @@ export const openapiSpec = () => ({
         responses: { '201': okResponse('Created.'), '409': errorResponse },
       },
     },
+    '/projects/{id}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' },
+          description: 'Project key (CAI) or uuid.' },
+      ],
+      get: { summary: 'Read a project, with its task count', responses: { '200': okResponse('Project.') } },
+      patch: {
+        summary: 'Rename a project, or change its key',
+        requestBody: body({
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            description: { type: ['string', 'null'] },
+            key: { type: 'string', description: 'Changing this changes every task ref.' },
+            status: { type: 'string', enum: ['active', 'archived'] },
+          },
+        }),
+        responses: { '200': okResponse('Updated.'), '400': errorResponse },
+      },
+      delete: {
+        summary: 'Delete a project and every task in it',
+        description:
+          'Irreversible, and it destroys recorded resolutions. Requires ' +
+          '`?confirm=<PROJECT_KEY>`; without it the call fails and reports how many ' +
+          'tasks would be lost.',
+        parameters: [{ name: 'confirm', in: 'query', schema: { type: 'string' } }],
+        responses: { '200': okResponse('Deleted.'), '400': errorResponse },
+      },
+    },
     '/projects/{id}/tasks': {
       parameters: [
         { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'Project key or UUID.' },
@@ -268,6 +297,42 @@ export const openapiSpec = () => ({
         description: 'Omit `reason`, or send null, to unblock.',
         requestBody: body({ type: 'object', properties: { reason: { type: ['string', 'null'] } } }),
         responses: { '200': okResponse('Updated.') },
+      },
+    },
+    '/tasks/{ref}/dependencies': {
+      parameters: [refParam],
+      get: {
+        summary: 'List what blocks this task, and what it blocks',
+        description:
+          'Check this before claiming: a task whose blockers are open is not ready to start.',
+        responses: { '200': okResponse('Relations, each with a `direction`.') },
+      },
+      post: {
+        summary: 'Link two tasks',
+        description:
+          "`blocked-by` (the default) means the other task must finish first. " +
+          'Direct cycles and self-links are refused.',
+        requestBody: body({
+          type: 'object',
+          properties: {
+            ref: { type: 'string', description: 'The other task, as a ref or uuid.' },
+            direction: { type: 'string', enum: ['blocked-by', 'blocks'], default: 'blocked-by' },
+          },
+          required: ['ref'],
+        }),
+        responses: { '201': okResponse('Linked.'), '400': errorResponse, '404': errorResponse },
+      },
+      delete: {
+        summary: 'Remove a link',
+        requestBody: body({
+          type: 'object',
+          properties: {
+            ref: { type: 'string' },
+            direction: { type: 'string', enum: ['blocked-by', 'blocks'], default: 'blocked-by' },
+          },
+          required: ['ref'],
+        }),
+        responses: { '200': okResponse('Removed.'), '404': errorResponse },
       },
     },
     '/tasks/{ref}/notes': {
