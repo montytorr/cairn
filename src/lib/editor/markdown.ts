@@ -38,6 +38,16 @@ export const editorExtensions = (): Extensions => [
   }),
 ]
 
+/**
+ * tiptap-markdown adds `storage.markdown` at runtime but ships no type for it,
+ * so declare it rather than casting at each call site.
+ */
+declare module '@tiptap/core' {
+  interface Storage {
+    markdown: { getMarkdown: () => string }
+  }
+}
+
 /** Headless editor, for serialisation and tests. Requires a DOM. */
 export const headlessEditor = (markdown: string) =>
   new Editor({ extensions: editorExtensions(), content: markdown })
@@ -45,7 +55,7 @@ export const headlessEditor = (markdown: string) =>
 /** markdown -> ProseMirror -> markdown. The trip a human edit makes. */
 export const roundTrip = (markdown: string): string => {
   const editor = headlessEditor(markdown)
-  const out = editor.storage.markdown.getMarkdown() as string
+  const out = editor.storage.markdown.getMarkdown()
   editor.destroy()
   return out
 }
