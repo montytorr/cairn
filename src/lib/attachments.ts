@@ -78,6 +78,21 @@ export const sha256 = (buffer: Buffer | Uint8Array): string =>
   createHash('sha256').update(buffer).digest('hex')
 
 /**
+ * Supabase builds signed URLs relative to whatever base the client was created
+ * with. Server-side that is SUPABASE_INTERNAL_URL — a Docker hostname no
+ * browser can resolve — so the origin has to be rewritten to the public one
+ * before the URL leaves the server. The signature covers only the path and
+ * token, so swapping the origin is safe.
+ */
+const toPublicOrigin = (signed: string | undefined): string | null => {
+  if (!signed) return null
+  const internal = process.env.SUPABASE_INTERNAL_URL?.replace(/\/+$/, '')
+  const publicBase = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, '')
+  if (!internal || !publicBase || internal === publicBase) return signed
+  return signed.startsWith(internal) ? `${publicBase}${signed.slice(internal.length)}` : signed
+}
+
+/**
  * Two URLs, because they are used differently: `preview` renders inline in the
  * task view, `download` forces a save. Both expire in an hour — long enough for
  * a page session, short enough that a leaked link is not a standing grant.
@@ -89,7 +104,10 @@ export const signUrls = async (storagePath: string, originalName: string) => {
     storage.createSignedUrl(storagePath, 3600, { download: originalName }),
   ])
   return {
-    previewUrl: preview.data?.signedUrl ?? null,
-    downloadUrl: download.data?.signedUrl ?? null,
+    previewUrl: toPublicOrigin(preview.data?.signedUrl),
+    downloadUrl: toPublicOrigin(download.data?.signedUrl),
   }
 }
+
+/** Exported for tests only. */
+export const __test = { toPublicOrigin }

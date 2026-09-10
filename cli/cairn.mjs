@@ -113,13 +113,31 @@ const request = async (method, path, body) => {
   return payload.data
 }
 
+/**
+ * The server validates against a MIME allowlist, and a Blob with no `type`
+ * arrives as application/octet-stream — so every legitimate upload would be
+ * rejected. Node has no mime lookup built in, so infer from the extension.
+ */
+const MIME_BY_EXT = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf',
+  txt: 'text/plain', log: 'text/plain', md: 'text/markdown', csv: 'text/csv',
+  json: 'application/json', zip: 'application/zip', tar: 'application/x-tar',
+  gz: 'application/gzip', mp4: 'video/mp4', mp3: 'audio/mpeg',
+}
+
+const mimeOf = (filePath) => {
+  const ext = filePath.toLowerCase().split('.').pop()
+  return MIME_BY_EXT[ext] ?? 'application/octet-stream'
+}
+
 const upload = async (path, filePath) => {
   if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
   if (!existsSync(filePath)) die(`no such file: ${filePath}`)
 
   const form = new FormData()
   // Let fetch set the multipart boundary; do not send a Content-Type header.
-  form.append('file', new Blob([readFileSync(filePath)]), basename(filePath))
+  form.append('file', new Blob([readFileSync(filePath)], { type: mimeOf(filePath) }), basename(filePath))
 
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
@@ -346,7 +364,7 @@ const commands = {
     const ref = need(positional[0], 'usage: cairn attach <ref> <file>')
     const file = need(positional[1], 'a file path is required')
     const size = statSync(file).size
-    process.stderr.write(`uploading ${basename(file)} (${size} bytes)\n`)
+    process.stderr.write(`uploading ${basename(file)} (${size} bytes, ${mimeOf(file)})\n`)
     emit(await upload(`/api/v1/tasks/${ref}/attachments`, file))
   },
 
