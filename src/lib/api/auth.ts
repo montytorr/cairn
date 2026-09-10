@@ -79,7 +79,10 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
   return {
     userId: data.user.id,
     actorType: 'human',
-    actorId: data.user.id,
+    // The email, not the uuid. `actorId` is stamped on every write and shown
+    // in the activity trail as "who changed this" — a uuid there answers
+    // nothing, and an agent's actorId is already its readable name.
+    actorId: data.user.email ?? data.user.id,
     rateKey: `user:${data.user.id}`,
   }
 }
