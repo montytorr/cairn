@@ -59,10 +59,10 @@ export const Select = forwardRef<HTMLSelectElement, WithSize<React.ComponentProp
       className={cn(
         base,
         sizes[size],
-        // Both spellings. Tailwind's `appearance-none` emits the unprefixed
-        // property only, and without the prefixed one WebKit keeps drawing its
-        // own arrow — which showed up as two chevrons side by side.
-        'cursor-pointer appearance-none [-webkit-appearance:none] pr-7',
+        // The WebKit prefix lives in a base rule in globals.css: written as a
+        // class, Tailwind reads the leading dash as a negative utility and
+        // emits nothing, so WebKit kept drawing its own arrow beside ours.
+        'cursor-pointer appearance-none pr-7',
         className,
       )}
       {...props}

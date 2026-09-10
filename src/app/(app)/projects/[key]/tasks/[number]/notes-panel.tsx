@@ -138,7 +138,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
               onChange={(e) => setKind(e.target.value as NoteKind)}
               aria-label="Note kind"
               className={cn(
-                'hover:bg-surface-raised cursor-pointer appearance-none rounded-md border border-transparent bg-transparent py-1 pr-5 pl-1.5 text-[12px] outline-none transition-colors [-webkit-appearance:none]',
+                'hover:bg-surface-raised cursor-pointer appearance-none rounded-md border border-transparent bg-transparent py-1 pr-5 pl-1.5 text-[12px] outline-none transition-colors',
                 KIND_STYLE[kind] ?? 'text-fg-muted',
               )}
             >
@@ -186,7 +186,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
               row — a divided list of boxes reads as a table, and this is a
               sequence. */}
           <span
-            className="bg-border absolute top-[11px] bottom-[11px] left-[10.5px] w-px"
+            className="bg-border-strong/70 absolute top-[16px] bottom-[16px] left-[10.5px] w-px"
             aria-hidden
           />
 

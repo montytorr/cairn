@@ -271,3 +271,15 @@
   .hljs-strong { font-weight: 600; }
   .hljs-deletion { color: var(--danger); }
 }
+
+@layer base {
+  /* Every select in the app draws its own chevron.
+     Tailwind reads `[-webkit-appearance:none]` as a *negative* utility and
+     emits nothing, so the class never worked and WebKit kept painting its own
+     arrow beside ours — two chevrons on every select. A base rule is the
+     right home for it anyway: it applies once rather than per call site. */
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
