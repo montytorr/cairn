@@ -324,14 +324,15 @@ export const openapiSpec = () => ({
       },
       delete: {
         summary: 'Remove a link',
-        requestBody: body({
-          type: 'object',
-          properties: {
-            ref: { type: 'string' },
-            direction: { type: 'string', enum: ['blocked-by', 'blocks'], default: 'blocked-by' },
+        description: 'Arguments go in the query string; DELETE bodies are not read.',
+        parameters: [
+          { name: 'ref', in: 'query', required: true, schema: { type: 'string' } },
+          {
+            name: 'direction',
+            in: 'query',
+            schema: { type: 'string', enum: ['blocked-by', 'blocks'], default: 'blocked-by' },
           },
-          required: ['ref'],
-        }),
+        ],
         responses: { '200': okResponse('Removed.'), '404': errorResponse },
       },
     },

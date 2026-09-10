@@ -423,10 +423,8 @@ const commands = {
   async unblockedby() {
     const ref = need(positional[0], 'usage: cairn unblockedby <ref> <other-ref>')
     const other = need(positional[1], 'the blocking task ref is required')
-    emit(await request('DELETE', `/api/v1/tasks/${ref}/dependencies`, {
-      ref: other,
-      direction: 'blocked-by',
-    }))
+    const q = new URLSearchParams({ ref: other, direction: 'blocked-by' })
+    emit(await request('DELETE', `/api/v1/tasks/${ref}/dependencies?${q}`))
   },
 
   async project() {

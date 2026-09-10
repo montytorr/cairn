@@ -170,11 +170,19 @@ export const DependencyEditor = ({
       setBusy(true)
       setError(null)
       try {
-        const res = await fetch(`/api/v1/tasks/${taskRef}/dependencies`, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref, direction }),
-        })
+        // DELETE takes query params — the API does not read DELETE bodies.
+        const res = await fetch(
+          method === 'DELETE'
+            ? `/api/v1/tasks/${taskRef}/dependencies?${new URLSearchParams({ ref, direction })}`
+            : `/api/v1/tasks/${taskRef}/dependencies`,
+          method === 'DELETE'
+            ? { method }
+            : {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ref, direction }),
+              },
+        )
         if (!res.ok) {
           const json = await res.json().catch(() => null)
           setError(json?.error?.message ?? 'Could not save that link.')

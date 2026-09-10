@@ -96,24 +96,45 @@ export const POST = route<{ ref: string }, z.infer<typeof body>>({
   },
 })
 
-export const DELETE = route<{ ref: string }, z.infer<typeof body>>({
-  schema: body,
-  handler: async ({ actor, params, body: input }) => {
+/**
+ * Takes its arguments in the query string, not a body: the shared route
+ * wrapper does not parse DELETE bodies, and a DELETE body is unreliable
+ * through proxies anyway.
+ *
+ *   DELETE /api/v1/tasks/CAI-42/dependencies?ref=CAI-40&direction=blocked-by
+ */
+export const DELETE = route<{ ref: string }>({
+  handler: async ({ actor, params, url }) => {
+    const parsed = body.safeParse({
+      ref: url.searchParams.get('ref') ?? undefined,
+      direction: url.searchParams.get('direction') ?? undefined,
+    })
+    if (!parsed.success) {
+      return fail('validation_failed', 'Provide ?ref=<the other task>.', {
+        issues: parsed.error.issues,
+      })
+    }
+    const input = parsed.data
+
     const [task, other] = await Promise.all([
       findTask(actor, params.ref, TASK_LIST_FIELDS),
       findTask(actor, input.ref, TASK_LIST_FIELDS),
     ])
-    if (!task || !other) return fail('not_found', 'One of those tasks does not exist.')
+    if (!task) return fail('not_found', `No task ${params.ref}.`)
+    if (!other) return fail('not_found', `No task ${input.ref}.`)
 
     const blocked = input.direction === 'blocked-by' ? task.id : other.id
     const blocking = input.direction === 'blocked-by' ? other.id : task.id
 
-    const { error } = await admin()
+    const { error, count } = await admin()
       .from('task_deps')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('blocked_id', blocked)
       .eq('blocking_id', blocking)
     if (error) return failFromDb(error)
+    // Reported rather than swallowed: a silent no-op here looked like success
+    // while the link stayed on screen.
+    if (!count) return fail('not_found', `${params.ref} is not linked to ${input.ref} that way.`)
     return ok({ removed: true })
   },
 })

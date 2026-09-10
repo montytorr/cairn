@@ -104,7 +104,7 @@ is not ready to start, no matter what its status says.
 ```bash
 cairn deps CAI-42                    # what blocks this, and what it blocks
 cairn blockedby CAI-42 CAI-40        # CAI-40 must finish before CAI-42
-cairn unblockedby CAI-42 CAI-40
+cairn unblockedby CAI-42 CAI-40   # remove it again
 ```
 
 Use this instead of writing "waiting on CAI-40" in a note: a note is prose nobody

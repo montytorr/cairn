@@ -46,6 +46,15 @@ describe('openapi spec', () => {
     expect(schema.required ?? []).toEqual([])
   })
 
+  // The shared route wrapper does not parse DELETE bodies, so a documented
+  // DELETE requestBody is a promise the API cannot keep. It shipped once.
+  it('never documents a request body on DELETE', () => {
+    for (const [path, methods] of Object.entries(spec.paths)) {
+      const del = (methods as Record<string, { requestBody?: unknown }>).delete
+      if (del) expect(del.requestBody, `${path} DELETE`).toBeUndefined()
+    }
+  })
+
   it('declares bearer auth and applies it by default', () => {
     expect(spec.components.securitySchemes.bearerAuth.scheme).toBe('bearer')
     expect(spec.security).toEqual([{ bearerAuth: [] }])
