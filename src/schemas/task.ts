@@ -53,22 +53,36 @@ export type NoteKind = z.infer<typeof noteKind>
 export const isTerminal = (s: TaskStatus): boolean =>
   (TERMINAL_STATUSES as readonly string[]).includes(s)
 
-export const createTaskSchema = z.object({
+/**
+ * Field definitions WITHOUT defaults.
+ *
+ * This split is load-bearing. `.default()` survives `.partial()` — Zod's
+ * ZodOptional wraps the ZodDefault rather than replacing it, so
+ * `createTaskSchema.partial().parse({})` yields `{ type: 'feature' }`. Deriving
+ * the PATCH schema that way made every update silently reset `type` and
+ * `priority` to their defaults, quietly corrupting rows the caller never
+ * mentioned. Defaults belong on the create schema only.
+ */
+const taskFields = z.object({
   title: z.string().min(1).max(300),
-  description: z.string().max(100_000).optional(),
+  description: z.string().max(100_000),
+  type: taskType,
+  status: taskStatus,
+  priority: taskPriority,
+  labels: z.array(z.string().min(1).max(50)).max(20),
+  dueDate: z.string().date(),
+})
+
+export const createTaskSchema = taskFields.partial().extend({
+  title: z.string().min(1).max(300),
   type: taskType.default('feature'),
   status: taskStatus.default('backlog'),
   priority: taskPriority.default('medium'),
   labels: z.array(z.string().min(1).max(50)).max(20).default([]),
-  dueDate: z.string().date().optional(),
 })
 
-/**
- * Partial update. Kept as a plain object schema (no `.refine()`) precisely so
- * that `.partial()` still works — `.partial()` does not exist on a refined
- * schema, which is a trap worth avoiding on PATCH routes.
- */
-export const updateTaskSchema = createTaskSchema.partial().extend({
+/** Partial update. No defaults, so absent fields stay absent. */
+export const updateTaskSchema = taskFields.partial().extend({
   resolution: z.string().max(100_000).optional(),
   resolutionKind: resolutionKind.optional(),
 })
