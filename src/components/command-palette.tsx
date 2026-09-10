@@ -3,10 +3,11 @@
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Settings, FileJson, Search as SearchIcon, Moon } from 'lucide-react'
+import { Settings, FileJson, Search as SearchIcon, Moon, Plus } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { ProjectIcon, StatusIcon } from '@/components/icons'
 import type { TaskStatus, TaskType } from '@/schemas/task'
+import { useCreateTask } from '@/components/task-creation'
 
 type Hit = {
   ref: string
@@ -47,6 +48,7 @@ const groupClass =
 export const CommandPalette = ({ projects }: { projects: { key: string; title: string }[] }) => {
   const router = useRouter()
   const { resolvedTheme, setTheme } = useTheme()
+  const { open: openCreate } = useCreateTask()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Hit[]>([])
@@ -172,6 +174,21 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
 
           {!searchable && (
             <>
+              <Command.Group heading="Create" className={groupClass}>
+                <Command.Item
+                  value="new task create"
+                  onSelect={() => {
+                    setOpen(false)
+                    openCreate()
+                  }}
+                  className={itemClass}
+                >
+                  <Plus size={14} className="text-fg-subtle" />
+                  New task
+                  <Keys keys={['C']} />
+                </Command.Item>
+              </Command.Group>
+
               <Command.Group heading="Go to" className={groupClass}>
                 <Command.Item value="settings" onSelect={() => go('/settings')} className={itemClass}>
                   <Settings size={14} className="text-fg-subtle" />

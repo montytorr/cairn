@@ -6,6 +6,8 @@ import { CommandPalette } from '@/components/command-palette'
 import { SignOut } from '@/components/sign-out'
 import { ProjectNav } from '@/components/project-nav'
 import { Avatar } from '@/components/icons'
+import { TaskCreationProvider } from '@/components/task-creation'
+import { Shortcuts } from '@/components/shortcuts'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const user = await currentUser()
@@ -16,7 +18,10 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const projects = await listProjects(user.id)
   const email = user.email ?? 'you'
 
+  const projectList = projects.map((p) => ({ key: p.key, title: p.title }))
+
   return (
+    <TaskCreationProvider projects={projectList}>
     <div className="bg-bg flex h-dvh">
       <aside className="border-border bg-bg-elevated hidden w-[220px] shrink-0 flex-col border-r md:flex">
         <div className="flex h-[44px] shrink-0 items-center gap-2 px-3">
@@ -29,7 +34,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
           </span>
         </div>
 
-        <ProjectNav projects={projects.map((p) => ({ key: p.key, title: p.title }))} />
+        <ProjectNav projects={projectList} />
 
         <div className="border-border text-fg-subtle flex items-center gap-2 border-t px-3 py-2 text-[11px]">
           <span className="truncate" title={email}>
@@ -45,8 +50,10 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
       </aside>
 
       <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
-      <CommandPalette projects={projects.map((p) => ({ key: p.key, title: p.title }))} />
+      <CommandPalette projects={projectList} />
+      <Shortcuts />
     </div>
+    </TaskCreationProvider>
   )
 }
 

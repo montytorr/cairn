@@ -258,3 +258,55 @@ export const listAllTasks = async (
 
   return { tasks, closedHidden: includeClosed ? 0 : (totals.count ?? 0) }
 }
+
+
+export type Relation = {
+  id: string
+  number: number
+  title: string
+  status: string
+  project_key: string
+  direction: 'blocked-by' | 'blocks'
+}
+
+/**
+ * Task relationships, both directions.
+ *
+ * task_deps has been written by the API since the first migration and
+ * rendered nowhere — so "this is waiting on that" existed in the data and was
+ * invisible to the person deciding what to pick up.
+ */
+export const listRelations = async (taskId: string): Promise<Relation[]> => {
+  const shape = 'blocked_id, blocking_id'
+  const [blockedBy, blocks] = await Promise.all([
+    admin().from('task_deps').select(shape).eq('blocked_id', taskId),
+    admin().from('task_deps').select(shape).eq('blocking_id', taskId),
+  ])
+
+  const ids = [
+    ...((blockedBy.data ?? []) as { blocking_id: string }[]).map((r) => ({
+      id: r.blocking_id,
+      direction: 'blocked-by' as const,
+    })),
+    ...((blocks.data ?? []) as { blocked_id: string }[]).map((r) => ({
+      id: r.blocked_id,
+      direction: 'blocks' as const,
+    })),
+  ]
+  if (ids.length === 0) return []
+
+  const { data } = await admin()
+    .from('tasks')
+    .select('id, number, title, status, project:projects!inner(key)')
+    .in('id', ids.map((i) => i.id))
+
+  type Row = { id: string; number: number; title: string; status: string; project: { key: string } | { key: string }[] }
+  return ((data ?? []) as unknown as Row[]).map((row) => ({
+    id: row.id,
+    number: row.number,
+    title: row.title,
+    status: row.status,
+    project_key: (Array.isArray(row.project) ? row.project[0]?.key : row.project?.key) ?? '',
+    direction: ids.find((i) => i.id === row.id)?.direction ?? 'blocked-by',
+  }))
+}

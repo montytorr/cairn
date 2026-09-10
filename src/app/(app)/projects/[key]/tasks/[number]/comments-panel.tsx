@@ -41,7 +41,7 @@ export const CommentsPanel = ({
 
   return (
     <section>
-      <h2 className="text-fg-muted mb-2 flex items-center gap-2 text-[10.5px] font-medium tracking-[0.06em] uppercase">
+      <h2 className="text-fg-muted mb-2.5 flex items-center gap-2 text-[11px] font-medium">
         Comments
         <span className="tabular text-fg-subtle">{comments.length}</span>
       </h2>

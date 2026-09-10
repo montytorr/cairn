@@ -2,12 +2,13 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
-  currentUser, getTask, listAttachments, listComments, listNotes,
+  currentUser, getTask, listAttachments, listComments, listNotes, listRelations,
 } from '@/lib/data'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { MarkdownView } from '@/components/markdown'
 import { ProjectIcon } from '@/components/icons'
 import { Properties } from './properties'
+import { EditableTitle } from './editable-title'
 import { LiveUpdates } from '@/components/live-updates'
 import { NotesPanel } from './notes-panel'
 import { CommentsPanel } from './comments-panel'
@@ -26,10 +27,11 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
   const task = await getTask(user.id, key, parsed)
   if (!task) notFound()
 
-  const [notes, comments, attachments] = await Promise.all([
+  const [notes, comments, attachments, relations] = await Promise.all([
     listNotes(task.id),
     listComments(task.id),
     listAttachments(task.id),
+    listRelations(task.id),
   ])
 
   const ref = task.external_ref ?? `${task.project.key}-${task.number}`
@@ -56,9 +58,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[720px] px-8 py-8">
-            <h1 className="mb-6 text-[24px] leading-[1.25] font-semibold tracking-[-0.01em] text-balance">
-              {task.title}
-            </h1>
+            <EditableTitle taskId={task.id} initial={task.title} />
 
             {task.blocked_reason ? (
               <p className="text-danger bg-danger-subtle mb-5 rounded-md px-3 py-2 text-[12px]">
@@ -98,7 +98,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
         </div>
 
         <div className="hidden overflow-y-auto lg:block">
-          <Properties task={task} project={task.project} />
+          <Properties task={task} project={task.project} relations={relations} />
         </div>
       </div>
       <LiveUpdates projectKey={task.project.key} />

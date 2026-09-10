@@ -7,6 +7,7 @@ import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } fr
 import { cn, isClaimStale } from '@/lib/utils'
 import { TASK_STATUSES, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
+import { NewTaskButton } from '@/components/task-creation'
 
 /** A group is a status, or the synthetic bucket the Recent tab renders into. */
 type GroupKey = TaskStatus | 'recent'
@@ -224,6 +225,7 @@ export const ListView = ({
           className="placeholder:text-fg-subtle ml-2 min-w-32 flex-1 bg-transparent px-1 text-[12px] outline-none"
         />
         <span className="text-fg-subtle tabular text-[11px]">{filtered.length}</span>
+        <NewTaskButton />
       </div>
 
       {groups.length === 0 && (
