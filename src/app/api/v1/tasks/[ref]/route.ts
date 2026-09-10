@@ -75,6 +75,26 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       if (!body.resolutionKind && !task.resolution_kind) patch.resolution_kind = 'fixed'
     }
 
+    if (body.duplicateOf !== undefined) {
+      if (body.duplicateOf === null) {
+        patch.duplicate_of = null
+      } else {
+        const original = await findTask(actor, body.duplicateOf, 'id, number, title')
+        if (!original) return fail('not_found', `No task ${body.duplicateOf}.`)
+        if (original.id === task.id) {
+          return fail('validation_failed', 'A task cannot duplicate itself.')
+        }
+        patch.duplicate_of = original.id
+        // Naming the original is the whole point, so treat it as the caller
+        // saying "duplicate" even if they only sent the pointer. The database
+        // refuses the pointer without the kind, and failing on a technicality
+        // here would be unhelpful.
+        if (!body.resolutionKind && task.resolution_kind !== 'duplicate') {
+          patch.resolution_kind = 'duplicate'
+        }
+      }
+    }
+
     // Finishing a task releases it. Without this the claim outlives the work,
     // and a board where done tasks still show a holder makes the one field an
     // agent checks before picking something up untrustworthy.
@@ -95,7 +115,15 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       .select('id, number, title, type, status, priority, labels, resolution, resolution_kind, updated_at')
       .single()
 
-    if (error) return failFromDb(error)
+    if (error) {
+      return failFromDb(error, {
+        // The database refuses a duplicate pointer without the matching kind,
+        // which is otherwise a bare constraint name in the response.
+        '23514': error.message.includes('tasks_duplicate_needs_kind')
+          ? 'A duplicate pointer only makes sense with resolutionKind "duplicate". Send both, or send duplicateOf: null.'
+          : error.message,
+      })
+    }
 
     if (body.status && body.status !== task.status) {
       await admin().from('task_activity_events').insert({

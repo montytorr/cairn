@@ -11,7 +11,7 @@ import { MarkdownPreview } from '@/components/markdown'
 import { Avatar, LabelPill, PriorityIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
 import { cn, isClaimStale } from '@/lib/utils'
-import { TASK_STATUSES, isTerminal, type TaskStatus } from '@/schemas/task'
+import { TASK_STATUSES, isTerminal, type ResolutionKind, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
 
 const COLUMN_LABEL: Record<TaskStatus, string> = {
@@ -136,14 +136,27 @@ export const BoardView = ({
   // start a drag.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
-  const persist = async (task: TaskListItem, status: TaskStatus, resolution?: string) => {
+  const persist = async (
+    task: TaskListItem,
+    status: TaskStatus,
+    close?: { resolution: string; kind: ResolutionKind; duplicateOf?: string },
+  ) => {
     const previous = tasks
     setTasks((current) => current.map((t) => (t.id === task.id ? { ...t, status } : t)))
 
     const res = await fetch(`/api/v1/tasks/${task.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(resolution ? { status, resolution } : { status }),
+      body: JSON.stringify(
+        close
+          ? {
+              status,
+              resolution: close.resolution,
+              resolutionKind: close.kind,
+              ...(close.duplicateOf ? { duplicateOf: close.duplicateOf } : {}),
+            }
+          : { status },
+      ),
     })
 
     if (!res.ok) {
@@ -212,8 +225,12 @@ export const BoardView = ({
           status={pendingClose.status}
           suggestion={pendingClose.task.checkpoint_summary}
           onCancel={() => setPendingClose(null)}
-          onConfirm={async (resolution: string) => {
-            const ok = await persist(pendingClose.task, pendingClose.status, resolution)
+          onConfirm={async (resolution: string, kind, duplicateOf) => {
+            const ok = await persist(pendingClose.task, pendingClose.status, {
+              resolution,
+              kind,
+              duplicateOf,
+            })
             setPendingClose(null)
             return ok
           }}

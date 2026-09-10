@@ -85,6 +85,12 @@ export const createTaskSchema = taskFields.partial().extend({
 export const updateTaskSchema = taskFields.partial().extend({
   resolution: z.string().max(100_000).optional(),
   resolutionKind: resolutionKind.optional(),
+  /**
+   * The task this one duplicates, as a ref or uuid. Only meaningful alongside
+   * `resolutionKind: 'duplicate'`; the database refuses the pair otherwise.
+   * `null` clears it.
+   */
+  duplicateOf: z.string().min(2).max(60).nullable().optional(),
 })
 
 export const createNoteSchema = z.object({

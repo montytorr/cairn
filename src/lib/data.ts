@@ -29,6 +29,7 @@ export type Task = {
   external_ref: string | null
   external_url: string | null
   has_resolution: boolean
+  duplicate_of: string | null
   created_at: string
   updated_at: string
 }
@@ -55,11 +56,20 @@ export const currentUser = async () => {
   return user
 }
 
-export const listProjects = async (userId: string): Promise<Project[]> => {
-  const { data } = await admin()
+/**
+ * Archived projects are excluded by default. Archiving exists so a finished
+ * project can leave a 33-item sidebar without being destroyed, which only
+ * works if the default view actually drops it.
+ */
+export const listProjects = async (
+  userId: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
+): Promise<Project[]> => {
+  const query = admin()
     .from('projects')
     .select('id, key, title, description, status, task_counter')
     .eq('owner_user_id', userId)
+  const { data } = await (includeArchived ? query : query.eq('status', 'active'))
     .order('position')
     .order('created_at')
   return (data ?? []) as Project[]
@@ -158,6 +168,30 @@ export const getTask = async (
     .eq('number', number)
     .maybeSingle()
   return (data as unknown as (Task & { project: Project })) ?? null
+}
+
+/**
+ * The ref and title of whatever a task duplicates. Its own query rather than a
+ * join on getTask: it is null for almost every task, and `select *` already
+ * pulls more than the detail page needs.
+ */
+export const getDuplicateOf = async (
+  taskId: string,
+): Promise<{ ref: string; title: string; status: string } | null> => {
+  const { data } = await admin()
+    .from('tasks')
+    .select('number, title, status, project:projects!inner(key)')
+    .eq('id', taskId)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as unknown as {
+    number: number
+    title: string
+    status: string
+    project: { key: string } | { key: string }[]
+  }
+  const project = Array.isArray(row.project) ? row.project[0] : row.project
+  return { ref: `${project?.key}-${row.number}`, title: row.title, status: row.status }
 }
 
 export type Note = {

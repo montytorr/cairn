@@ -178,7 +178,14 @@ export const openapiSpec = () => ({
       },
     },
     '/projects': {
-      get: { summary: 'List projects', responses: { '200': okResponse('Projects.'), '401': errorResponse } },
+      get: {
+        summary: 'List projects',
+        description: 'Archived projects are omitted unless `?archived=1`.',
+        parameters: [
+          { name: 'archived', in: 'query', schema: { type: 'string', enum: ['1'] } },
+        ],
+        responses: { '200': okResponse('Projects.'), '401': errorResponse },
+      },
       post: {
         summary: 'Create a project',
         requestBody: body({

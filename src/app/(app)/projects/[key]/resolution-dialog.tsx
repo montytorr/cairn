@@ -17,19 +17,36 @@ export const ResolutionDialog = ({
   taskTitle,
   status,
   suggestion,
+  allowDuplicate = true,
   onCancel,
   onConfirm,
 }: {
   taskTitle: string
   status: TaskStatus
   suggestion: string | null
+  /**
+   * Withheld when closing many tasks at once: forty tasks are not all
+   * duplicates of the same one thing, and offering the kind without being
+   * able to honour the pointer would silently discard what was typed.
+   */
+  allowDuplicate?: boolean
   onCancel: () => void
-  onConfirm: (resolution: string, kind: ResolutionKind) => Promise<boolean>
+  onConfirm: (
+    resolution: string,
+    kind: ResolutionKind,
+    duplicateOf?: string,
+  ) => Promise<boolean>
 }) => {
   const [value, setValue] = useState(suggestion ?? '')
   const [kind, setKind] = useState<ResolutionKind>(status === 'cancelled' ? 'wont-fix' : 'fixed')
   const [pending, setPending] = useState(false)
+  const [duplicateOf, setDuplicateOf] = useState('')
   const ref = useRef<HTMLTextAreaElement>(null)
+
+  // "duplicate" without naming the original sends the reader off to search for
+  // it, which is the work the resolution was supposed to save.
+  const needsOriginal = kind === 'duplicate'
+  const originalOk = !needsOriginal || /^[A-Za-z][A-Za-z0-9]{1,9}-\d+$/.test(duplicateOf.trim())
 
   useEffect(() => {
     ref.current?.focus()
@@ -40,9 +57,13 @@ export const ResolutionDialog = ({
   }, [onCancel])
 
   const submit = async () => {
-    if (!value.trim() || pending) return
+    if (!value.trim() || pending || !originalOk) return
     setPending(true)
-    const ok = await onConfirm(value.trim(), kind)
+    const ok = await onConfirm(
+      value.trim(),
+      kind,
+      needsOriginal ? duplicateOf.trim().toUpperCase() : undefined,
+    )
     if (!ok) setPending(false)
   }
 
@@ -89,12 +110,25 @@ export const ResolutionDialog = ({
             className="w-40"
             aria-label="Resolution kind"
           >
-            {RESOLUTION_KINDS.map((k) => (
+            {RESOLUTION_KINDS.filter((k) => allowDuplicate || k !== 'duplicate').map((k) => (
               <option key={k} value={k}>
                 {k}
               </option>
             ))}
           </Select>
+
+          {needsOriginal && (
+            <input
+              value={duplicateOf}
+              onChange={(e) => setDuplicateOf(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
+              }}
+              placeholder="duplicate of… CAI-31"
+              aria-label="The task this duplicates"
+              className="border-border bg-bg text-fg placeholder:text-fg-subtle focus:border-accent h-[28px] w-[150px] rounded-md border px-2 text-[12.5px] outline-none"
+            />
+          )}
 
           <div className="ml-auto flex gap-2">
             <Button size="sm" variant="ghost" onClick={onCancel} className="w-auto px-3">
@@ -104,7 +138,7 @@ export const ResolutionDialog = ({
               size="sm"
               variant="primary"
               onClick={submit}
-              disabled={!value.trim() || pending}
+              disabled={!value.trim() || pending || !originalOk}
               className="w-auto px-3"
             >
               {pending ? 'Saving…' : status === 'cancelled' ? 'Cancel task' : 'Close task'}

@@ -209,6 +209,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn comment <ref> "<text>"
     cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
     cairn cancel <ref> --resolution "<why it is being dropped>" [--kind wont-fix]
+    cairn done <ref> --duplicate-of CAI-31 --resolution "…"   points at the original
     cairn attach <ref> <file>      |   cairn files <ref>
 
   dependencies
@@ -217,7 +218,10 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn unblockedby <ref> <other>         remove that link
 
   projects
+    cairn projects [--archived]                  --archived includes retired ones
     cairn project rename <KEY> "<title>"
+    cairn project archive <KEY>                  hides it; the tasks stay searchable
+    cairn project restore <KEY>
     cairn project delete <KEY> --confirm <KEY>   deletes every task in it
 
   coordinate
@@ -243,13 +247,13 @@ const closeTask = async (status, defaultKind) => {
   const resolution = await resolveValue(
     need(flags.resolution, 'a --resolution is required: say what was actually done, and why'),
   )
-  emit(
-    await request('PATCH', `/api/v1/tasks/${ref}`, {
-      status,
-      resolution,
-      resolutionKind: flags.kind ?? defaultKind,
-    }),
-  )
+  const body = { status, resolution, resolutionKind: flags.kind ?? defaultKind }
+  // Naming the original is what makes "duplicate" useful to whoever finds it.
+  if (flags['duplicate-of']) {
+    body.duplicateOf = flags['duplicate-of']
+    body.resolutionKind = 'duplicate'
+  }
+  emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
 }
 
 const commands = {
@@ -305,7 +309,8 @@ const commands = {
   },
 
   async projects() {
-    emit(await request('GET', '/api/v1/projects'))
+    const suffix = flags.archived ? '?archived=1' : ''
+    emit(await request('GET', `/api/v1/projects${suffix}`))
   },
 
   async add() {
@@ -349,6 +354,10 @@ const commands = {
     // how in one call — without it the API rightly refuses the move.
     if (flags.resolution) body.resolution = await resolveValue(flags.resolution)
     if (flags.kind) body.resolutionKind = flags.kind
+    if (flags['duplicate-of']) {
+      body.duplicateOf = flags['duplicate-of']
+      body.resolutionKind = 'duplicate'
+    }
     emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
   },
 
@@ -459,6 +468,12 @@ const commands = {
       emit(await request('PATCH', `/api/v1/projects/${key}`, { title }))
       return
     }
+    if (sub === 'archive' || sub === 'restore') {
+      emit(await request('PATCH', `/api/v1/projects/${key}`, {
+        status: sub === 'archive' ? 'archived' : 'active',
+      }))
+      return
+    }
     if (sub === 'delete') {
       // Deleting a project removes every task in it. The API demands the key
       // back as confirmation; require it here too rather than passing it
@@ -473,7 +488,7 @@ const commands = {
       emit(await request('DELETE', `/api/v1/projects/${key}?confirm=${encodeURIComponent(key)}`))
       return
     }
-    die(`unknown subcommand "${sub}" — expected rename or delete`)
+    die(`unknown subcommand "${sub}" — expected rename, archive, restore or delete`)
   },
 
   async claim() {

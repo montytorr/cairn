@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
-  currentUser, getTask, listAttachments, listComments, listNotes, listRelations,
+  currentUser, getDuplicateOf, getTask, listAttachments, listComments, listNotes, listRelations,
 } from '@/lib/data'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { MarkdownView } from '@/components/markdown'
@@ -27,11 +27,12 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
   const task = await getTask(user.id, key, parsed)
   if (!task) notFound()
 
-  const [notes, comments, attachments, relations] = await Promise.all([
+  const [notes, comments, attachments, relations, duplicateOf] = await Promise.all([
     listNotes(task.id),
     listComments(task.id),
     listAttachments(task.id),
     listRelations(task.id),
+    task.duplicate_of ? getDuplicateOf(task.duplicate_of) : Promise.resolve(null),
   ])
 
   const ref = task.external_ref ?? `${task.project.key}-${task.number}`
@@ -59,6 +60,22 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
         <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[720px] px-8 py-8">
             <EditableTitle taskId={task.id} initial={task.title} />
+
+            {/* First thing on the page when it applies: a reader who opens a
+                duplicate wants redirecting, not reading. */}
+            {duplicateOf ? (
+              <p className="border-border bg-surface-raised text-fg-muted mb-5 rounded-md border px-3 py-2 text-[12.5px]">
+                Duplicate of{' '}
+                <Link
+                  href={`/projects/${duplicateOf.ref.slice(0, duplicateOf.ref.lastIndexOf('-'))}/tasks/${duplicateOf.ref.slice(duplicateOf.ref.lastIndexOf('-') + 1)}`}
+                  prefetch
+                  className="text-accent hover:underline"
+                >
+                  {duplicateOf.ref}
+                </Link>{' '}
+                — {duplicateOf.title}
+              </p>
+            ) : null}
 
             {task.blocked_reason ? (
               <p className="text-danger bg-danger-subtle mb-5 rounded-md px-3 py-2 text-[12px]">

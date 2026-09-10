@@ -3,6 +3,7 @@ import { admin } from '@/lib/supabase/admin'
 import { currentUser } from '@/lib/data'
 import { PasswordSection } from './password-section'
 import { KeysSection, type KeyRow } from './keys-section'
+import { ArchivedSection, type ArchivedProject } from './archived-section'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,13 @@ const SettingsPage = async () => {
     .eq('user_id', user.id)
     .order('created_at')
 
+  const { data: archived } = await admin()
+    .from('projects')
+    .select('id, key, title, task_counter')
+    .eq('owner_user_id', user.id)
+    .eq('status', 'archived')
+    .order('title')
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       <header className="mb-8">
@@ -27,6 +35,7 @@ const SettingsPage = async () => {
       <div className="flex flex-col gap-10">
         <PasswordSection />
         <KeysSection keys={(data ?? []) as KeyRow[]} />
+        <ArchivedSection projects={(archived ?? []) as ArchivedProject[]} />
       </div>
     </div>
   )

@@ -114,6 +114,16 @@ queries, a dependency shows up on both tasks and in `cairn deps`.
 something outside Cairn (an unavailable credential, a third party). Reach for
 `blockedby` when the blocker is another task.
 
+## 8. Closing as a duplicate
+
+```bash
+cairn done CAI-42 --duplicate-of CAI-31 --resolution "same cause as CAI-31; fixed there"
+```
+
+Naming the original is the point. `--kind duplicate` on its own records *that* it was a
+duplicate and leaves the reader to go and find *what* — which is the work the resolution
+was supposed to save.
+
 ## Output
 
 TSV by default: a `#count` line, one header row, then rows; nulls omitted. `--json` to

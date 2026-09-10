@@ -102,10 +102,12 @@ export const ProjectMenu = ({
   projectKey,
   title,
   taskCount,
+  archived,
 }: {
   projectKey: string
   title: string
   taskCount: number
+  archived: boolean
 }) => {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -129,6 +131,21 @@ export const ProjectMenu = ({
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
+
+  const setStatus = async (status: 'active' | 'archived') => {
+    setOpen(false)
+    const res = await fetch(`/api/v1/projects/${projectKey}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    // Archiving removes it from the sidebar, so staying on its page would
+    // leave the nav showing nothing selected. Go home instead.
+    if (res.ok) {
+      if (status === 'archived') router.push('/')
+      else router.refresh()
+    }
+  }
 
   const rename = async () => {
     const next = draft.trim()
@@ -186,6 +203,13 @@ export const ProjectMenu = ({
             className="text-fg-muted hover:bg-surface-hover hover:text-fg block w-full px-3 py-1.5 text-left text-[13px] transition-colors"
           >
             Rename project
+          </button>
+          <button
+            type="button"
+            onClick={() => void setStatus(archived ? 'active' : 'archived')}
+            className="text-fg-muted hover:bg-surface-hover hover:text-fg block w-full px-3 py-1.5 text-left text-[13px] transition-colors"
+          >
+            {archived ? 'Restore from archive' : 'Archive project'}
           </button>
           <button
             type="button"

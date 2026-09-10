@@ -214,8 +214,13 @@ export const Properties = ({
           status={pendingClose}
           suggestion={task.checkpoint_summary}
           onCancel={() => setPendingClose(null)}
-          onConfirm={async (resolution: string, kind) => {
-            const ok = await patch({ status: pendingClose, resolution, resolutionKind: kind })
+          onConfirm={async (resolution: string, kind, duplicateOf) => {
+            const ok = await patch({
+              status: pendingClose,
+              resolution,
+              resolutionKind: kind,
+              ...(duplicateOf ? { duplicateOf } : {}),
+            })
             setPendingClose(null)
             return ok
           }}

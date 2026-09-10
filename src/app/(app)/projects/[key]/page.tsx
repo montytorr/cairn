@@ -42,6 +42,11 @@ const ProjectPage = async ({
         </span>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
         <span className="text-fg text-[13px]">Tasks</span>
+        {project.status === 'archived' && (
+          <span className="border-border text-fg-subtle ml-1 rounded border px-1.5 py-px text-[10px] uppercase tracking-wide">
+            Archived
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-3">
           {closedHidden > 0 || includeClosed ? (
@@ -56,6 +61,7 @@ const ProjectPage = async ({
             projectKey={project.key}
             title={project.title}
             taskCount={tasks.length + closedHidden}
+            archived={project.status === 'archived'}
           />
         </div>
       </header>

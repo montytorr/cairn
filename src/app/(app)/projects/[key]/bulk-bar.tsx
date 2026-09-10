@@ -168,6 +168,7 @@ export const BulkBar = ({
           status={closing}
           suggestion={null}
           onCancel={() => setClosing(null)}
+          allowDuplicate={false}
           onConfirm={async (resolution: string, kind: ResolutionKind) => {
             const ok = await run({ status: closing, resolution, resolutionKind: kind })
             if (ok) setClosing(null)
