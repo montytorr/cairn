@@ -40,3 +40,24 @@ describe('widenedQuery', () => {
     expect(widenedQuery('a of to')).toBeNull()
   })
 })
+
+describe('result refs must stay addressable', () => {
+  /**
+   * A search result's `ref` is what an agent passes straight to `cairn show`.
+   * Preferring the imported identifier there returns things like "BBTRADE-373",
+   * which looks like a ref and 404s, because no project has that key. The
+   * imported id belongs in its own field.
+   */
+  const toRef = (row: { project_key: string; number: number }) =>
+    `${row.project_key}-${row.number}`
+
+  it('builds the ref from the project key and number', () => {
+    expect(toRef({ project_key: 'TBV', number: 109 })).toBe('TBV-109')
+  })
+
+  it('is unaffected by an imported identifier', () => {
+    const row = { project_key: 'TBV', number: 109, external_ref: 'BBTRADE-373' }
+    expect(toRef(row)).toBe('TBV-109')
+    expect(toRef(row)).not.toBe(row.external_ref)
+  })
+})

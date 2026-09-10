@@ -57,7 +57,12 @@ export const GET = route({
     // by anything other than ts_rank discards relevance, which is exactly the
     // regression this replaced.
     const results = rows.map((row) => ({
-      ref: row.external_ref ?? `${row.project_key}-${row.number}`,
+      // ALWAYS the Cairn ref: it is what `cairn show` resolves. Returning the
+      // imported identifier here hands the caller something that looks like a
+      // ref and 404s, because no project has key "BBTRADE".
+      ref: `${row.project_key}-${row.number}`,
+      // The original identifier, for recognising old work. Not addressable.
+      externalRef: row.external_ref,
       title: row.title,
       type: row.type,
       status: row.status,
