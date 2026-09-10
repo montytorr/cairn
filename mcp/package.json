@@ -1,0 +1,11 @@
+{
+  "name": "cairn-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "cairn-mcp": "./server.mjs" },
+  "description": "MCP facade over the cairn CLI. Holds no logic of its own.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

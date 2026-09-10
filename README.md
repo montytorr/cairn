@@ -116,3 +116,43 @@ export CAIRN_DB_CONTAINER=supabase-db
 `restore-drill.sh` restores the newest dump into a throwaway database, asserts the data
 is really there (including that the generated `search_vector` survived, which would
 otherwise break search silently), then drops it. An untested backup is not a backup.
+
+## Agent setup
+
+Three interfaces over one implementation. The CLI is the implementation; the skill and
+the MCP server are thin wrappers, so behaviour cannot diverge between them.
+
+```bash
+# credentials — or export CAIRN_BASE_URL / CAIRN_API_KEY
+mkdir -p ~/.cairn && cat > ~/.cairn/env <<'ENV'
+CAIRN_BASE_URL=https://cairn.example.com
+CAIRN_API_KEY=sk_live_...
+ENV
+chmod 600 ~/.cairn/env
+
+install -m 755 cli/cairn.mjs /usr/local/bin/cairn
+```
+
+**Skill** (Claude Code, Codex and OpenClaw all read skill folders):
+
+```bash
+cp -r skills/cairn ~/.claude/skills/     # Claude Code
+cp -r skills/cairn ~/.codex/skills/      # Codex
+cp -r skills/cairn /root/clawd/skills/   # OpenClaw
+```
+
+**MCP** (optional — native tool-calling for Claude Code and Codex; OpenClaw reaches it
+through `mcporter`). Codex, in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cairn]
+command = "cairn-mcp"
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+```
+
+Note Codex rejects a literal `bearer_token`; for an HTTP transport it wants
+`bearer_token_env_var`.
+
+Issue **one key per agent** so writes are attributable and any single agent can be
+revoked without disturbing the others.

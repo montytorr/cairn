@@ -43,3 +43,6 @@ coverage/
 .vscode/
 .idea/
 tsconfig.tsbuildinfo
+
+# mcp facade
+mcp/node_modules/
