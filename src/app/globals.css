@@ -273,13 +273,26 @@
 }
 
 @layer base {
-  /* Every select in the app draws its own chevron.
-     Tailwind reads `[-webkit-appearance:none]` as a *negative* utility and
-     emits nothing, so the class never worked and WebKit kept painting its own
-     arrow beside ours — two chevrons on every select. A base rule is the
-     right home for it anyway: it applies once rather than per call site. */
+  /* Every select in the app draws its own chevron, so the browser's has to
+     go. Two things were in the way:
+
+     1. `[-webkit-appearance:none]` as a class emits nothing — Tailwind reads
+        the leading dash as a *negative* utility. Hence the base rule.
+     2. `appearance: none` is not enough in current Chrome, which computes
+        selects to `base-select` and draws the arrow as a `::picker-icon`
+        pseudo-element that no appearance value touches. That is what was
+        still painting a second chevron beside ours. */
   select {
     -webkit-appearance: none;
     appearance: none;
+  }
+
+  select::picker-icon {
+    display: none;
+  }
+
+  /* Legacy Edge/IE. Harmless where unsupported. */
+  select::-ms-expand {
+    display: none;
   }
 }
