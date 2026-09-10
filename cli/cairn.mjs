@@ -12,7 +12,8 @@
  * row so the model can decline to open something.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { basename } from 'node:path'
 import { homedir } from 'node:os'
 
 /**
@@ -112,6 +113,27 @@ const request = async (method, path, body) => {
   return payload.data
 }
 
+const upload = async (path, filePath) => {
+  if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
+  if (!existsSync(filePath)) die(`no such file: ${filePath}`)
+
+  const form = new FormData()
+  // Let fetch set the multipart boundary; do not send a Content-Type header.
+  form.append('file', new Blob([readFileSync(filePath)]), basename(filePath))
+
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}` },
+    body: form,
+  }).catch((error) => die(`cannot reach ${BASE}: ${error.message}`))
+
+  const payload = await res.json().catch(() => null)
+  if (!payload?.success) {
+    die(payload?.error ?? `upload failed with ${res.status}`)
+  }
+  return payload.data
+}
+
 // ---------------------------------------------------------------------------
 // output
 // ---------------------------------------------------------------------------
@@ -168,6 +190,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
     cairn comment <ref> "<text>"
     cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
+    cairn attach <ref> <file>      |   cairn files <ref>
 
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
@@ -317,6 +340,30 @@ const commands = {
     const ref = need(positional[0], 'usage: cairn comment <ref> "<text>"')
     const content = await resolveValue(need(positional[1], 'a comment body is required'))
     emit(await request('POST', `/api/v1/tasks/${ref}/comments`, { content }))
+  },
+
+  async attach() {
+    const ref = need(positional[0], 'usage: cairn attach <ref> <file>')
+    const file = need(positional[1], 'a file path is required')
+    const size = statSync(file).size
+    process.stderr.write(`uploading ${basename(file)} (${size} bytes)\n`)
+    emit(await upload(`/api/v1/tasks/${ref}/attachments`, file))
+  },
+
+  async files() {
+    const ref = need(positional[0], 'usage: cairn files <ref>')
+    const data = await request('GET', `/api/v1/tasks/${ref}/attachments`)
+    emit(data, {
+      rows: (d) =>
+        d.map((a) => ({
+          id: a.id,
+          name: a.original_name,
+          type: a.mime_type,
+          bytes: a.size_bytes,
+          by: a.actor_id,
+        })),
+      columns: ['id', 'name', 'type', 'bytes', 'by'],
+    })
   },
 
   async claim() {
