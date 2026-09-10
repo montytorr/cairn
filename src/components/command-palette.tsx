@@ -134,6 +134,28 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
             </Command.Group>
           )}
 
+          {query.trim().length < 2 && (
+            <Command.Group
+              heading="Go to"
+              className="[&_[cmdk-group-heading]]:text-fg-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase"
+            >
+              <Command.Item
+                value="settings"
+                onSelect={() => go('/settings')}
+                className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-2 text-sm"
+              >
+                Settings
+              </Command.Item>
+              <Command.Item
+                value="api docs"
+                onSelect={() => go('/api-docs')}
+                className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-2 text-sm"
+              >
+                API reference
+              </Command.Item>
+            </Command.Group>
+          )}
+
           {query.trim().length < 2 && projects.length > 0 && (
             <Command.Group
               heading="Projects"

@@ -34,9 +34,13 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
         <ProjectNav projects={projects.map((p) => ({ key: p.key, title: p.title }))} />
 
         <div className="border-border text-fg-subtle border-t px-4 py-3 text-[11px]">
-          <p className="truncate" title={user.email ?? ''}>
+          <Link
+            href="/settings"
+            className="hover:text-fg block truncate transition-colors"
+            title={user.email ?? ''}
+          >
             {user.email}
-          </p>
+          </Link>
           <div className="mt-1.5 flex items-center justify-between">
             <span>
               <kbd className="border-border bg-surface rounded border px-1 font-mono text-[10px]">
@@ -44,7 +48,12 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
               </kbd>{' '}
               search
             </span>
-            <SignOut />
+            <div className="flex gap-2.5">
+              <Link href="/settings" className="hover:text-fg transition-colors">
+                Settings
+              </Link>
+              <SignOut />
+            </div>
           </div>
         </div>
       </aside>
