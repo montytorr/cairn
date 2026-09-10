@@ -3,8 +3,9 @@
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
-import { StatusBadge, TypeBadge } from '@/components/badges'
+import { Settings, FileJson, Search as SearchIcon, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { ProjectIcon, StatusIcon } from '@/components/icons'
 import type { TaskStatus, TaskType } from '@/schemas/task'
 
 type Hit = {
@@ -13,15 +14,39 @@ type Hit = {
   type: TaskType
   status: TaskStatus
   resolved: boolean
+  loose?: boolean
   tokens: number
 }
 
-/**
- * ⌘K search over the same endpoint the agents use, so the human and the agents
- * are looking at one index rather than two implementations of "find prior work".
- */
+/** Keyboard hint, rendered as the chips Linear shows on the right of a row. */
+const Keys = ({ keys }: { keys: string[] }) => (
+  <span className="ml-auto flex shrink-0 items-center gap-1">
+    {keys.map((k, i) =>
+      k === 'then' ? (
+        <span key={i} className="text-fg-subtle text-[11px]">
+          then
+        </span>
+      ) : (
+        <kbd key={i} className="kbd">
+          {k}
+        </kbd>
+      ),
+    )}
+  </span>
+)
+
+const itemClass =
+  'flex h-[38px] cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-[13px] ' +
+  'data-[selected=true]:bg-surface-hover'
+
+const groupClass =
+  '[&_[cmdk-group-heading]]:text-fg-subtle [&_[cmdk-group-heading]]:px-2.5 ' +
+  '[&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1 ' +
+  '[&_[cmdk-group-heading]]:text-[11px]'
+
 export const CommandPalette = ({ projects }: { projects: { key: string; title: string }[] }) => {
   const router = useRouter()
+  const { resolvedTheme, setTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Hit[]>([])
@@ -39,15 +64,15 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
   }, [])
 
   const searchable = query.trim().length >= 2
-  // Derived rather than cleared in an effect: setting state synchronously
-  // inside useEffect triggers a cascading render, and this needs no state.
+  // Derived, not cleared in an effect: setting state synchronously inside
+  // useEffect triggers a cascading render, and this needs no state.
   const visibleHits = searchable ? hits : []
 
   useEffect(() => {
     if (!open || !searchable) return
 
-    // Debounced, and aborted on the next keystroke so results cannot arrive
-    // out of order and overwrite a newer query.
+    // Debounced and aborted on the next keystroke, so a slow response cannot
+    // land after a newer query and overwrite it.
     const controller = new AbortController()
     const timer = setTimeout(async () => {
       setLoading(true)
@@ -62,7 +87,7 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
       } finally {
         setLoading(false)
       }
-    }, 180)
+    }, 160)
 
     return () => {
       controller.abort()
@@ -80,99 +105,114 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-[14vh]"
       onClick={() => setOpen(false)}
     >
       <Command
-        className="bg-surface border-border w-full max-w-lg overflow-hidden rounded-lg border shadow-2xl"
+        className="bg-surface border-border pop w-full max-w-[560px] overflow-hidden rounded-lg border shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
         onClick={(e) => e.stopPropagation()}
-        shouldFilter={false}
+        shouldFilter={!searchable}
         loop
       >
-        <div className="border-border flex items-center gap-2 border-b px-3">
-          <Search size={14} className="text-fg-subtle shrink-0" />
+        <div className="border-border flex items-center gap-2.5 border-b px-3.5">
+          <SearchIcon size={14} className="text-fg-subtle shrink-0" />
           <Command.Input
             autoFocus
             value={query}
             onValueChange={setQuery}
-            placeholder="Search prior work, or jump to a project…"
-            className="placeholder:text-fg-subtle w-full bg-transparent py-3 text-sm outline-none"
+            placeholder="Search tasks, or jump to a project…"
+            className="placeholder:text-fg-subtle h-[46px] w-full bg-transparent text-[14px] outline-none"
           />
-          {loading && <span className="text-fg-subtle text-[11px]">…</span>}
+          {loading ? (
+            <span className="text-fg-subtle shrink-0 text-[11px]">…</span>
+          ) : (
+            <kbd className="kbd shrink-0">esc</kbd>
+          )}
         </div>
 
-        <Command.List className="max-h-80 overflow-y-auto p-1.5">
-          <Command.Empty className="text-fg-subtle px-2 py-6 text-center text-xs">
-            {query.trim().length < 2 ? 'Type to search.' : 'Nothing found — this looks new.'}
+        <Command.List className="max-h-[340px] overflow-y-auto p-1.5">
+          <Command.Empty className="text-fg-subtle px-2.5 py-8 text-center text-[12px]">
+            {searchable ? 'Nothing found — this subject looks new.' : 'Type to search.'}
           </Command.Empty>
 
           {visibleHits.length > 0 && (
-            <Command.Group
-              heading="Tasks"
-              className="[&_[cmdk-group-heading]]:text-fg-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase"
-            >
+            <Command.Group heading="Tasks" className={groupClass}>
               {visibleHits.map((hit) => {
-                const [key] = hit.ref.split('-')
-                const number = hit.ref.slice((key?.length ?? 0) + 1)
+                const idx = hit.ref.lastIndexOf('-')
+                const key = hit.ref.slice(0, idx)
+                const number = hit.ref.slice(idx + 1)
                 return (
                   <Command.Item
                     key={hit.ref}
                     value={hit.ref}
                     onSelect={() => go(`/projects/${key}/tasks/${number}`)}
-                    className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-sm"
+                    className={itemClass}
                   >
-                    <code className="text-fg-subtle w-16 shrink-0 text-[11px]">{hit.ref}</code>
-                    <TypeBadge type={hit.type} compact />
-                    <StatusBadge status={hit.status} compact />
+                    <StatusIcon status={hit.status} size={13} />
+                    <code className="text-fg-subtle w-[68px] shrink-0 truncate text-[11px] tabular">
+                      {hit.ref}
+                    </code>
                     <span className="min-w-0 flex-1 truncate">{hit.title}</span>
                     {hit.resolved && (
-                      <span className="text-status-done shrink-0 text-[11px]">answered</span>
+                      <span className="bg-status-done size-[6px] shrink-0 rounded-full" title="Has a resolution" />
                     )}
+                    {hit.loose && (
+                      <span className="text-fg-subtle shrink-0 text-[10px]" title="Loose match">
+                        ~
+                      </span>
+                    )}
+                    <span className="text-fg-subtle shrink-0 text-[10px] tabular">
+                      ~{hit.tokens}
+                    </span>
                   </Command.Item>
                 )
               })}
             </Command.Group>
           )}
 
-          {query.trim().length < 2 && (
-            <Command.Group
-              heading="Go to"
-              className="[&_[cmdk-group-heading]]:text-fg-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase"
-            >
-              <Command.Item
-                value="settings"
-                onSelect={() => go('/settings')}
-                className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-2 text-sm"
-              >
-                Settings
-              </Command.Item>
-              <Command.Item
-                value="api docs"
-                onSelect={() => go('/api-docs')}
-                className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-2 text-sm"
-              >
-                API reference
-              </Command.Item>
-            </Command.Group>
-          )}
-
-          {query.trim().length < 2 && projects.length > 0 && (
-            <Command.Group
-              heading="Projects"
-              className="[&_[cmdk-group-heading]]:text-fg-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase"
-            >
-              {projects.map((p) => (
-                <Command.Item
-                  key={p.key}
-                  value={p.key}
-                  onSelect={() => go(`/projects/${p.key}`)}
-                  className="data-[selected=true]:bg-surface-raised flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-2 text-sm"
-                >
-                  <code className="text-fg-subtle text-[11px]">{p.key}</code>
-                  <span>{p.title}</span>
+          {!searchable && (
+            <>
+              <Command.Group heading="Go to" className={groupClass}>
+                <Command.Item value="settings" onSelect={() => go('/settings')} className={itemClass}>
+                  <Settings size={14} className="text-fg-subtle" />
+                  Settings
+                  <Keys keys={['G', 'then', 'S']} />
                 </Command.Item>
-              ))}
-            </Command.Group>
+                <Command.Item value="api reference" onSelect={() => go('/api-docs')} className={itemClass}>
+                  <FileJson size={14} className="text-fg-subtle" />
+                  API reference
+                  <Keys keys={['G', 'then', 'A']} />
+                </Command.Item>
+                <Command.Item
+                  value="toggle theme"
+                  onSelect={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                  className={itemClass}
+                >
+                  <Moon size={14} className="text-fg-subtle" />
+                  Toggle theme
+                  <Keys keys={['⌘', '⇧', 'L']} />
+                </Command.Item>
+              </Command.Group>
+
+              {projects.length > 0 && (
+                <Command.Group heading="Projects" className={groupClass}>
+                  {projects.slice(0, 8).map((p) => (
+                    <Command.Item
+                      key={p.key}
+                      value={`${p.key} ${p.title}`}
+                      onSelect={() => go(`/projects/${p.key}`)}
+                      className={itemClass}
+                    >
+                      <span className="text-fg-subtle">
+                        <ProjectIcon size={13} />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                      <code className="text-fg-subtle shrink-0 text-[10px]">{p.key}</code>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+            </>
           )}
         </Command.List>
       </Command>

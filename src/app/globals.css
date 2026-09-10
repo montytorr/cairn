@@ -3,113 +3,103 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   Cairn — design tokens.
+   Cairn — design tokens, modelled on Linear.
 
-   A cairn is a stack of stones left to mark a trail, and the interface takes
-   that literally: warm stone rather than the cold blue-grey every tracker
-   defaults to, hairline rules stacked on a strict 4px rhythm, and colour held
-   back entirely for state. On a screen showing three hundred rows, restraint
-   is not an aesthetic preference — it is what makes the rows readable.
+   Dark-first, because that is the reference and where a tool like this is
+   actually used. The ground is a cool near-black rather than a warm one:
+   warmth reads as "document", and this is an instrument.
 
-   Colour is authored in oklch so lightness is perceptually even: nudging L on
-   one status keeps its hue and chroma intact, which is what stops a dense
-   column of badges looking like a pile of swatches.
+   Colour is carried almost entirely by state — status rings, priority bars,
+   label dots. Text is three greys and nothing else. On a screen showing three
+   hundred rows that restraint is what makes the rows scannable.
    --------------------------------------------------------------------------- */
 
 :root {
-  /* --- ground: warm paper -------------------------------------------- */
-  --bg:             oklch(0.9855 0.0035 85);
-  --surface:        oklch(1      0      0);
-  --surface-raised: oklch(0.9660 0.0050 85);
-  --surface-sunken: oklch(0.9520 0.0060 85);
+  --radius: 6px;
 
-  --fg:             oklch(0.2450 0.0110 65);
-  --fg-muted:       oklch(0.5100 0.0110 68);
-  --fg-subtle:      oklch(0.6450 0.0100 70);
+  /* light — a faithful inverse, kept usable but not the primary target */
+  --bg:             #ffffff;
+  --bg-elevated:    #f9f9fa;
+  --surface:        #ffffff;
+  --surface-raised: #f2f3f5;
+  --surface-hover:  #f0f1f3;
 
-  /* Hairlines. Two weights only: one you barely see, one you do. */
-  --border:         oklch(0.9080 0.0055 80);
-  --border-strong:  oklch(0.8350 0.0075 80);
+  --fg:             #0d0e10;
+  --fg-muted:       #61656c;
+  --fg-subtle:      #8a8f98;
 
-  /* --- accent: ink. One colour, used sparingly. ---------------------- */
-  --accent:         oklch(0.4600 0.0950 245);
-  --accent-fg:      oklch(0.9920 0      0);
-  --accent-subtle:  oklch(0.9420 0.0250 245);
-  --ring:           oklch(0.4600 0.0950 245 / 0.35);
+  --border:         #e6e7e9;
+  --border-strong:  #d3d5d9;
 
-  --danger:         oklch(0.5150 0.1650 28);
-  --danger-subtle:  oklch(0.9480 0.0260 28);
+  --accent:         #5e6ad2;
+  --accent-fg:      #ffffff;
+  --accent-subtle:  #eceefb;
+  --ring:           #5e6ad2;
 
-  /* --- state. The only place colour is allowed to speak. ------------- */
-  --status-backlog:   oklch(0.6300 0.0140 70);
-  --status-todo:      oklch(0.5450 0.0880 248);
-  --status-doing:     oklch(0.6350 0.1320 62);
-  --status-in-review: oklch(0.5300 0.1080 305);
-  --status-done:      oklch(0.5250 0.0980 152);
-  --status-cancelled: oklch(0.6600 0.0180 70);
+  --danger:         #c52828;
+  --danger-subtle:  #fdeaea;
 
-  --priority-urgent: oklch(0.5150 0.1650 28);
-  --priority-high:   oklch(0.6050 0.1300 52);
-  --priority-medium: oklch(0.5900 0.0620 245);
-  --priority-low:    oklch(0.6900 0.0110 70);
+  /* status — the six, as ring colours */
+  --status-backlog:   #9ca3af;
+  --status-todo:      #6b7280;
+  --status-doing:     #f2994a;
+  --status-in-review: #4cb782;
+  --status-done:      #5e6ad2;
+  --status-cancelled: #95a2b3;
 
-  /* --- rhythm. Everything spatial resolves to these. ----------------- */
-  --step-1: 0.25rem;   /*  4px */
-  --step-2: 0.5rem;    /*  8px */
-  --step-3: 0.75rem;   /* 12px */
-  --step-4: 1rem;      /* 16px */
-  --step-5: 1.5rem;    /* 24px */
-  --step-6: 2rem;      /* 32px */
-  --step-7: 3rem;      /* 48px */
+  --priority-urgent: #f2994a;
+  --priority-high:   #8a8f98;
+  --priority-medium: #8a8f98;
+  --priority-low:    #8a8f98;
 
-  --row:    2rem;      /* 32px — the list row, and the unit everything aligns to */
-  --radius: 0.375rem;
+  /* rhythm */
+  --row: 36px;
+  --row-compact: 32px;
 
-  --ease:   cubic-bezier(0.32, 0.72, 0, 1);  /* settles, rather than eases out */
-  --fast:   120ms;
-  --medium: 200ms;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 :root.dark {
-  /* Warm charcoal, not blue-black — the same stone at dusk. */
-  --bg:             oklch(0.1780 0.0055 75);
-  --surface:        oklch(0.2120 0.0060 75);
-  --surface-raised: oklch(0.2480 0.0068 75);
-  --surface-sunken: oklch(0.1520 0.0050 75);
+  --bg:             #08090a;
+  --bg-elevated:    #0f1011;
+  --surface:        #101113;
+  --surface-raised: #191a1c;
+  --surface-hover:  #1a1b1e;
 
-  --fg:             oklch(0.9420 0.0040 80);
-  --fg-muted:       oklch(0.6900 0.0090 78);
-  --fg-subtle:      oklch(0.5500 0.0090 76);
+  --fg:             #f7f8f8;
+  --fg-muted:       #8a8f98;
+  --fg-subtle:      #62666d;
 
-  --border:         oklch(0.2820 0.0070 75);
-  --border-strong:  oklch(0.3650 0.0090 75);
+  --border:         #1f2023;
+  --border-strong:  #2c2e33;
 
-  --accent:         oklch(0.7150 0.1080 240);
-  --accent-fg:      oklch(0.1780 0.0055 75);
-  --accent-subtle:  oklch(0.2900 0.0480 240);
-  --ring:           oklch(0.7150 0.1080 240 / 0.45);
+  --accent:         #7b86e8;
+  --accent-fg:      #ffffff;
+  --accent-subtle:  #23253a;
+  --ring:           #5e6ad2;
 
-  --danger:         oklch(0.6550 0.1600 28);
-  --danger-subtle:  oklch(0.2820 0.0520 28);
+  --danger:         #eb5757;
+  --danger-subtle:  #2a1618;
 
-  --status-backlog:   oklch(0.6100 0.0140 75);
-  --status-todo:      oklch(0.6900 0.0920 248);
-  --status-doing:     oklch(0.7550 0.1250 68);
-  --status-in-review: oklch(0.7050 0.1050 305);
-  --status-done:      oklch(0.7000 0.1000 152);
-  --status-cancelled: oklch(0.5300 0.0180 75);
+  --status-backlog:   #6b7078;
+  --status-todo:      #8a8f98;
+  --status-doing:     #f2c94c;
+  --status-in-review: #4cb782;
+  --status-done:      #7b86e8;
+  --status-cancelled: #5c6066;
 
-  --priority-urgent: oklch(0.6700 0.1750 28);
-  --priority-high:   oklch(0.7350 0.1300 58);
-  --priority-medium: oklch(0.6800 0.0700 245);
-  --priority-low:    oklch(0.5500 0.0120 75);
+  --priority-urgent: #f2994a;
+  --priority-high:   #8a8f98;
+  --priority-medium: #8a8f98;
+  --priority-low:    #8a8f98;
 }
 
 @theme inline {
   --color-bg:             var(--bg);
+  --color-bg-elevated:    var(--bg-elevated);
   --color-surface:        var(--surface);
   --color-surface-raised: var(--surface-raised);
-  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover:  var(--surface-hover);
   --color-fg:             var(--fg);
   --color-fg-muted:       var(--fg-muted);
   --color-fg-subtle:      var(--fg-subtle);
@@ -130,27 +120,20 @@
   --color-status-cancelled: var(--status-cancelled);
 
   --color-priority-urgent: var(--priority-urgent);
-  --color-priority-high:   var(--priority-high);
-  --color-priority-medium: var(--priority-medium);
-  --color-priority-low:    var(--priority-low);
 
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) * 1.6);
-  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-lg: 8px;
+  --radius-sm: 4px;
 
   --spacing-row: var(--row);
+  --spacing-rowc: var(--row-compact);
 
-  --font-sans:    var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono:    var(--font-mono), ui-monospace, SFMono-Regular, monospace;
-  --font-display: var(--font-display), Georgia, serif;
-
-  --ease-settle: var(--ease);
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 @layer base {
-  * {
-    border-color: var(--border);
-  }
+  * { border-color: var(--border); }
 
   html { color-scheme: light; }
   html.dark { color-scheme: dark; }
@@ -161,32 +144,24 @@
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-size: 13px;
     line-height: 1.5;
+    letter-spacing: -0.0025em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
   }
 
-  /* Figures that change in place must not reflow the row around them. */
+  /* Counts and dates change in place; they must not reflow the row. */
   .tabular { font-variant-numeric: tabular-nums; }
 
-  .font-display {
-    font-family: var(--font-display), Georgia, serif;
-    letter-spacing: -0.01em;
-  }
-
   :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline: 2px solid var(--ring);
+    outline-offset: -1px;
     border-radius: var(--radius-sm);
   }
 
-  ::selection { background-color: var(--accent-subtle); }
+  ::selection { background-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 
-  /* Scrollbars, so a 300-row list does not slam a grey slab down its edge. */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-  }
+  /* A 300-row list should not slam a grey slab down its edge. */
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
@@ -199,20 +174,29 @@
 }
 
 @layer utilities {
-  /* One well-orchestrated entrance beats scattered micro-interactions.
-     Rows settle in sequence on load; the stagger is capped so a long list
-     does not turn into a slideshow. */
-  @keyframes settle {
-    from { opacity: 0; transform: translateY(3px); }
+  /* A keyboard hint, as it appears in the command palette. */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--surface-raised);
+    color: var(--fg-muted);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.99); }
     to   { opacity: 1; transform: none; }
   }
-
-  .settle {
-    animation: settle var(--medium) var(--ease) both;
-  }
+  .pop { animation: pop 140ms var(--ease) both; }
 
   @media (prefers-reduced-motion: reduce) {
-    .settle { animation: none; }
+    .pop { animation: none; }
     * { transition-duration: 1ms !important; }
   }
 }

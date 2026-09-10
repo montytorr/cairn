@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { ProjectIcon } from '@/components/icons'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -29,8 +30,7 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
           placeholder="Find a project…"
           aria-label="Filter projects"
           className={
-            'placeholder:text-fg-subtle mb-1 rounded-md bg-transparent px-2 py-1 text-[12px] ' +
-            'outline-none focus:bg-surface'
+            "placeholder:text-fg-subtle mb-1 rounded-md bg-transparent px-2 py-1 text-[12px] outline-none focus:bg-surface"
           }
         />
       )}
@@ -44,19 +44,15 @@ export const ProjectNav = ({ projects }: { projects: { key: string; title: strin
               <Link
                 href={href}
                 className={cn(
-                  'group flex items-baseline gap-2 rounded-md px-2 py-[5px] transition-colors duration-100',
-                  active ? 'bg-surface text-fg' : 'text-fg-muted hover:bg-surface hover:text-fg',
+                  'group flex h-[28px] items-center gap-2 rounded-md px-2 transition-colors duration-75',
+                  active
+                    ? 'bg-surface-raised text-fg'
+                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
                 )}
               >
-                <code
-                  className={cn(
-                    'w-11 shrink-0 truncate text-[10px]',
-                    active ? 'text-accent' : 'text-fg-subtle',
-                  )}
-                >
-                  {p.key}
-                </code>
-                <span className="truncate text-[12.5px]">{p.title}</span>
+                <ProjectIcon size={13} />
+                <span className="truncate text-[13px]">{p.title}</span>
+                <code className="text-fg-subtle ml-auto shrink-0 text-[10px]">{p.key}</code>
               </Link>
             </li>
           )

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { admin } from '@/lib/supabase/admin'
 import { currentUser, listProjects } from '@/lib/data'
-import { StatusBadge, TypeBadge } from '@/components/badges'
+import { StatusIcon, TypePill } from '@/components/icons'
 import type { TaskStatus, TaskType } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -50,7 +50,7 @@ const Home = async () => {
   if (projects.length === 0) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-6">
-        <h1 className="font-display mb-2 text-2xl">Nothing here yet</h1>
+        <h1 className="mb-2 text-[20px] font-semibold tracking-[-0.01em]">Nothing here yet</h1>
         <p className="text-fg-muted mb-5 leading-relaxed">
           A cairn is built one stone at a time. Create the first project from an agent, or
           from the CLI.
@@ -65,7 +65,7 @@ const Home = async () => {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
       <header className="mb-8">
-        <h1 className="font-display text-2xl leading-none">Cairn</h1>
+        <h1 className="text-[20px] font-semibold tracking-[-0.01em]">Cairn</h1>
         <p className="text-fg-muted mt-2 max-w-md leading-relaxed">
           Shared memory for the agents working here. Before starting a subject they check
           what has already been done.
@@ -94,7 +94,7 @@ const Home = async () => {
                   href={`/projects/${keyOf(r)}/tasks/${r.number}`}
                   className="flex h-row items-center gap-2.5 px-3 transition-colors duration-100 hover:bg-surface-raised"
                 >
-                  <StatusBadge status={r.status} compact />
+                  <StatusIcon status={r.status} />
                   <span className="min-w-0 flex-1 truncate text-[13px]">{r.title}</span>
                   {r.has_resolution && (
                     <span
@@ -103,7 +103,7 @@ const Home = async () => {
                     />
                   )}
                   <span className="hidden shrink-0 sm:block">
-                    <TypeBadge type={r.type} compact />
+                    <TypePill type={r.type} />
                   </span>
                   <code className="text-fg-subtle hidden shrink-0 text-[10.5px] md:block">
                     {r.external_ref ?? `${keyOf(r)}-${r.number}`}

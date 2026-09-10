@@ -1,6 +1,8 @@
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 import { currentUser, getProject, listTasks } from '@/lib/data'
-import { MarkdownView } from '@/components/markdown'
+import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
 
 export const dynamic = 'force-dynamic'
@@ -21,31 +23,37 @@ const ProjectPage = async ({
   if (!project) notFound()
 
   const includeClosed = closed === '1'
-  const { tasks, total, closedHidden } = await listTasks(project.id, { includeClosed })
+  const { tasks, closedHidden } = await listTasks(project.id, { includeClosed })
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8">
-      <header className="mb-6">
-        <div className="flex flex-wrap items-baseline gap-2.5">
-          <code className="text-fg-subtle text-[11px]">{project.key}</code>
-          <h1 className="font-display text-[22px] leading-none">{project.title}</h1>
-          <span className="text-fg-subtle tabular ml-auto text-xs">
-            {tasks.length} shown · {total} total
-          </span>
-        </div>
-        {project.description ? (
-          <div className="mt-2 max-w-2xl">
-            <MarkdownView>{project.description}</MarkdownView>
-          </div>
+    <div className="flex h-dvh flex-col">
+      {/* Breadcrumb bar — fixed height, so the list below always starts in
+          the same place regardless of project name length. */}
+      <header className="border-border flex h-[44px] shrink-0 items-center gap-1.5 border-b px-4">
+        <Link href="/" className="text-fg-muted hover:text-fg text-[13px] transition-colors">
+          Cairn
+        </Link>
+        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        <span className="text-fg-muted flex items-center gap-1.5 text-[13px]">
+          <ProjectIcon size={13} />
+          {project.title}
+        </span>
+        <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
+        <span className="text-fg text-[13px]">Tasks</span>
+
+        {closedHidden > 0 || includeClosed ? (
+          <Link
+            href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
+            className="text-fg-subtle hover:text-fg ml-auto text-[12px] transition-colors"
+          >
+            {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
+          </Link>
         ) : null}
       </header>
 
-      <ViewSwitch
-        tasks={tasks}
-        projectKey={project.key}
-        closedHidden={closedHidden}
-        includeClosed={includeClosed}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ViewSwitch tasks={tasks} projectKey={project.key} />
+      </div>
     </div>
   )
 }

@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownPreview } from '@/components/markdown'
-import { ClaimChip, Label, PriorityBadge, TypeBadge } from '@/components/badges'
+import { Avatar, LabelPill, PriorityIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
 import { cn, isClaimStale } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type TaskStatus } from '@/schemas/task'
@@ -44,11 +44,11 @@ const Card = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) 
         >
           {projectKey}-{task.number}
         </Link>
-        <TypeBadge type={task.type} compact />
-        <PriorityBadge priority={task.priority} />
+        <TypePill type={task.type} />
+        <PriorityIcon priority={task.priority} />
         {task.claimed_by && (
-          <span className="ml-auto">
-            <ClaimChip by={task.claimed_by} stale={isClaimStale(task.heartbeat_at)} />
+          <span className="ml-auto" title={`Held by ${task.claimed_by}`}>
+            <Avatar name={task.claimed_by} size={16} />
           </span>
         )}
       </div>
@@ -80,7 +80,7 @@ const Card = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) 
       {task.labels.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {task.labels.slice(0, 3).map((l) => (
-            <Label key={l}>{l}</Label>
+            <LabelPill key={l}>{l}</LabelPill>
           ))}
         </div>
       )}

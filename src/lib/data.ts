@@ -26,6 +26,9 @@ export type Task = {
   resolution_kind: string | null
   resolved_at: string | null
   resolved_by: string | null
+  external_ref: string | null
+  external_url: string | null
+  has_resolution: boolean
   created_at: string
   updated_at: string
 }

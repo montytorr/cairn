@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useState } from 'react'
 import { Columns3, List } from 'lucide-react'
 import { BoardView } from './board-view'
@@ -15,13 +14,9 @@ import type { TaskListItem } from '@/lib/data'
 export const ViewSwitch = ({
   tasks,
   projectKey,
-  closedHidden,
-  includeClosed,
 }: {
   tasks: TaskListItem[]
   projectKey: string
-  closedHidden: number
-  includeClosed: boolean
 }) => {
   const [view, setView] = useState<'board' | 'list'>(() => {
     try {
@@ -59,24 +54,14 @@ export const ViewSwitch = ({
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-1">
-        <div className="bg-surface-sunken border-border flex items-center gap-0.5 rounded-md border p-0.5">
+      <div className="border-border flex items-center gap-1 border-b px-3 py-1.5">
         {button('list', List, 'List view')}
         {button('board', Columns3, 'Board view')}
-        </div>
-        {closedHidden > 0 || includeClosed ? (
-          <Link
-            href={includeClosed ? `/projects/${projectKey}` : `/projects/${projectKey}?closed=1`}
-            className="text-fg-subtle hover:text-fg ml-auto text-xs"
-          >
-            {includeClosed
-              ? 'hide closed'
-              : `show ${closedHidden} closed`}
-          </Link>
-        ) : null}
       </div>
       {view === 'board' ? (
-        <BoardView tasks={tasks} projectKey={projectKey} />
+        <div className="p-3">
+          <BoardView tasks={tasks} projectKey={projectKey} />
+        </div>
       ) : (
         <ListView tasks={tasks} projectKey={projectKey} />
       )}
