@@ -39,7 +39,16 @@ export const findTask = async (actor: Actor, raw: string, fields = TASK_FIELDS) 
   const ref = parseRef(raw)
   if (!ref) return null
 
-  const query = admin().from('tasks').select(fields).eq('projects.owner_user_id', actor.userId)
+  // The owner filter reaches through the embedded relation, so PostgREST needs
+  // that relation in the select or the query matches nothing — and returns no
+  // error, which reads exactly like "no such task". Three callers passing a
+  // narrow field list hit this. Appending it here rather than trusting every
+  // future caller to remember.
+  const select = fields.includes('projects!inner')
+    ? fields
+    : `${fields}, projects!inner(owner_user_id)`
+
+  const query = admin().from('tasks').select(select).eq('projects.owner_user_id', actor.userId)
 
   const { data, error } =
     'id' in ref
