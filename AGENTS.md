@@ -107,10 +107,15 @@ cairn relearn <slug> --body -       # it changed
 cairn unlearn <slug> --superseded-by <new-slug>
 ```
 
-No `--project` means global: infra, conventions, anything that is not one project's
-business. Correct knowledge rather than adding to it — two contradictory claims, equally
-findable, with no way to tell which is current, is the failure mode every memory store
-reaches eventually.
+Three scopes, narrowest first: `--project HM` is true of that project, `--entity dispofi`
+is true of that grouping (`cairn entities` lists them — a business, a stack, a subsystem),
+and neither is true everywhere. A project belongs to several entities at once, so pick the
+one the fact is actually about. When a fact exists at two scopes the narrower is shown
+first, which is how "true for Dispofi, except here" gets said.
+
+Correct knowledge rather than adding to it — two contradictory claims, equally findable,
+with no way to tell which is current, is the failure mode every memory store reaches
+eventually.
 
 **Sessions** are written for you when a session ends: what was asked, what was learned,
 what landed, where it was left. Any task you were still holding gets checkpointed at the
