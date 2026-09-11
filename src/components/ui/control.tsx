@@ -52,8 +52,22 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.ComponentProps<'te
 )
 Textarea.displayName = 'Textarea'
 
+/**
+ * The wrapper sizes to the select, and never shrinks below it.
+ *
+ * It carried `w-full`, so a select given an explicit width — w-36, w-40,
+ * w-[130px]; every caller passes one — sat at its stated width inside a
+ * full-width box, and the absolutely positioned chevron rendered against the
+ * far edge of the row instead of against the control.
+ *
+ * `shrink-0` is the other half of the same problem: inside a flex row that
+ * scrolls horizontally, a select with no minimum was squeezed narrower than its
+ * own label, so "All projects" wrapped to two lines inside a 26px-tall control
+ * and the second line was clipped. The row scrolls precisely so controls do not
+ * have to shrink.
+ */
 export const Select = forwardRef<HTMLSelectElement, WithSize<React.ComponentProps<'select'>>>(({ className, size = 'md', children, ...props }, ref) => (
-<div className="relative inline-flex items-center">
+  <div className="relative inline-flex shrink-0 items-center">
     <select
       ref={ref}
       className={cn(
