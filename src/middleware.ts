@@ -13,6 +13,9 @@ import { SESSION_COOKIE } from '@/lib/auth/cookie'
  * and must stay reachable without a browser session.
  */
 export const middleware = async (req: NextRequest) => {
+  if (req.nextUrl.pathname.startsWith('/api/auth/') || req.nextUrl.pathname === '/api/files') {
+    return NextResponse.next({ request: req })
+  }
   // Middleware runs in an edge-like runtime and performs the cheap redirect.
   // The app layout and API handlers resolve the opaque token against Postgres
   // before they read any data.

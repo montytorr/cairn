@@ -16,6 +16,7 @@ set -euo pipefail
 
 DEST=${CAIRN_BACKUP_DIR:-/srv/backups/cairn}
 DB_CONTAINER=${CAIRN_DB_CONTAINER:-clawdius-postgres}
+DB_NAME=${CAIRN_DB_NAME:-cairn}
 ATTACHMENTS=${CAIRN_ATTACHMENT_DIR:-/srv/cairn/attachments}
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
@@ -35,7 +36,7 @@ log "starting backup $STAMP"
 
 # Public is the complete application database. Supabase-owned schemas, roles,
 # owners and grants are deliberately excluded so the dump is stock-PG portable.
-if ! docker exec "$DB_CONTAINER" pg_dump -U postgres -d cairn -Fc \
+if ! docker exec "$DB_CONTAINER" pg_dump -U postgres -d "$DB_NAME" -Fc \
       --schema=public --no-owner --no-privileges > "$TMP"; then
   fail "pg_dump failed"
 fi
