@@ -166,7 +166,14 @@ export const upsertSession = async (actor: Actor, input: SessionUpsert) => {
 
 export const listSessions = async (
   userId: string,
-  filters: { project?: string; cwd?: string; limit: number },
+  filters: {
+    project?: string
+    cwd?: string
+    agent?: string
+    limit: number
+    /** Keyset cursor for the timeline: rows strictly older than this. */
+    before?: string
+  },
 ): Promise<SessionRow[]> => {
   let query = admin()
     .from('sessions')
@@ -176,6 +183,10 @@ export const listSessions = async (
     .limit(filters.limit)
 
   if (filters.cwd) query = query.eq('cwd', filters.cwd)
+  if (filters.agent) query = query.eq('agent_id', filters.agent)
+  // Strictly before, not <=: the cursor is the last row already shown, and
+  // <= would repeat it (or, worse, drop every other row sharing its instant).
+  if (filters.before) query = query.lt('ended_at', filters.before)
   if (filters.project) {
     const projectId = await projectIdForKey(userId, filters.project)
     if (!projectId) return []
@@ -185,4 +196,36 @@ export const listSessions = async (
   const { data, error } = await query
   if (error) throw new Error(error.message)
   return (data ?? []) as unknown as SessionRow[]
+}
+
+/** Distinct agent ids seen, for the sessions timeline's filter. */
+export const listSessionAgents = async (userId: string): Promise<string[]> => {
+  const { data, error } = await admin()
+    .from('sessions')
+    .select('agent_id')
+    .eq('owner_user_id', userId)
+    .not('agent_id', 'is', null)
+  if (error) throw new Error(error.message)
+
+  return [...new Set((data ?? []).map((r) => r.agent_id as string))].sort()
+}
+
+/** Project keys for the ids on a page of sessions, so the timeline can show one. */
+export const projectKeysById = async (
+  userId: string,
+  ids: string[],
+): Promise<Map<string, string>> => {
+  const out = new Map<string, string>()
+  const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))]
+  if (wanted.length === 0) return out
+
+  const { data, error } = await admin()
+    .from('projects')
+    .select('id, key')
+    .eq('owner_user_id', userId)
+    .in('id', wanted)
+  if (error) throw new Error(error.message)
+
+  for (const row of data ?? []) out.set(row.id as string, row.key as string)
+  return out
 }

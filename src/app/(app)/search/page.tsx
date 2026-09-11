@@ -2,49 +2,80 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { currentUser, listProjects } from '@/lib/data'
-import { searchTasks, type SearchRow } from '@/lib/api/search'
+import { searchAll, searchTasks, type SearchAllRow, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
 import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { SearchControls } from './search-controls'
 import { SearchResults } from './search-results'
+import { UnifiedResults } from './unified-results'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
 
+export const KINDS = ['all', 'task', 'note', 'knowledge', 'session'] as const
+export type Kind = (typeof KINDS)[number]
+
 const SearchPage = async ({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; project?: string; type?: string; status?: string }>
+  searchParams: Promise<{
+    q?: string
+    project?: string
+    type?: string
+    status?: string
+    kind?: string
+  }>
 }) => {
-  const { q = '', project, type, status } = await searchParams
+  const { q = '', project, type, status, kind } = await searchParams
   const user = await currentUser()
   if (!user) redirect('/login')
 
   const projects = await listProjects(user.id)
   const query = q.trim()
 
+  // A type or status filter is a statement about tasks, so it selects the
+  // task-only path along with an explicit `kind=task`. That path keeps
+  // selection and bulk edit, which mean nothing for a session or a fact.
+  const taskOnly = kind === 'task' || Boolean(type) || Boolean(status)
+
   let rows: SearchRow[] = []
+  let unified: SearchAllRow[] = []
   let widened = false
   let failure: string | null = null
 
   if (query.length >= 2) {
     try {
-      ;({ rows, widened } = await searchTasks(
-        user.id,
-        query,
-        {
-          project: project || undefined,
-          type: TASK_TYPES.includes(type as TaskType) ? type : undefined,
-          status: TASK_STATUSES.includes(status as TaskStatus) ? status : undefined,
-        },
-        60,
-      ))
+      if (taskOnly) {
+        ;({ rows, widened } = await searchTasks(
+          user.id,
+          query,
+          {
+            project: project || undefined,
+            type: TASK_TYPES.includes(type as TaskType) ? type : undefined,
+            status: TASK_STATUSES.includes(status as TaskStatus) ? status : undefined,
+          },
+          60,
+        ))
+      } else {
+        ;({ rows: unified, widened } = await searchAll(
+          user.id,
+          query,
+          {
+            project: project || undefined,
+            kinds: KINDS.includes(kind as Kind) && kind !== 'all' ? [kind as string] : undefined,
+          },
+          60,
+        ))
+      }
     } catch (error) {
       failure = error instanceof Error ? error.message : 'Search failed.'
     }
   }
 
-  const resolved = rows.filter((r) => r.resolution).length
+  const count = taskOnly ? rows.length : unified.length
+  const resolved = taskOnly
+    ? rows.filter((r) => r.resolution).length
+    : unified.filter((r) => r.answered).length
 
   return (
     <div className="flex h-dvh flex-col">
@@ -58,9 +89,9 @@ const SearchPage = async ({
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
         <span className="text-fg text-[13px]">Search</span>
-        {rows.length > 0 && (
+        {count > 0 && (
           <span className="text-fg-subtle ml-auto hidden text-[12px] sm:block">
-            {rows.length} {rows.length === 1 ? 'result' : 'results'}
+            {count} {count === 1 ? 'result' : 'results'}
             {resolved > 0 ? ` · ${resolved} with a recorded answer` : ''}
             {widened ? ' · loose match' : ''}
           </span>
@@ -72,6 +103,7 @@ const SearchPage = async ({
         project={project ?? ''}
         type={type ?? ''}
         status={status ?? ''}
+        kind={kind ?? 'all'}
         projects={projects.map((p) => ({ key: p.key, title: p.title }))}
       />
 
@@ -80,18 +112,20 @@ const SearchPage = async ({
           <p className="text-danger px-4 py-8 text-[13px]">{failure}</p>
         ) : query.length < 2 ? (
           <div className="text-fg-subtle px-4 py-12 text-center text-[13px]">
-            <p>Search every task, comment, note and resolution.</p>
+            <p>Search tasks, work-log notes, knowledge and past sessions at once.</p>
             <p className="mt-1.5 text-[12px]">
               Closed work is included on purpose — a recorded answer is the point.
             </p>
           </div>
-        ) : rows.length === 0 ? (
+        ) : count === 0 ? (
           <div className="text-fg-subtle px-4 py-12 text-center text-[13px]">
             <p>
               Nothing found for <span className="text-fg-muted">{query}</span>.
             </p>
             <p className="mt-1.5 text-[12px]">This subject looks new.</p>
           </div>
+        ) : !taskOnly ? (
+          <UnifiedResults rows={unified} />
         ) : (
           <SearchResults
             rows={rows.map((row) => ({

@@ -9,6 +9,8 @@ import {
   TASK_STATUSES,
   TASK_TYPES,
 } from '@/schemas/task'
+import { knowledgeCreate, knowledgeUpdate } from '@/schemas/knowledge'
+import { sessionUpsert } from '@/schemas/session'
 
 /**
  * The spec is generated from the same Zod schemas the routes validate with,
@@ -142,12 +144,21 @@ export const openapiSpec = () => ({
       get: {
         summary: 'Find prior work — call this first',
         description:
-          'Returns an index, never bodies. Hits carrying a resolution rank first. ' +
-          'Note that matching is keyword-based (Postgres FTS ANDs terms), so a ' +
-          'paraphrase can miss.',
+          'Searches four stores at once: tasks, work-log notes, knowledge and recorded ' +
+          'sessions. Returns an index, never bodies. Hits carrying an answer rank first. ' +
+          'Matching is keyword-based (Postgres FTS ANDs terms, widening to OR when the ' +
+          'precise pass comes back thin), so a paraphrase can still miss. ' +
+          'A `type` or `status` filter is a statement about tasks and narrows to them.',
         parameters: [
           { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'project', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'kinds',
+            in: 'query',
+            description: 'Comma-separated subset of task,note,knowledge,session. Default: all.',
+            schema: { type: 'string', example: 'task,knowledge' },
+          },
+          { name: 'tasksOnly', in: 'query', schema: { type: 'boolean', default: false } },
           { name: 'type', in: 'query', schema: { type: 'string', enum: [...TASK_TYPES] } },
           { name: 'status', in: 'query', schema: { type: 'string', enum: [...TASK_STATUSES] } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
@@ -162,11 +173,21 @@ export const openapiSpec = () => ({
                 items: {
                   type: 'object',
                   properties: {
-                    ref: { type: 'string' },
+                    kind: { type: 'string', enum: ['task', 'note', 'knowledge', 'session'] },
+                    ref: {
+                      type: 'string',
+                      description:
+                        'A task ref for tasks and notes, a slug for knowledge, a date for sessions.',
+                    },
                     title: { type: 'string' },
-                    type: { type: 'string', enum: [...TASK_TYPES] },
-                    status: { type: 'string', enum: [...TASK_STATUSES] },
-                    resolved: { type: 'boolean', description: 'Whether an answer is recorded.' },
+                    type: { type: 'string' },
+                    status: { type: 'string' },
+                    resolved: {
+                      type: 'boolean',
+                      description:
+                        'An answer is recorded: a resolution on a task, a finding or decision ' +
+                        'on a note, next steps on a session, verified on knowledge.',
+                    },
                     tokens: { type: 'integer', description: 'Rough cost of opening this.' },
                   },
                 },
@@ -430,6 +451,141 @@ export const openapiSpec = () => ({
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       get: { summary: 'Get an attachment with fresh signed URLs', responses: { '200': okResponse('Attachment.') } },
       delete: { summary: 'Delete an attachment', responses: { '200': okResponse('Deleted.') } },
+    },
+    '/events': {
+      get: {
+        summary: 'Change stream (SSE)',
+        description:
+          'Server-sent events, for a UI that wants to know when something moved. Polls a ' +
+          '`max(updated_at):count` fingerprint every four seconds and lives ten minutes, ' +
+          'rather than holding a Realtime subscription open — the stack is shared and a ' +
+          'poll that cheap is not worth a websocket.',
+        parameters: [{ name: 'project', in: 'query', schema: { type: 'string' } }],
+        responses: { '200': okResponse('An event stream.') },
+      },
+    },
+    '/knowledge': {
+      get: {
+        summary: 'What we know that applies here',
+        description:
+          'Scoped three ways, narrowest first: to a project, to an entity (a grouping of ' +
+          'projects), or to nothing at all, which means everywhere. A project-scoped read ' +
+          'deliberately includes both of the wider scopes — the question is "what do we ' +
+          'know that applies here", and an infra gotcha applies here.',
+        parameters: [
+          { name: 'project', in: 'query', schema: { type: 'string' } },
+          { name: 'label', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'superseded',
+            in: 'query',
+            description: 'Include rows that have been replaced. Hidden by default.',
+            schema: { type: 'boolean', default: false },
+          },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 200 } },
+        ],
+        responses: { '200': okResponse('Knowledge index.') },
+      },
+      post: {
+        summary: 'Record what we now know',
+        description:
+          'Omit `projects` and `entities` for a fact that is true everywhere. The slug is ' +
+          'derived from the title when not given, and must be unique.',
+        requestBody: body(json(knowledgeCreate)),
+        responses: { '201': okResponse('Recorded.'), '409': errorResponse },
+      },
+    },
+    '/knowledge/{slug}': {
+      parameters: [
+        { name: 'slug', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      get: { summary: 'Read one', responses: { '200': okResponse('The fact.'), '404': errorResponse } },
+      patch: {
+        summary: 'Correct it, or mark it superseded',
+        description:
+          'Correcting knowledge is the point: two contradictory claims, equally findable, ' +
+          'with no way to tell which is current, is how a memory store stops being worth ' +
+          'reading. `supersededBy` points at what replaced this; the row stays findable ' +
+          'and is marked.',
+        requestBody: body(json(knowledgeUpdate)),
+        responses: { '200': okResponse('Updated.'), '404': errorResponse },
+      },
+      delete: { summary: 'Forget it', responses: { '200': okResponse('Deleted.'), '404': errorResponse } },
+    },
+    '/entities': {
+      get: {
+        summary: 'Groupings a fact can be true of',
+        description:
+          'A business, a stack, a subsystem. Many-to-many with projects, because a project ' +
+          'belongs to more than one at a time and a fact can be true of it for either reason.',
+        responses: { '200': okResponse('Entities and their projects.') },
+      },
+      post: { summary: 'Create one', responses: { '201': okResponse('Created.'), '409': errorResponse } },
+      patch: {
+        summary: 'Add or remove projects',
+        description:
+          'Additive and subtractive rather than a wholesale replacement: assigning one ' +
+          'project must not silently unassign thirty others.',
+        responses: { '200': okResponse('Membership changed.'), '404': errorResponse },
+      },
+    },
+    '/sessions': {
+      get: {
+        summary: 'What happened, newest first',
+        parameters: [
+          { name: 'project', in: 'query', schema: { type: 'string' } },
+          { name: 'cwd', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+        ],
+        responses: { '200': okResponse('Sessions.') },
+      },
+      post: {
+        summary: 'Record a finished session',
+        description:
+          'Written by a session-end hook, not by hand. Idempotent on ' +
+          '(platformSource, externalId), which is a correctness requirement rather than a ' +
+          'nicety: Codex has no session-end event so its writer runs on Stop, which fires ' +
+          'every turn. `checkpointHeld` also checkpoints any task the agent still holds, ' +
+          'so a claim it walked away from stops looking like live work.',
+        requestBody: body(json(sessionUpsert)),
+        responses: { '200': okResponse('Recorded.') },
+      },
+    },
+    '/context': {
+      get: {
+        summary: 'The briefing a session opens with',
+        description:
+          'What you are still holding, what is in flight around you, where the last session ' +
+          'in this directory stopped, and what is known here. Index only, never bodies. ' +
+          'With `file`, it answers the narrower question instead: what is known about that ' +
+          'path. Read by a hook that has milliseconds and no way to recover from a failure, ' +
+          'so it stays cheap and must never be why a session does not start.',
+        parameters: [
+          { name: 'cwd', in: 'query', schema: { type: 'string' } },
+          { name: 'project', in: 'query', schema: { type: 'string' } },
+          { name: 'file', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { '200': okResponse('The briefing.') },
+      },
+    },
+    '/reconcile': {
+      post: {
+        summary: 'Release your own abandoned claims',
+        description:
+          'The backstop for runtimes with no session-end event. Releases claims held by ' +
+          'the calling agent that have shown no sign of life — heartbeat, note, checkpoint ' +
+          'or edit — for `olderThanMinutes` (default 120, deliberately far longer than the ' +
+          '15-minute claim lease, because agents barely heartbeat and a release is not as ' +
+          'recoverable as a takeover). Never closes anything: a task with a resolution ' +
+          'nobody meant is worse than one plainly still open.',
+        requestBody: body({
+          type: 'object',
+          properties: {
+            olderThanMinutes: { type: 'integer', minimum: 5, maximum: 1440, default: 120 },
+            dryRun: { type: 'boolean', default: false },
+          },
+        }),
+        responses: { '200': okResponse('What was released.') },
+      },
     },
     '/labels': {
       get: {

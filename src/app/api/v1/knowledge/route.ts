@@ -38,7 +38,14 @@ export const GET = route({
         title: r.title,
         labels: r.labels,
         projects: r.projects ?? [],
-        scope: (r.projects ?? []).length === 0 ? 'global' : 'project',
+        entities: r.entities ?? [],
+        // Narrowest wins, and the label says which rule put it in front of you.
+        scope:
+          (r.projects ?? []).length > 0
+            ? 'project'
+            : (r.entities ?? []).length > 0
+              ? 'entity'
+              : 'global',
         verified: Boolean(r.verified_at),
         superseded: Boolean(r.superseded_by),
         updatedAt: r.updated_at,

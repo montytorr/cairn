@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { openapiSpec } from './openapi'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
@@ -68,5 +70,32 @@ describe('openapi spec', () => {
     const err = spec.paths['/tasks/{ref}'].patch.responses['400'].content['application/json']
       .schema as { properties: Record<string, unknown> }
     expect(err.properties).toHaveProperty('suggestedResolution')
+  })
+
+  /**
+   * The hand-written list below it says which routes matter. THIS says the
+   * spec covers all of them — which is the check that was missing when five
+   * routes (knowledge, sessions, context, entities, reconcile) shipped and
+   * /api-docs kept describing the surface without them.
+   */
+  it('documents every route that exists on disk', () => {
+    const root = join(process.cwd(), 'src/app/api/v1')
+
+    const walk = (dir: string, prefix = ''): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) {
+          const segment = entry.name.startsWith('[')
+            ? `{${entry.name.slice(1, -1)}}`
+            : entry.name
+          return walk(join(dir, entry.name), `${prefix}/${segment}`)
+        }
+        return entry.name === 'route.ts' && prefix ? [prefix] : []
+      })
+
+    // openapi.json documents the spec itself; there is nothing to say about it.
+    const routes = walk(root).filter((r) => r !== '/openapi.json')
+    const documented = new Set(Object.keys(spec.paths))
+
+    expect(routes.filter((r) => !documented.has(r))).toEqual([])
   })
 })

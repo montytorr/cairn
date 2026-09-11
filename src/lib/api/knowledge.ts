@@ -401,6 +401,36 @@ export const updateKnowledge = async (actor: Actor, slug: string, patch: Knowled
   return getKnowledge(actor.userId, slug)
 }
 
+/**
+ * Slug/title for a set of knowledge ids, keyed by id.
+ *
+ * `superseded_by` is stored as the row id, not the slug — a slug can be
+ * re-derived from a renamed title, an id cannot, so the UI needs this to turn
+ * "superseded by <uuid>" into a link a person can follow. Owner-scoped like
+ * every other read here, even though the ids passed in were already read off
+ * the caller's own rows.
+ */
+export const supersededByInfo = async (
+  userId: string,
+  ids: string[],
+): Promise<Map<string, { slug: string; title: string }>> => {
+  const out = new Map<string, { slug: string; title: string }>()
+  const wanted = [...new Set(ids)]
+  if (wanted.length === 0) return out
+
+  const { data, error } = await admin()
+    .from('knowledge')
+    .select('id, slug, title')
+    .eq('owner_user_id', userId)
+    .in('id', wanted)
+  if (error) throw new Error(error.message)
+
+  for (const row of data ?? []) {
+    out.set(row.id as string, { slug: row.slug as string, title: row.title as string })
+  }
+  return out
+}
+
 export const deleteKnowledge = async (userId: string, slug: string): Promise<boolean> => {
   const existing = await getKnowledge(userId, slug)
   if (!existing) return false

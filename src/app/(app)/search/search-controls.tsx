@@ -64,12 +64,14 @@ export const SearchControls = ({
   project,
   type,
   status,
+  kind,
   projects,
 }: {
   q: string
   project: string
   type: string
   status: string
+  kind: string
   projects: { key: string; title: string }[]
 }) => {
   const router = useRouter()
@@ -93,9 +95,17 @@ export const SearchControls = ({
     project?: string
     type?: string
     status?: string
+    kind?: string
   }) => {
     const params = new URLSearchParams()
-    const merged = { q: draft, project, type, status, ...next }
+    const merged = { q: draft, project, type, status, kind, ...next }
+    // Type and status only mean anything for tasks, so choosing another kind
+    // drops them rather than silently returning nothing.
+    if (merged.kind && merged.kind !== 'all' && merged.kind !== 'task') {
+      merged.type = ''
+      merged.status = ''
+    }
+    if (merged.kind === 'all') merged.kind = ''
     for (const [key, value] of Object.entries(merged)) {
       if (value) params.set(key, value)
     }
@@ -117,7 +127,7 @@ export const SearchControls = ({
   // `q` prop, not the ref: a ref read during render neither re-renders when it
   // changes nor is sound under concurrent rendering.
   const pendingDebounce = draft.trim() !== q.trim()
-  const cleared = !q && !project && !type && !status
+  const cleared = !q && !project && !type && !status && (!kind || kind === 'all')
 
   return (
     <div className="border-border flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:h-[42px] sm:flex-row sm:items-center sm:px-4 sm:py-0">
@@ -149,23 +159,38 @@ export const SearchControls = ({
       </div>
       <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
       <Filter
+        value={kind === 'all' ? '' : kind}
+        onChange={(v) => push({ kind: v || 'all' })}
+        placeholder="Everything"
+        options={[
+          { value: 'task', label: 'Tasks' },
+          { value: 'note', label: 'Work-log notes' },
+          { value: 'knowledge', label: 'Knowledge' },
+          { value: 'session', label: 'Sessions' },
+        ]}
+      />
+      <Filter
         value={project}
         onChange={(v) => push({ project: v })}
         placeholder="All projects"
         options={projects.map((p) => ({ value: p.key, label: p.title }))}
       />
-      <Filter
-        value={type}
-        onChange={(v) => push({ type: v })}
-        placeholder="Any type"
-        options={TASK_TYPES.map((t) => ({ value: t, label: t }))}
-      />
-      <Filter
-        value={status}
-        onChange={(v) => push({ status: v })}
-        placeholder="Any status"
-        options={TASK_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] ?? s }))}
-      />
+      {(kind === 'all' || kind === 'task') && (
+        <>
+          <Filter
+            value={type}
+            onChange={(v) => push({ type: v })}
+            placeholder="Any type"
+            options={TASK_TYPES.map((t) => ({ value: t, label: t }))}
+          />
+          <Filter
+            value={status}
+            onChange={(v) => push({ status: v })}
+            placeholder="Any status"
+            options={TASK_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] ?? s }))}
+          />
+        </>
+      )}
       {!cleared && (
         <button
           type="button"
