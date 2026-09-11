@@ -104,7 +104,16 @@ export const buildBoardUrl = (pathname: string, filters: BoardFilters, currentSe
 }
 
 export const matchesFilters = (task: BoardTask, filters: BoardFilters): boolean => {
-  if (filters.projects.length > 0 && !filters.projects.includes(task.project_key)) return false
+  // Filtering by project matches every project the task belongs to, so a
+  // supra-project task shows up under each of them. Grouping does not: a card
+  // must sit in exactly one column or dragging it means two contradictory
+  // things, so it stays in the project that owns its ref.
+  if (
+    filters.projects.length > 0 &&
+    !(task.project_keys ?? [task.project_key]).some((k) => filters.projects.includes(k))
+  ) {
+    return false
+  }
   if (filters.types.length > 0 && !filters.types.includes(task.type)) return false
   if (filters.priorities.length > 0 && !filters.priorities.includes(task.priority)) return false
   if (filters.labels.length > 0 && !filters.labels.some((l) => task.labels.includes(l))) return false

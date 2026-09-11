@@ -34,6 +34,7 @@ const task = (overrides: Partial<BoardTask> = {}): BoardTask => ({
   has_resolution: false,
   checkpoint_summary: null,
   project_key: 'CAI',
+  project_keys: ['CAI'],
   ...overrides,
 })
 
@@ -161,5 +162,17 @@ describe('lanesFor', () => {
 describe('laneValueOf', () => {
   it('agrees with lanesFor on what an unassigned task is called', () => {
     expect(laneValueOf(task({ claimed_by: null }), 'agent')).toBe(UNASSIGNED)
+  })
+})
+
+describe('supra-project tasks', () => {
+  it('matches a project filter through a secondary link, not just its home', () => {
+    const guest = { ...task({ id: 'g' }), project_key: 'CAIRN', project_keys: ['CAIRN', 'HM'] }
+    expect(matchesFilters(guest, { ...noFilters, projects: ['HM'] })).toBe(true)
+  })
+
+  it('still groups it under the project that owns its ref', () => {
+    const guest = { ...task({ id: 'g' }), project_key: 'CAIRN', project_keys: ['CAIRN', 'HM'] }
+    expect(groupValue(guest, 'project')).toBe('CAIRN')
   })
 })

@@ -31,6 +31,13 @@ export type BoardTask = {
   checkpoint_summary: string | null
   /** The project this task actually lives in — the whole point of this board. */
   project_key: string
+  /**
+   * Every project this task belongs to: its home first, then any secondary
+   * links. Supra-project work is filed once and shown everywhere it applies,
+   * so grouping by project must see all of them, not just the one that
+   * happens to own the ref.
+   */
+  project_keys: string[]
 }
 
 export type BoardProject = { id: string; key: string; title: string }
@@ -54,7 +61,7 @@ export const listBoardTasks = async (
 ): Promise<{ tasks: BoardTask[]; projects: BoardProject[]; closedHidden: number }> => {
   const closed = ['done', 'cancelled']
 
-  const [projectsRes, tasksRes, totals] = await Promise.all([
+  const [projectsRes, tasksRes, totals, links] = await Promise.all([
     admin()
       .from('projects')
       .select('id, key, title')
@@ -75,15 +82,33 @@ export const listBoardTasks = async (
       .select('id, project:projects!project_id!inner(owner_user_id)', { count: 'exact', head: true })
       .eq('projects.owner_user_id', userId)
       .in('status', closed),
+    admin().from('task_projects').select('task_id, project:projects(key)'),
   ])
 
   type Row = Omit<BoardTask, 'project_key'> & { project: { key: string } | { key: string }[] }
 
-  const tasks = ((tasksRes.data ?? []) as unknown as Row[]).map((t) => ({
-    ...t,
-    preview: t.preview ? t.preview.slice(0, PREVIEW_CHARS) : null,
-    project_key: (Array.isArray(t.project) ? t.project[0]?.key : t.project?.key) ?? '',
-  }))
+  // RLS is bypassed by the service role, so the link rows are narrowed to the
+  // tasks this query already established belong to this owner.
+  const guestKeys = new Map<string, string[]>()
+  for (const row of (links.data ?? []) as unknown as {
+    task_id: string
+    project: { key: string } | { key: string }[] | null
+  }[]) {
+    const embedded = row.project
+    const key = Array.isArray(embedded) ? embedded[0]?.key : embedded?.key
+    if (!key) continue
+    guestKeys.set(row.task_id, [...(guestKeys.get(row.task_id) ?? []), key])
+  }
+
+  const tasks = ((tasksRes.data ?? []) as unknown as Row[]).map((t) => {
+    const home = (Array.isArray(t.project) ? t.project[0]?.key : t.project?.key) ?? ''
+    return {
+      ...t,
+      preview: t.preview ? t.preview.slice(0, PREVIEW_CHARS) : null,
+      project_key: home,
+      project_keys: [home, ...(guestKeys.get(t.id) ?? [])].filter(Boolean),
+    }
+  })
 
   return {
     tasks,
