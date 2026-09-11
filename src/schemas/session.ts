@@ -27,7 +27,12 @@ export const sessionUpsert = z.object({
   nextSteps: z.string().max(8_000).optional(),
 
   files: z.array(z.string().max(500)).max(400).default([]),
-  taskRefs: z.array(z.string().max(40)).max(100).default([]),
+  /**
+   * Task refs as scraped, not as vetted. A transcript yields `SHA-256`,
+   * `HTTP-01` and `Z0-9` alongside real refs, so the cap is generous here and
+   * the server drops everything whose project key it does not recognise.
+   */
+  taskRefs: z.array(z.string().max(40)).max(400).default([]),
   toolCalls: z.number().int().min(0).optional(),
 
   /**

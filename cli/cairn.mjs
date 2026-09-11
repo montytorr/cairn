@@ -12,8 +12,9 @@
  * row so the model can decline to open something.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { basename } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /**
@@ -106,7 +107,11 @@ const request = async (method, path, body) => {
     // useful round-trip into a wasted one.
     const extra = payload.suggestedResolution
       ? `\nsuggested: ${payload.suggestedResolution}`
-      : ''
+      : payload.issues
+        ? `\n${payload.issues
+            .map((i) => `  ${(i.path ?? []).join('.') || '(body)'}: ${i.message}`)
+            .join('\n')}`
+        : ''
     // 409 gets its own exit code so a caller can branch on "someone else has it".
     die(`${payload.error}${extra}`, payload.code === 'already_claimed' ? 9 : 1)
   }
@@ -194,6 +199,46 @@ const emit = (data, opts = {}) => {
 }
 
 /** Comma or repeated-flag list, e.g. --label a,b --label c. */
+/**
+ * Which Cairn project a directory belongs to.
+ *
+ * The server can guess from sessions already recorded against a cwd, but only
+ * after the first one. This is the explicit answer, kept next to the
+ * credentials: a longest-prefix map in ~/.cairn/projects.json, so a monorepo
+ * subdirectory can override its parent.
+ */
+const PROJECT_MAP_PATH = join(homedir(), '.cairn', 'projects.json')
+
+const readProjectMap = () => {
+  try {
+    return JSON.parse(readFileSync(PROJECT_MAP_PATH, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+const projectForDir = (dir) => {
+  const map = readProjectMap()
+  let best = null
+  for (const [path, key] of Object.entries(map)) {
+    if ((dir === path || dir.startsWith(`${path}/`)) && (!best || path.length > best[0].length)) {
+      best = [path, key]
+    }
+  }
+  return best?.[1] ?? null
+}
+
+const gitRoot = (dir) => {
+  try {
+    return execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    return null
+  }
+}
+
 const splitList = (v) => {
   if (v === undefined || v === true) return []
   const parts = Array.isArray(v) ? v : [v]
@@ -208,8 +253,26 @@ const splitList = (v) => {
  * known here. Anything with nothing to say prints nothing at all -- an empty
  * heading is noise that trains the reader to skip the block.
  */
-const renderContext = (d) => {
+const renderContext = (d, { fileOnly = false } = {}) => {
   const out = []
+
+  // A file read is a narrow question. Answering it with the whole project
+  // briefing, on every Read, is how an injection channel becomes noise the
+  // reader learns to skip -- and then the one time it matters, it is skipped.
+  if (fileOnly) {
+    const f = d.file
+    if (!f || (!f.tasks.length && !f.knowledge.length)) return ''
+    out.push(`## Cairn knows about ${f.path}`)
+    for (const t of f.tasks) {
+      out.push(`  ${t.ref}  ${t.status}${t.resolved ? ' (answered)' : ''}  ${truncate(t.title, 54)}`)
+    }
+    for (const k of f.knowledge) out.push(`  ${k.slug}  -- ${truncate(k.title, 54)}`)
+    for (const sn of f.sessions.slice(0, 1)) {
+      if (sn.nextSteps) out.push(`  last session here: ${truncate(sn.nextSteps, 160)}`)
+    }
+    return `${out.join('\n')}\n`
+  }
+
   const where = d.project ? `[${d.project}]` : '[unfiled]'
   out.push(`## Cairn ${where}`)
 
@@ -305,6 +368,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn labels remove <label>
 
   projects
+    cairn map [<KEY>|none]                       which project this directory is
     cairn projects [--archived]                  --archived includes retired ones
     cairn project rename <KEY> "<title>"
     cairn project archive <KEY>                  hides it; the tasks stay searchable
@@ -789,13 +853,37 @@ const commands = {
   // --- the briefing ------------------------------------------------------
 
   async context() {
+    const cwd = flags.cwd ?? process.cwd()
     const params = new URLSearchParams()
-    params.set('cwd', flags.cwd ?? process.cwd())
-    if (flags.project) params.set('project', flags.project)
+    params.set('cwd', cwd)
+    const project = flags.project ?? projectForDir(cwd)
+    if (project) params.set('project', project)
     if (flags.file) params.set('file', flags.file)
     const data = await request('GET', `/api/v1/context?${params}`)
     if (FORMAT === 'json') return emit(data)
-    process.stdout.write(renderContext(data))
+    process.stdout.write(renderContext(data, { fileOnly: Boolean(flags.file) }))
+  },
+
+  async map() {
+    const dir = flags.dir ?? gitRoot(process.cwd()) ?? process.cwd()
+    const key = positional[0]
+
+    if (!key) {
+      const map = readProjectMap()
+      const rows = Object.entries(map).map(([path, k]) => ({ project: k, path }))
+      return emit(
+        { count: rows.length, here: projectForDir(process.cwd()) ?? '', rows },
+        { rows: (d) => d.rows, columns: ['project', 'path'] },
+      )
+    }
+
+    const map = readProjectMap()
+    if (key === 'none') delete map[dir]
+    else map[dir] = key.toUpperCase()
+
+    mkdirSync(dirname(PROJECT_MAP_PATH), { recursive: true })
+    writeFileSync(PROJECT_MAP_PATH, `${JSON.stringify(map, null, 2)}\n`)
+    emit({ path: dir, project: map[dir] ?? null })
   },
 
   // --- the episodic record -----------------------------------------------
@@ -818,6 +906,7 @@ const commands = {
       ]) {
         if (flags[flag] !== undefined) payload[field] = await resolveValue(flags[flag])
       }
+      if (flags['tool-calls']) payload.toolCalls = Number(flags['tool-calls'])
       if (flags['no-checkpoint']) payload.checkpointHeld = false
       return emit(await request('POST', '/api/v1/sessions', payload))
     }

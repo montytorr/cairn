@@ -100,8 +100,32 @@ const checkpointHeldTasks = async (actor: Actor, session: SessionRow): Promise<s
   return held.map((t) => `${t.project.key}-${t.number}`)
 }
 
+/**
+ * Keeps only refs whose project actually exists for this owner.
+ *
+ * A transcript is scraped with a regex, and `[A-Z][A-Z0-9]+-\d+` matches
+ * `SHA-256`, `HTTP-01`, `UTF-8` and the `Z0-9` out of a character class as
+ * happily as it matches `CAIRN-64`. Filtering at the source would need a
+ * blocklist that is wrong the moment someone names a project ISO; the owner's
+ * own project keys are the only authority that stays right.
+ */
+const keepRealRefs = async (userId: string, refs: string[]): Promise<string[]> => {
+  if (refs.length === 0) return []
+
+  const { data, error } = await admin()
+    .from('projects')
+    .select('key')
+    .eq('owner_user_id', userId)
+  if (error) throw new Error(error.message)
+
+  const keys = new Set((data ?? []).map((p) => (p.key as string).toUpperCase()))
+  const kept = refs.filter((ref) => keys.has(ref.split('-')[0]?.toUpperCase() ?? ''))
+  return [...new Set(kept)].slice(0, 100)
+}
+
 export const upsertSession = async (actor: Actor, input: SessionUpsert) => {
   const projectId = await projectIdForKey(actor.userId, input.project)
+  const taskRefs = await keepRealRefs(actor.userId, input.taskRefs)
 
   const row = {
     owner_user_id: actor.userId,
@@ -117,7 +141,7 @@ export const upsertSession = async (actor: Actor, input: SessionUpsert) => {
     completed: input.completed ?? null,
     next_steps: input.nextSteps ?? null,
     files: input.files,
-    task_refs: input.taskRefs,
+    task_refs: taskRefs,
     tool_calls: input.toolCalls ?? null,
   }
 
