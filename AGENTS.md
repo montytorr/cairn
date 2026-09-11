@@ -63,7 +63,7 @@ cairn done CAI-42 --resolution "Raised supavisor pool_size to 40; the default 15
 The API rejects a `done` or `cancelled` transition with no resolution. This is deliberate:
 a closed task with no record of *how* is invisible to everyone who comes after, and
 retrofitting resolutions onto months of closed work is not possible. If it genuinely is
-not fixed, say so — `--resolution-kind wont-fix` with a one-line reason is fine.
+not fixed, say so — `--kind wont-fix` with a one-line reason is fine.
 
 ## 5. Claiming work, so three agents don't collide
 
