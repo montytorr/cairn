@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from '../../resolution-dialog'
+import { AlsoIn } from './also-in'
 import { DependencyEditor } from './dependency-editor'
 import {
   TASK_PRIORITIES,
@@ -87,10 +88,14 @@ export const Properties = ({
   task,
   project,
   relations = [],
+  alsoProjects = [],
+  projects = [],
 }: {
   task: Task
   project: Project
   relations?: Relation[]
+  alsoProjects?: string[]
+  projects?: { key: string; title: string }[]
 }) => {
   const router = useRouter()
   const stale = useRenderedClaimStale(task.heartbeat_at)
@@ -208,6 +213,17 @@ export const Properties = ({
         </span>
       </Section>
       </div>
+
+      {projects.length > 0 && (
+        <div className="hidden lg:block">
+          <AlsoIn
+            taskRef={`${project.key}-${task.number}`}
+            homeKey={project.key}
+            alsoProjects={alsoProjects}
+            projects={projects}
+          />
+        </div>
+      )}
 
       {task.external_ref && (
         <Section title="Imported from" className="hidden lg:flex">

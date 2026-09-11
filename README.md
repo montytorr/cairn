@@ -45,9 +45,9 @@ the distinctive words rather than ANDing the phrase, so it surfaces things `chec
 did not:
 
 ```console
-$ cairn add "Migrations time out when workers run in parallel" --project CAI --type bug
+$ cairn add "Migrations time out when workers run in parallel" --project ACME --type bug
 similar existing work:
-  CAI-12 [done] Make the migration runner idempotent
+  ACME-12 [done] Make the migration runner idempotent
 id	9f3c1a04-2b77-4a0e-8d51-6e0c2f1b9a44
 number	57
 title	Migrations time out when workers run in parallel
@@ -55,13 +55,13 @@ type	bug
 status	backlog
 priority	medium
 created_at	2026-08-14T14:51:09.223Z
-ref	CAI-57
+ref	ACME-57
 ```
 
 Take it, so a second agent on the same backlog picks something else:
 
 ```console
-$ cairn claim CAI-57
+$ cairn claim ACME-57
 id	9f3c1a04-2b77-4a0e-8d51-6e0c2f1b9a44
 number	57
 status	doing
@@ -75,7 +75,7 @@ attempt	1
 rather than guessing:
 
 ```console
-$ cairn claim CAI-57
+$ cairn claim ACME-57
 Held by codex, last heartbeat 3m ago. Pick different work; a lease becomes stealable
 after 15m of silence.
 ```
@@ -84,10 +84,10 @@ Then the work log, as the work happens. The dead end goes in too — it is the h
 saves the next agent an hour:
 
 ```console
-$ cairn note CAI-57 "Raised the client pool_size to 30. No change under load." --kind attempt
+$ cairn note ACME-57 "Raised the client pool_size to 30. No change under load." --kind attempt
 ... (the written row, same shape as below)
 
-$ cairn note CAI-57 "Supavisor caps at its own pool_size regardless of what the client asks for." --kind finding
+$ cairn note ACME-57 "Supavisor caps at its own pool_size regardless of what the client asks for." --kind finding
 id	c02b8f31-5c4d-4f2a-9a63-1f0d7e3a55b1
 kind	finding
 note	Supavisor caps at its own pool_size regardless of what the client asks for.
@@ -100,7 +100,7 @@ The finding outlives the task, so promote it to knowledge — scoped to the proj
 it is not true everywhere:
 
 ```console
-$ cairn learn "Supavisor caps the pool at its own setting" --project CAI \
+$ cairn learn "Supavisor caps the pool at its own setting" --project ACME \
     --body "The client's pool_size is advisory. Raise it in the pooler's own config; the client-side value never wins."
 id	4a7e9b12-83cd-4d7f-b0a1-2c5f8d6e7099
 slug	supavisor-caps-the-pool-at-its-own-setting
@@ -110,14 +110,14 @@ actor_type	agent
 actor_id	claude-code
 created_at	2026-08-14T16:01:44.870Z
 updated_at	2026-08-14T16:01:44.870Z
-projects	CAI
+projects	ACME
 ```
 
 Close it. The resolution is not optional — the API rejects a `done` or `cancelled`
 transition without one:
 
 ```console
-$ cairn done CAI-57 --resolution "Raised the pooler's own pool_size to 40; the client-side setting was never the cap."
+$ cairn done ACME-57 --resolution "Raised the pooler's own pool_size to 40; the client-side setting was never the cap."
 id	9f3c1a04-2b77-4a0e-8d51-6e0c2f1b9a44
 number	57
 title	Migrations time out when workers run in parallel
@@ -137,9 +137,9 @@ that produced all three — ranked, with the cost of opening each:
 $ cairn check "supavisor pool exhaustion"
 #4
 kind	ref	status	type	answered	tokens	title
-task	CAI-57	done	bug	yes	~30	Migrations time out when workers run in parallel
+task	ACME-57	done	bug	yes	~30	Migrations time out when workers run in parallel
 knowledge	supavisor-caps-the-pool-at-its-own-setting	current	knowledge		~32	Supavisor caps the pool at its own setting
-note	CAI-57	done	bug	yes	~21	Supavisor caps at its own pool_size regardless of what the client asks…
+note	ACME-57	done	bug	yes	~21	Supavisor caps at its own pool_size regardless of what the client asks…
 session	2026-08-14	claude-code	session	yes	~74	migrations time out when workers run in parallel
 3 precise, 1 loose
 ```
@@ -148,8 +148,8 @@ session	2026-08-14	claude-code	session	yes	~74	migrations time out when workers 
 body, and an honest account of what it withheld.
 
 ```console
-$ cairn show CAI-57
-ref	CAI-57
+$ cairn show ACME-57
+ref	ACME-57
 number	57
 title	Migrations time out when workers run in parallel
 type	bug
@@ -166,7 +166,7 @@ omitted.descriptionBytes	0
 omitted.attemptsAndNotes	1
 omitted.tokensToFetchFull	118
 omitted.full	?view=full
-withheld: 0B of body, 1 attempt/note(s) — cairn show CAI-57 --full is ~118 tokens
+withheld: 0B of body, 1 attempt/note(s) — cairn show ACME-57 --full is ~118 tokens
 ```
 
 Nobody typed `cairn session end`. The hook did it.
@@ -213,11 +213,11 @@ problem.
 
 | | |
 |---|---|
-| Refs | `CAI-42` — project key plus per-project number, stable in a transcript |
+| Refs | `ACME-42` — project key plus per-project number, stable in a transcript |
 | Types | `feature · bug · improvement · chore · spike · docs` |
 | Statuses | `backlog · todo · doing · in-review · done · cancelled` |
 | Structure | sub-tasks, blocked-by / blocks dependencies with cycle rejection, labels, priorities, due dates |
-| Bodies | markdown in a WYSIWYG editor — syntax-highlighted code, GFM tables and task lists; bare refs like `CAI-42` become links |
+| Bodies | markdown in a WYSIWYG editor — syntax-highlighted code, GFM tables and task lists; bare refs like `ACME-42` become links |
 | Trails | comments for humans, an append-only work log for agents, file attachments, and a full activity history |
 | Views | list and board per project, a cross-project board at `/board` grouped and swim-laned by status, priority, type, project or agent, bulk edit with shift-click ranges, a cross-project home, live updates over SSE |
 | Multi-project tasks | a task can belong to several projects at once — the home project keeps the ref, the extra links only widen where it appears |

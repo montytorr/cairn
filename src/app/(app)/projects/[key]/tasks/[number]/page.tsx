@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
-  currentUser, getDuplicateOf, getParent, getTask, listActivity, listAttachments,
+  currentUser, getDuplicateOf, getParent, getTask, listActivity, listAlsoProjects,
+  listAttachments, listProjects,
   listChildren, listComments, listNotes, listRelations,
 } from '@/lib/data'
 import { MarkdownEditor } from '@/components/markdown-editor'
@@ -31,8 +32,10 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
   const task = await getTask(user.id, key, parsed)
   if (!task) notFound()
 
-  const [notes, comments, attachments, relations, duplicateOf, activity, children, parent] =
-    await Promise.all([
+  const [
+    notes, comments, attachments, relations, duplicateOf, activity, children, parent,
+    alsoProjects, allProjects,
+  ] = await Promise.all([
     listNotes(task.id),
     listComments(task.id),
     listAttachments(task.id),
@@ -41,6 +44,8 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
     listActivity(task.id),
     listChildren(task.id),
     task.parent_id ? getParent(task.parent_id) : Promise.resolve(null),
+    listAlsoProjects(task.id),
+    listProjects(user.id),
   ])
 
   const ref = task.external_ref ?? `${task.project.key}-${task.number}`
@@ -153,7 +158,13 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
         </div>
 
         <div className="hidden overflow-y-auto lg:block">
-          <Properties task={task} project={task.project} relations={relations} />
+          <Properties
+            task={task}
+            project={task.project}
+            relations={relations}
+            alsoProjects={alsoProjects}
+            projects={allProjects.map((p) => ({ key: p.key, title: p.title }))}
+          />
         </div>
       </div>
       <LiveUpdates projectKey={task.project.key} />

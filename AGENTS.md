@@ -27,8 +27,8 @@ near-duplicate.
 
 ```bash
 cairn check "flaky auth redirect"     # 1. index of ids + one-liners. Cheap.
-cairn show CAI-42                     # 2. full body of the ones that matter.
-cairn note CAI-42 "..."               # 3. act, and record what you did.
+cairn show ACME-42                     # 2. full body of the ones that matter.
+cairn note ACME-42 "..."               # 3. act, and record what you did.
 ```
 
 Never fetch bodies in bulk to browse them. The index exists so you can decide what is
@@ -46,9 +46,9 @@ Three different things, three different places:
 | **resolution** | The task is finished — required on close | Everyone, later |
 
 ```bash
-cairn note CAI-42 --kind attempt  "Bumped pool_size to 30; no change under load."
-cairn note CAI-42 --kind finding  "supavisor caps at default 15 regardless of client."
-cairn note CAI-42 --kind decision "Sticking with supavisor; direct connections break PgBouncer."
+cairn note ACME-42 --kind attempt  "Bumped pool_size to 30; no change under load."
+cairn note ACME-42 --kind finding  "supavisor caps at default 15 regardless of client."
+cairn note ACME-42 --kind decision "Sticking with supavisor; direct connections break PgBouncer."
 ```
 
 **A recorded dead end is as valuable as a fix.** "Tried X, made no difference" saves the
@@ -57,7 +57,7 @@ next agent an hour. Write it down even though it failed — *especially* because
 ## 4. Closing a task requires a resolution
 
 ```bash
-cairn done CAI-42 --resolution "Raised supavisor pool_size to 40; the default 15 was the cap."
+cairn done ACME-42 --resolution "Raised supavisor pool_size to 40; the default 15 was the cap."
 ```
 
 The API rejects a `done` or `cancelled` transition with no resolution. This is deliberate:
@@ -68,10 +68,10 @@ not fixed, say so — `--kind wont-fix` with a one-line reason is fine.
 ## 5. Claiming work, so three agents don't collide
 
 ```bash
-cairn claim CAI-42        # exits non-zero if another agent holds it
-cairn beat CAI-42         # keep the claim alive during long work
-cairn checkpoint CAI-42 --summary "migration written, tests not yet run"
-cairn release CAI-42      # or: cairn done CAI-42 --resolution "..."
+cairn claim ACME-42        # exits non-zero if another agent holds it
+cairn beat ACME-42         # keep the claim alive during long work
+cairn checkpoint ACME-42 --summary "migration written, tests not yet run"
+cairn release ACME-42      # or: cairn done ACME-42 --resolution "..."
 ```
 
 - A claim is **execution state** and is independent of `status`. A task can be `doing` and
@@ -89,7 +89,7 @@ cairn release CAI-42      # or: cairn done CAI-42 --resolution "..."
 - **note kind** — `note | finding | decision | attempt | handoff`
 - **resolution kind** — `fixed | wont-fix | duplicate | not-reproducible | superseded | answered`
 
-Tasks are referred to as `CAI-42` (project key + number). Use that form in prose; it stays
+Tasks are referred to as `ACME-42` (project key + number). Use that form in prose; it stays
 resolvable in a transcript long after the fact.
 
 ## 7. Knowledge, sessions and the briefing

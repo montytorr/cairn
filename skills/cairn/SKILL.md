@@ -15,6 +15,8 @@ Cairn is the shared memory for everything worked on here. It holds four things, 
 | **knowledge** | what we now *know* — infra, conventions, gotchas — outliving any task |
 | **sessions** | what happened in a working session, and where it was left |
 
+Examples below use `ACME-42`; refs are your own project key plus a number, like `HM-700`.
+
 Requires `cairn` on PATH. Credentials come from `CAIRN_BASE_URL` / `CAIRN_API_KEY`, or from
 `~/.cairn/env` if those are unset.
 
@@ -61,13 +63,13 @@ rough token cost of opening it:
 ```
 #3
 kind       ref                       status  type         answered  tokens  title
-task       CAI-1                     done    bug          yes       ~15     supavisor timeouts under load
+task       ACME-1                     done    bug          yes       ~15     supavisor timeouts under load
 knowledge  supavisor-pool-sizing     current knowledge     yes      ~90     Supavisor pools are per-tenant
-note       CAI-7                     doing   bug          yes       ~40     Tried raising pool_size, no change
+note       ACME-7                     doing   bug          yes       ~40     Tried raising pool_size, no change
 ```
 
-Open a task with `cairn show CAI-1`, a piece of knowledge with `cairn know <slug>`, a
-task's notes with `cairn log CAI-7`. **Do not re-debug something already answered.** If it
+Open a task with `cairn show ACME-1`, a piece of knowledge with `cairn know <slug>`, a
+task's notes with `cairn log ACME-7`. **Do not re-debug something already answered.** If it
 returns `#0`, the subject is new.
 
 `--kinds task,note,knowledge,session` narrows it; the default searches everything, because
@@ -77,9 +79,9 @@ you do not know in advance which one holds the answer.
 
 ```bash
 cairn check "flaky auth redirect"   # index. cheap.
-cairn show CAI-42                   # digest: the answer, findings, a clipped body
-cairn show CAI-42 --full            # everything, when the digest is not enough
-cairn note CAI-42 "..."             # act, and record it
+cairn show ACME-42                   # digest: the answer, findings, a clipped body
+cairn show ACME-42 --full            # everything, when the digest is not enough
+cairn note ACME-42 "..."             # act, and record it
 ```
 
 Never pull bodies in bulk to browse them. That is what the index is for.
@@ -87,9 +89,9 @@ Never pull bodies in bulk to browse them. That is what the index is for.
 ## 3. Record as you go
 
 ```bash
-cairn note CAI-42 "bumped pool_size to 30, no change" --kind attempt
-cairn note CAI-42 "supavisor caps at 15 regardless of client" --kind finding
-cairn note CAI-42 "staying on supavisor; direct conns break PgBouncer" --kind decision
+cairn note ACME-42 "bumped pool_size to 30, no change" --kind attempt
+cairn note ACME-42 "supavisor caps at 15 regardless of client" --kind finding
+cairn note ACME-42 "staying on supavisor; direct conns break PgBouncer" --kind decision
 ```
 
 `--kind`: `note | finding | decision | attempt | handoff`
@@ -102,7 +104,7 @@ Use `cairn comment` instead when you are addressing the human rather than the ne
 ## 4. Closing requires saying how
 
 ```bash
-cairn done CAI-42 --resolution "raised supavisor pool_size to 40; default 15 was the cap"
+cairn done ACME-42 --resolution "raised supavisor pool_size to 40; default 15 was the cap"
 ```
 
 The API refuses `done` without a resolution, and will suggest one from your last
@@ -113,10 +115,10 @@ A closed task with no recorded answer is invisible to everyone who comes later.
 ## 5. Claiming, so agents don't collide
 
 ```bash
-cairn claim CAI-42        # exit code 9 means another agent holds it
-cairn beat CAI-42         # keep it alive during long work
-cairn checkpoint CAI-42 --summary "migration written, tests not run"
-cairn release CAI-42
+cairn claim ACME-42        # exit code 9 means another agent holds it
+cairn beat ACME-42         # keep it alive during long work
+cairn checkpoint ACME-42 --summary "migration written, tests not run"
+cairn release ACME-42
 ```
 
 - **Exit 9 means pick different work.** Do not force it.
@@ -128,8 +130,8 @@ cairn release CAI-42
 ## 6. Filing work
 
 ```bash
-cairn add "title" --project CAI --type bug --priority high
-cairn add "title" --project CAI --body -     # long markdown body from stdin
+cairn add "title" --project ACME --type bug --priority high
+cairn add "title" --project ACME --body -     # long markdown body from stdin
 ```
 
 `--type`: `feature | bug | improvement | chore | spike | docs`
@@ -193,7 +195,7 @@ belief can discover it was replaced.
 
 ### Knowledge or a note?
 
-A note is bound to a task and to a moment: *"tried raising pool_size on CAI-7, no change"*.
+A note is bound to a task and to a moment: *"tried raising pool_size on ACME-7, no change"*.
 Knowledge is bound to nothing: *"Supavisor pools are per-tenant"*. If you would want it
 surfaced while working on an unrelated project, it is knowledge.
 
@@ -235,22 +237,22 @@ Before claiming, check whether something has to land first. A task with open blo
 is not ready to start, no matter what its status says.
 
 ```bash
-cairn deps CAI-42                    # what blocks this, and what it blocks
-cairn blockedby CAI-42 CAI-40        # CAI-40 must finish before CAI-42
-cairn unblockedby CAI-42 CAI-40   # remove it again
+cairn deps ACME-42                    # what blocks this, and what it blocks
+cairn blockedby ACME-42 ACME-40        # ACME-40 must finish before ACME-42
+cairn unblockedby ACME-42 ACME-40   # remove it again
 ```
 
-Use this instead of writing "waiting on CAI-40" in a note: a note is prose nobody
+Use this instead of writing "waiting on ACME-40" in a note: a note is prose nobody
 queries, a dependency shows up on both tasks and in `cairn deps`.
 
-`cairn block CAI-42 "reason"` is a different thing — it flags a task as stuck on
+`cairn block ACME-42 "reason"` is a different thing — it flags a task as stuck on
 something outside Cairn (an unavailable credential, a third party). Reach for
 `blockedby` when the blocker is another task.
 
 ## 11. Closing as a duplicate
 
 ```bash
-cairn done CAI-42 --duplicate-of CAI-31 --resolution "same cause as CAI-31; fixed there"
+cairn done ACME-42 --duplicate-of ACME-31 --resolution "same cause as ACME-31; fixed there"
 ```
 
 Naming the original is the point. `--kind duplicate` on its own records *that* it was a
@@ -260,9 +262,9 @@ was supposed to save.
 ## 12. Splitting work up
 
 ```bash
-cairn add "write the migration" --project CAI --parent CAI-42
-cairn children CAI-42                 # the split, and how much of it is closed
-cairn update CAI-7 --no-parent        # lift it back to the top level
+cairn add "write the migration" --project ACME --parent ACME-42
+cairn children ACME-42                 # the split, and how much of it is closed
+cairn update ACME-7 --no-parent        # lift it back to the top level
 ```
 
 Sub-tasks are *containment*; `blockedby` is *ordering*. Use a parent when one task is
@@ -272,7 +274,7 @@ in an order.
 ## 13. What already happened
 
 ```bash
-cairn history CAI-42     # status moves, claims, renames, resolutions — with who and when
+cairn history ACME-42     # status moves, claims, renames, resolutions — with who and when
 ```
 
 Different from `cairn log`, which is what an agent *said*. `history` is what actually

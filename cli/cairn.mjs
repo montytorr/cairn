@@ -968,7 +968,7 @@ const commands = {
       )
     }
 
-    if (verb) die(`unknown entities verb "${verb}" — try: add, assign, unassign`)
+    if (verb) die(`unknown entities verb "${verb}" — try: add, rename, assign, unassign`)
 
     const data = await request('GET', '/api/v1/entities')
     emit(data, {

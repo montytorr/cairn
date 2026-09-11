@@ -111,6 +111,15 @@ export type TaskListItem = Pick<
   resolution_kind: string | null
   has_resolution: boolean
   checkpoint_summary: string | null
+  /**
+   * Present only on a task filed elsewhere and linked into this project. The
+   * row keeps its own ref, so the list has to say which project that ref
+   * belongs to — a row reading CAIRN-83 in the HM list otherwise looks like a
+   * bug. The list view already renders `project_key` when it is set, which is
+   * why this reuses that field rather than adding a parallel one.
+   */
+  project_key?: string
+  guest?: boolean
 }
 
 export type TaskPage = { tasks: TaskListItem[]; total: number; closedHidden: number }
@@ -128,7 +137,16 @@ export const listTasks = async (
 ): Promise<TaskPage> => {
   const closedFilter = ['done', 'cancelled']
 
-  const [openRows, totals] = await Promise.all([
+  // Tasks filed elsewhere and linked here. The API route has included these
+  // since cross-project links shipped; this did not, so `cairn list --project HM`
+  // and the HM page in a browser disagreed about what was in HM.
+  const { data: links } = await admin()
+    .from('task_projects')
+    .select('task_id')
+    .eq('project_id', projectId)
+  const guestIds = (links ?? []).map((l) => l.task_id as string)
+
+  const [openRows, guestRows, totals] = await Promise.all([
     (() => {
       let q = admin()
         .from('tasks')
@@ -137,6 +155,15 @@ export const listTasks = async (
       if (!includeClosed) q = q.not('status', 'in', `(${closedFilter.join(',')})`)
       return q.order('position').order('number', { ascending: false }).limit(limit)
     })(),
+    (async () => {
+      if (guestIds.length === 0) return { data: [] }
+      let q = admin()
+        .from('tasks')
+        .select(`${LIST_COLUMNS}, project:projects!project_id!inner(key)`)
+        .in('id', guestIds)
+      if (!includeClosed) q = q.not('status', 'in', `(${closedFilter.join(',')})`)
+      return q.order('number', { ascending: false }).limit(limit)
+    })(),
     admin()
       .from('tasks')
       .select('status', { count: 'exact', head: false })
@@ -144,16 +171,46 @@ export const listTasks = async (
   ])
 
   const all = (totals.data ?? []) as { status: string }[]
-  const tasks = ((openRows.data ?? []) as unknown as TaskListItem[]).map((t) => ({
+  const clip = (t: TaskListItem) => ({
     ...t,
     preview: t.preview ? t.preview.slice(0, PREVIEW_CHARS) : null,
+  })
+
+  const owned = ((openRows.data ?? []) as unknown as TaskListItem[]).map(clip)
+
+  const guests = (
+    (guestRows.data ?? []) as unknown as (TaskListItem & {
+      project: { key: string } | { key: string }[]
+    })[]
+  ).map((t) => ({
+    ...clip(t),
+    project_key: (Array.isArray(t.project) ? t.project[0]?.key : t.project?.key) ?? undefined,
+    guest: true,
   }))
+
+  const tasks = [...owned, ...guests]
 
   return {
     tasks,
-    total: all.length,
+    total: all.length + guests.length,
     closedHidden: includeClosed ? 0 : all.filter((t) => closedFilter.includes(t.status)).length,
   }
+}
+
+/**
+ * The projects a task is linked into beyond the one that owns its ref. Keys
+ * only — the detail panel needs to render them and toggle them, not join them.
+ */
+export const listAlsoProjects = async (taskId: string): Promise<string[]> => {
+  const { data } = await admin()
+    .from('task_projects')
+    .select('project:projects(key)')
+    .eq('task_id', taskId)
+
+  return ((data ?? []) as unknown as { project: { key: string } | { key: string }[] | null }[])
+    .map((r) => (Array.isArray(r.project) ? r.project[0]?.key : r.project?.key))
+    .filter((k): k is string => Boolean(k))
+    .sort()
 }
 
 export const getTask = async (

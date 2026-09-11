@@ -56,7 +56,7 @@ const Row = ({
   knownLabels,
   projects,
 }: {
-  task: TaskListItem & { project_key?: string }
+  task: TaskListItem & { project_key?: string; guest?: boolean }
   projectKey: string
   showProject?: boolean
   selected: boolean
@@ -175,6 +175,18 @@ const Row = ({
         </QuickSelect>
 
         <span className="text-fg min-w-0 flex-1 truncate text-[13px]">{task.title}</span>
+
+        {/* Filed in another project and linked here. Without saying so, a row
+            reading CAIRN-83 in the HM list reads as a bug rather than as work
+            that genuinely spans both. */}
+        {task.guest && (
+          <span
+            title={`Filed in ${ownKey}, also belongs here`}
+            className="border-border text-fg-subtle pointer-events-auto hidden shrink-0 rounded border px-1.5 py-px text-[10px] tracking-wide uppercase sm:inline"
+          >
+            guest
+          </span>
+        )}
 
         {error ? (
           <button
