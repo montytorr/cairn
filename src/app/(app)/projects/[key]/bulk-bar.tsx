@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusIcon, PriorityIcon } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
@@ -60,23 +60,47 @@ const Action = <T extends string>({
   onPick: (v: T) => void
 }) => {
   const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+
+  // Outside-click and Escape, like every other menu here. The previous
+  // onBlur-with-a-timeout raced the menu's own click handler.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   return (
-    <div className="relative">
+    <div ref={wrap} className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        className="text-fg-muted hover:text-fg hover:bg-surface-hover h-[26px] rounded-md px-2.5 text-[12px] transition-colors"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={`h-[26px] rounded-md px-2.5 text-[12px] transition-colors ${
+          open ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'
+        }`}
       >
         {label}
       </button>
       {open && (
-        <div className="border-border bg-surface absolute bottom-[30px] left-0 z-50 w-[168px] overflow-hidden rounded-md border py-1 shadow-xl">
+        <div
+          role="menu"
+          className="border-border bg-surface absolute bottom-[32px] left-0 z-50 w-[168px] overflow-hidden rounded-md border py-1 shadow-xl"
+        >
           {options.map((o) => (
             <button
               key={o}
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              role="menuitem"
               onClick={() => {
                 setOpen(false)
                 onPick(o)
@@ -122,7 +146,12 @@ export const BulkBar = ({
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4">
-        <div className="border-border bg-surface pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+        {/* No `overflow-x-auto` here, ever. Setting one overflow axis to
+            `auto` forces the other from `visible` to `auto`, so the bar became
+            a scroll container in both directions and clipped its own Status
+            and Priority menus — which open *above* it — out of existence.
+            The content is ~300px; it wraps rather than scrolls. */}
+        <div className="border-border bg-surface pointer-events-auto flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-1 rounded-lg border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
           <span className="text-fg tabular px-1.5 text-[12px] font-medium">
             {progress === null
               ? `${ids.length} selected`
