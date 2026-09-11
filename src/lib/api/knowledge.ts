@@ -89,44 +89,43 @@ export const listKnowledge = async (
   userId: string,
   filters: { project?: string; label?: string; limit: number; includeSuperseded?: boolean },
 ): Promise<KnowledgeRow[]> => {
-  let scoped: string[] | null = null
-
-  if (filters.project) {
-    // Project-scoped reads include global rows on purpose: "what do we know
-    // that applies here" is the question, and an infra gotcha applies here.
-    const { ids } = await resolveProjects(userId, [filters.project])
-    if (ids.length === 0) return []
-
-    const { data, error } = await admin()
-      .from('knowledge_projects')
-      .select('knowledge_id')
-      .eq('project_id', ids[0])
-    if (error) throw new Error(error.message)
-    scoped = (data ?? []).map((r) => r.knowledge_id as string)
-  }
-
   let query = admin()
     .from('knowledge')
     .select(COLUMNS)
     .eq('owner_user_id', userId)
     .order('updated_at', { ascending: false })
-    .limit(filters.limit)
 
   if (filters.label) query = query.contains('labels', [filters.label])
   if (!filters.includeSuperseded) query = query.is('superseded_by', null)
 
-  const { data, error } = await query
-  if (error) throw new Error(error.message)
+  if (filters.project) {
+    // Project-scoped reads include the global rows on purpose: the question is
+    // "what do we know that applies here", and an infra gotcha applies here.
+    //
+    // The narrowing has to happen IN the query. Filtering after a LIMIT looked
+    // identical and was not: once 200 rows were imported, the twelve most
+    // recently updated were all from other projects, so the briefing's
+    // knowledge section silently went empty.
+    const { ids } = await resolveProjects(userId, [filters.project])
+    if (ids.length === 0) return []
 
-  let rows = (data ?? []) as unknown as KnowledgeRow[]
+    const [scoped, globals] = await Promise.all([
+      admin().from('knowledge_projects').select('knowledge_id').eq('project_id', ids[0]),
+      globalIds(userId),
+    ])
+    if (scoped.error) throw new Error(scoped.error.message)
 
-  if (scoped !== null) {
-    const globals = await globalIds(userId)
-    const allowed = new Set([...scoped, ...globals])
-    rows = rows.filter((r) => allowed.has(r.id))
+    const allowed = [
+      ...new Set([...(scoped.data ?? []).map((r) => r.knowledge_id as string), ...globals]),
+    ]
+    if (allowed.length === 0) return []
+    query = query.in('id', allowed)
   }
 
-  return withProjects(rows)
+  const { data, error } = await query.limit(filters.limit)
+  if (error) throw new Error(error.message)
+
+  return withProjects((data ?? []) as unknown as KnowledgeRow[])
 }
 
 /** Rows with no project links at all — the supra-project set. */

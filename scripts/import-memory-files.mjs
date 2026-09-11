@@ -133,10 +133,26 @@ for (const [dir, project] of Object.entries(PROJECTS)) {
         continue
       }
 
-      // The same fact name recurs across projects -- every codebase has a
-      // `feedback-verify-branch-before-commit`. Slugs are unique per owner, so
-      // the first one in wins and the rest were being dropped silently: 147 of
-      // 293 files. Qualify the loser with its project rather than lose it.
+      // A taken slug means one of two very different things, and guessing
+      // wrong is expensive in both directions. If the row already there has
+      // this exact body it is this same file, imported by an earlier pass --
+      // re-slugging it produced 125 duplicate rows. If the body differs it is
+      // a different project's fact of the same name (every codebase has a
+      // `feedback-verify-branch-before-commit`), and dropping it loses content.
+      let existing = null
+      try {
+        existing = JSON.parse(
+          execFileSync('cairn', ['know', slug, '--json'], { encoding: 'utf8' }),
+        )
+      } catch {
+        existing = null
+      }
+
+      if (existing && existing.body?.trim() === full.trim()) {
+        skipped += 1
+        continue
+      }
+
       if (!project) {
         collisions.push(slug)
         skipped += 1
