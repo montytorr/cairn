@@ -80,17 +80,39 @@ const resolveValue = async (v) => (v === '-' ? (await readStdin()).trim() : v)
 // ---------------------------------------------------------------------------
 // http
 // ---------------------------------------------------------------------------
+/**
+ * Gateway errors are transient and worth waiting out.
+ *
+ * A deploy takes the app down for a few seconds, and during that window every
+ * call returns 502 from the proxy. That is survivable for a human retrying by
+ * hand and fatal for a batch import or a session-end hook, which gets one
+ * chance to record what happened before the session is gone.
+ */
+const TRANSIENT = new Set([502, 503, 504])
+const RETRIES = 3
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 const request = async (method, path, body) => {
   if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
   let res
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      method,
-      headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch (error) {
-    die(`cannot reach ${BASE}: ${error.message}`)
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch (error) {
+      if (attempt >= RETRIES) die(`cannot reach ${BASE}: ${error.message}`)
+      await sleep(500 * 2 ** attempt)
+      continue
+    }
+    if (TRANSIENT.has(res.status) && attempt < RETRIES) {
+      await sleep(500 * 2 ** attempt)
+      continue
+    }
+    break
   }
 
   const text = await res.text()
@@ -385,6 +407,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn unlearn <slug> [--superseded-by <slug>]
     cairn session list             recent sessions
     cairn session end --id <id>    write the episodic record, checkpoint what is held
+    cairn reconcile                release your own claims that went quiet
 
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
@@ -820,6 +843,8 @@ const commands = {
 
     if (flags.project) params.set('project', flags.project)
     if (flags.label) params.set('label', flags.label)
+    if (flags.limit) params.set('limit', flags.limit)
+    if (flags.superseded) params.set('superseded', '1')
     const data = await request('GET', `/api/v1/knowledge?${params}`)
     emit(data, {
       rows: (d) => d.results.map((r) => ({
@@ -888,6 +913,24 @@ const commands = {
     mkdirSync(dirname(PROJECT_MAP_PATH), { recursive: true })
     writeFileSync(PROJECT_MAP_PATH, `${JSON.stringify(map, null, 2)}\n`)
     emit({ path: dir, project: map[dir] ?? null })
+  },
+
+  async reconcile() {
+    const body = { dryRun: Boolean(flags['dry-run']) }
+    if (flags.older) body.olderThanMinutes = Number(flags.older)
+    const data = await request('POST', '/api/v1/reconcile', body)
+    emit(
+      { count: data.released.length, ...data },
+      {
+        rows: (d) =>
+          d.released.map((r) => ({
+            ref: r.ref,
+            held: `${r.heldForMinutes}m`,
+            checkpoint: r.hadCheckpoint ? 'yes' : 'none',
+          })),
+        columns: ['ref', 'held', 'checkpoint'],
+      },
+    )
   },
 
   // --- the episodic record -----------------------------------------------
