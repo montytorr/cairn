@@ -406,7 +406,12 @@ const HELP = `cairn — agent-first task tracker and shared memory
   memory
     cairn context                  the briefing: what you hold, what is in flight,
                                    where the last session here stopped, what is known
-    cairn learn "<title>" --body - record what we now know (global unless --project)
+    cairn learn "<title>" --body - record what we now know
+                                   --project K  true of that project
+                                   --entity E   true of that grouping (cairn entities)
+                                   neither      true everywhere
+    cairn entities                 groupings a fact can be true of, and their projects
+    cairn entities assign <key> --project A,B
     cairn know [<slug>|<query>]    read it back, or list what applies here
     cairn relearn <slug> --body -  correct it
     cairn unlearn <slug> [--superseded-by <slug>]
@@ -806,6 +811,7 @@ const commands = {
       labels: splitList(flags.label),
       projects: splitList(flags.project),
     }
+    if (flags.entity) payload.entities = splitList(flags.entity)
     if (flags.slug) payload.slug = flags.slug
     if (flags.task) payload.sourceTaskRef = flags.task
     if (flags.verified) payload.verified = true
@@ -854,7 +860,13 @@ const commands = {
     emit(data, {
       rows: (d) => d.results.map((r) => ({
         slug: r.slug,
-        scope: r.scope === 'global' ? 'global' : r.projects.join(','),
+        // Where it applies, narrowest first: this project, else the groupings
+        // it belongs to, else everywhere.
+        scope: r.projects?.length
+          ? r.projects.join(',')
+          : r.entities?.length
+            ? r.entities.join(',')
+            : 'global',
         verified: r.verified ? 'yes' : '',
         tokens: `~${r.tokens}`,
         title: truncate(r.title, 70),
@@ -880,8 +892,52 @@ const commands = {
     if (flags.title) patch.title = flags.title
     if (flags.label) patch.labels = splitList(flags.label)
     if (flags.project) patch.projects = splitList(flags.project)
+    if (flags.entity !== undefined) patch.entities = splitList(flags.entity)
     if (flags.verified) patch.verified = true
     emit(await request('PATCH', `/api/v1/knowledge/${slug}`, patch))
+  },
+
+  async entities() {
+    const verb = positional.shift()
+
+    if (verb === 'add') {
+      const key = need(positional[0], 'usage: cairn entities add <key> "<title>" [--project A,B]')
+      return emit(
+        await request('POST', '/api/v1/entities', {
+          key,
+          title: positional[1] ?? key,
+          description: flags.description ?? '',
+          projects: splitList(flags.project),
+        }),
+      )
+    }
+
+    if (verb === 'assign' || verb === 'unassign') {
+      const key = need(positional[0], `usage: cairn entities ${verb} <key> --project A,B`)
+      const projects = splitList(flags.project ?? positional[1])
+      if (projects.length === 0) die('--project is required')
+      return emit(
+        await request('PATCH', '/api/v1/entities', {
+          key,
+          addProjects: verb === 'assign' ? projects : [],
+          removeProjects: verb === 'unassign' ? projects : [],
+        }),
+      )
+    }
+
+    if (verb) die(`unknown entities verb "${verb}" — try: add, assign, unassign`)
+
+    const data = await request('GET', '/api/v1/entities')
+    emit(data, {
+      rows: (d) =>
+        d.results.map((e) => ({
+          entity: e.key,
+          projects: e.projects.length,
+          keys: truncate(e.projects.join(' '), 58),
+          title: e.title,
+        })),
+      columns: ['entity', 'projects', 'keys', 'title'],
+    })
   },
 
   // --- the briefing ------------------------------------------------------

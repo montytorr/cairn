@@ -39,6 +39,8 @@ export const knowledgeCreate = z.object({
   body: z.string().max(100_000).default(''),
   labels: z.array(z.string().min(1).max(40)).max(20).default([]),
   projects: z.array(z.string().min(1).max(10)).max(20).default([]),
+  /** Groupings this is true of — a business, a stack, a subsystem. */
+  entities: z.array(z.string().min(1).max(40)).max(20).default([]),
   sourceTaskRef: z.string().max(40).optional(),
   sourceSessionId: z.string().uuid().optional(),
   verified: z.boolean().optional(),
@@ -54,6 +56,7 @@ export const knowledgeUpdate = z.object({
   body: z.string().max(100_000).optional(),
   labels: z.array(z.string().min(1).max(40)).max(20).optional(),
   projects: z.array(z.string().min(1).max(10)).max(20).optional(),
+  entities: z.array(z.string().min(1).max(40)).max(20).optional(),
   supersededBy: z.string().max(120).nullable().optional(),
   verified: z.boolean().optional(),
 })
