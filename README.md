@@ -1,6 +1,6 @@
 # Cairn
 
-**A self-hosted task tracker whose tasks double as shared memory for AI coding agents.**
+**A self-hosted task tracker that doubles as shared memory for AI coding agents.**
 
 A cairn is a stack of stones travellers leave to mark a path for whoever comes next. That
 is the idea: agents add to the pile as they work, and anyone who follows — human or agent —
@@ -19,10 +19,19 @@ reasoning evaporates, so the next person re-debugs the same problem. That is tol
 a human team, where memory lives in people. It is fatal when the workers are AI agents
 with no memory between sessions.
 
-Cairn makes the tracker the memory:
+Cairn makes the tracker the memory. It holds four things, and one verb searches all of
+them:
 
-- **Check before you start.** `cairn check "<subject>"` returns prior work on a subject —
-  open and closed — so an agent learns what was already tried before spending a token on it.
+| | answers |
+|---|---|
+| **tasks** | what needs doing, what was done, how it was resolved |
+| **notes** | what was tried on the way, including what did not work |
+| **knowledge** | what we now *know* — infra, conventions, gotchas — outliving any one task |
+| **sessions** | what happened in a working session, and where it was left |
+
+- **Check before you start.** `cairn check "<subject>"` returns prior work on a subject
+  across all four — open and closed — so an agent learns what was already tried before
+  spending a token on it.
 - **Resolutions are mandatory.** Closing a task requires recording *how*. A closed task
   with no answer in it is invisible to everyone who comes later.
 - **Dead ends are first-class.** An append-only work log captures attempts and findings as
@@ -42,15 +51,30 @@ Cairn makes the tracker the memory:
 - Markdown bodies in a WYSIWYG editor, rendered with syntax-highlighted code, GFM tables
   and task lists; bare refs like `CAI-42` become links
 - Comments for humans, an append-only work log for agents, and file attachments
-- List and board views, bulk edit with shift-click ranges, a cross-project home, and
-  live updates over SSE
+- List and board views per project, a **cross-project board** at `/board` with grouping
+  and swimlanes by status, priority, type, project or agent, bulk edit with shift-click
+  ranges, a cross-project home, and live updates over SSE
+- Tasks can belong to **several projects at once** — the home project keeps the ref, the
+  extra links only widen where it appears
 
 **Memory**
 
-- Postgres full-text search across titles, bodies, notes *and* resolutions, ranked in the
-  database by `ts_rank` — closed work is included on purpose
+- Postgres full-text search across **tasks, work-log notes, knowledge and recorded
+  sessions** in one pass, ranked in the database by `ts_rank` — closed work is included
+  on purpose. Precise first, widening to OR only when the precise pass comes back thin
+  (measured: 75% → 93% recall)
 - Results come back as an index with a `~tokens` estimate per row, so an agent can budget
   what it opens instead of pulling bodies it will never read
+- **Knowledge** is scoped narrowest-first: to a project, to an *entity* (a grouping of
+  projects — a business, a stack, a subsystem), or to nothing, meaning everywhere. It is
+  corrected rather than appended to: `superseded_by` keeps the old claim findable and
+  marked, because two contradictory facts with no way to tell which is current is how a
+  memory store stops being worth reading
+- **Sessions are written without being asked.** A session-end hook records the request,
+  what was learned, what landed and where it stopped — one cheap model call per session,
+  not one per tool call — and checkpoints any task the agent was still holding
+- **A file index** answers the question nobody asks: opening a file surfaces the tasks and
+  knowledge that concern it, with no query to write
 - Resolutions are mandatory on close, and carry a kind
   (`fixed · wont-fix · duplicate · not-reproducible · superseded · answered`)
 
@@ -58,6 +82,11 @@ Cairn makes the tracker the memory:
 
 - A claim / heartbeat / checkpoint protocol so several agents can work a backlog without
   collisions, with lease stealing when a holder goes quiet
+- `cairn reconcile` releases claims an agent walked away from, leaving a note saying why —
+  the backstop for runtimes with no session-end event. It never closes anything: a task
+  with a resolution nobody meant is worse than one plainly still open
+- `cairn context` is the briefing a session opens with: what you hold, what is in flight,
+  where the last session in this directory stopped, what is known here
 - Every write is attributed to the API key that made it
 - REST API with hashed bearer keys, plus a CLI, an agent skill and an MCP server
 
@@ -82,7 +111,8 @@ parse and `--pretty` to read.
 
 | | |
 |---|---|
-| `cairn check "<subject>"` | **Start here.** Prior work on a subject, open and closed, with a `~tokens` cost per row |
+| `cairn check "<subject>"` | **Start here.** Prior work across tasks, notes, knowledge and sessions, open and closed, with a `~tokens` cost per row |
+| `cairn context` | The briefing: what you hold, what is in flight, where the last session here stopped |
 | `cairn show <ref>` · `cairn list` · `cairn projects` | Read one, many, or the project index |
 | `cairn add "<title>" --project K` | File work. Warns if something similar already exists |
 | `cairn update <ref> --status S --priority P` | Change fields |
@@ -99,6 +129,13 @@ parse and `--pretty` to read.
 | `cairn checkpoint <ref> --summary "…"` | Where work stopped, for whoever resumes |
 | `cairn block <ref> "<reason>"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
 | `cairn project rename\|delete <KEY>` | Deleting takes every task in it, and demands the key back |
+| `cairn learn "<title>" --body -` | Record what we now know. Global unless `--project` or `--entity` |
+| `cairn know [<slug>\|<query>]` | Read it back, or list what applies here |
+| `cairn relearn <slug>` · `cairn unlearn <slug> --superseded-by <slug>` | Correct it, or mark it replaced |
+| `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
+| `cairn session list` · `cairn session end --id <id>` | The episodic record |
+| `cairn reconcile` | Release your own claims that went quiet |
+| `cairn map <KEY>` | Tell Cairn which project this directory is |
 
 `cairn --help` is the full reference.
 
@@ -118,8 +155,17 @@ schemas the routes validate against, so it cannot drift. Browsable at `/api-docs
 /tasks/{ref}/attachments        upload; /attachments/{id} to fetch
 /tasks/{ref}/dependencies       blocked-by / blocks
 /tasks/{ref}/claim  /beat  /release  /checkpoint  /block
+/knowledge  /knowledge/{slug}   what we know, and correcting it
+/entities                       groupings a fact can be true of
+/sessions                       the episodic record
+/context                        the briefing a session opens with
+/reconcile                      release claims that went quiet
+/events                         change stream (SSE)
 /keys  /keys/{id}               issue and revoke agent keys
 ```
+
+A test walks `src/app/api/v1` and asserts every route on disk appears in the spec, so the
+docs cannot fall behind the surface — which they had, by six routes, before that existed.
 
 Authenticate with `Authorization: Bearer sk_live_…`. Keys are stored as a sha256 hash —
 the plaintext is shown once, at creation, and never again. Issue **one key per agent** so
@@ -199,9 +245,16 @@ repository. `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — keep it server-side onl
   hashed bearer API keys for agents, one key per agent
 - **RLS**: every policy resolves to `projects.owner_user_id = auth.uid()`
 
-See [`docs/`](./docs) for the design notes, and
-[`supabase/migrations/001_initial.sql`](./supabase/migrations/001_initial.sql) — it is
-commented and is the best description of the data model.
+**The data model**, in four groups: `projects` / `tasks` / `task_notes` / `task_comments`
+/ `task_attachments` / `task_deps` / `task_activity_events` for the tracker;
+`knowledge` + `knowledge_projects` + `knowledge_entities` for what we know; `sessions` and
+`file_touches` for what happened and where; `entities` + `project_entities` for the
+groupings that sit between one project and everything.
+
+See [`docs/`](./docs) for the design notes, and the migrations themselves — each one is
+commented with *why*, not what, and together they are the best description of the data
+model. [`001_initial.sql`](./supabase/migrations/001_initial.sql) is the tracker;
+[`013_knowledge.sql`](./supabase/migrations/013_knowledge.sql) onward is the memory layer.
 
 ## Backups
 
@@ -258,6 +311,27 @@ tool_timeout_sec = 60
 
 Note Codex rejects a literal `bearer_token`; for an HTTP transport it wants
 `bearer_token_env_var`.
+
+**Hooks** — the part that means nobody has to remind an agent to keep Cairn current:
+
+```bash
+node scripts/install-hooks.mjs        # --dry-run to see what it would write
+```
+
+Three mechanisms, the same three on every runtime that supports them:
+
+| When | What |
+|---|---|
+| session start | the briefing is injected — what you hold, what is in flight, where the last session here stopped |
+| a file is read | what is known about that file, if anything; silence if not |
+| session end | the session is recorded, and any task still held is checkpointed |
+
+Claude Code has all three. Codex has no `SessionEnd`, so its recorder runs on `Stop` and
+leans on the API being idempotent; its handlers must also be trusted in `config.toml`
+before they run. OpenClaw has neither, so it injects through `agent:bootstrap` and relies
+on `cairn reconcile` on a schedule. Every hook fails silent and non-blocking —
+a memory system must never be the reason a session cannot start or close.
+`CAIRN_HOOK_DEBUG=1` when that silence is itself the problem.
 
 Issue **one key per agent** so writes are attributable and any single agent can be
 revoked without disturbing the others.
