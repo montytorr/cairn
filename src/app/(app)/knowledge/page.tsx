@@ -73,20 +73,21 @@ const KnowledgePage = async ({
       failure = error instanceof Error ? error.message : 'Search failed.'
     }
   } else {
-    const scoped = project
-      ? await listKnowledge(user.id, {
-          project,
-          label: label || undefined,
-          limit: 300,
-          includeSuperseded,
-        })
-      : universe.filter((r) => {
-          if (!includeSuperseded && r.superseded_by) return false
-          if (label && !r.labels.includes(label)) return false
-          return true
-        })
+    const scoped =
+      project || entity || label
+        ? await listKnowledge(user.id, {
+            project: project || undefined,
+            entity: entity || undefined,
+            label: label || undefined,
+            limit: 300,
+            includeSuperseded,
+          })
+        : universe.filter((r) => !includeSuperseded ? !r.superseded_by : true)
 
-    const rows = entity ? scoped.filter((r) => (r.entities ?? []).includes(entity)) : scoped
+    // The entity narrowing is done by listKnowledge, in the query. Doing it
+    // here would filter an already-limited page, which is correct only while
+    // the corpus is smaller than the limit.
+    const rows = scoped
     const supersededMap = await supersededByInfo(
       user.id,
       rows.map((r) => r.superseded_by).filter((id): id is string => Boolean(id)),

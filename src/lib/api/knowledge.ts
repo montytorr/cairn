@@ -167,8 +167,30 @@ export const entitiesForProject = async (userId: string, key: string): Promise<s
 
 export const listKnowledge = async (
   userId: string,
-  filters: { project?: string; label?: string; limit: number; includeSuperseded?: boolean },
+  filters: {
+    project?: string
+    entity?: string
+    label?: string
+    limit: number
+    includeSuperseded?: boolean
+  },
 ): Promise<KnowledgeRow[]> => {
+  // Narrowing by entity happens here, in the query, for the same reason the
+  // project narrowing does: a filter applied to an already-limited page only
+  // reorders that page, and looks correct until the corpus outgrows the limit.
+  let filterToEntity: string[] | null = null
+  if (filters.entity) {
+    const { data, error } = await admin()
+      .from('knowledge_entities')
+      .select('knowledge_id, entity:entities!inner(key, owner_user_id)')
+      .eq('entities.owner_user_id', userId)
+      .eq('entities.key', filters.entity.toLowerCase())
+    if (error) throw new Error(error.message)
+
+    filterToEntity = (data ?? []).map((r) => r.knowledge_id as string)
+    if (filterToEntity.length === 0) return []
+  }
+
   const base = () => {
     let q = admin()
       .from('knowledge')
@@ -178,6 +200,7 @@ export const listKnowledge = async (
 
     if (filters.label) q = q.contains('labels', [filters.label])
     if (!filters.includeSuperseded) q = q.is('superseded_by', null)
+    if (filterToEntity) q = q.in('id', filterToEntity)
     return q
   }
 

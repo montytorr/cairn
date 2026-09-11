@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 
 const listQuery = z.object({
   project: z.string().max(10).optional(),
+  entity: z.string().max(40).optional(),
   label: z.string().max(40).optional(),
   superseded: z.coerce.boolean().default(false),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -23,9 +24,10 @@ export const GET = route({
     const parsed = listQuery.safeParse(Object.fromEntries(url.searchParams))
     if (!parsed.success) return fail('validation_failed', 'Bad filters.', { issues: parsed.error.issues })
 
-    const { project, label, superseded, limit } = parsed.data
+    const { project, entity, label, superseded, limit } = parsed.data
     const rows = await listKnowledge(actor.userId, {
       project,
+      entity,
       label,
       limit,
       includeSuperseded: superseded,

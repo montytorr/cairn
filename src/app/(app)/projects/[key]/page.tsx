@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { currentUser, getProject, listTasks } from '@/lib/data'
+import { entitiesForProject } from '@/lib/api/knowledge'
 import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
 import { LiveUpdates } from '@/components/live-updates'
@@ -27,7 +28,10 @@ const ProjectPage = async ({
   if (!project) notFound()
 
   const includeClosed = closed === '1'
-  const { tasks, closedHidden } = await listTasks(project.id, { includeClosed })
+  const [{ tasks, closedHidden }, entities] = await Promise.all([
+    listTasks(project.id, { includeClosed }),
+    entitiesForProject(user.id, project.key),
+  ])
 
   return (
     <div className="flex h-dvh flex-col">
@@ -50,6 +54,22 @@ const ProjectPage = async ({
         </span>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
         <span className="text-fg hidden text-[13px] sm:block">Tasks</span>
+        {/* Which groupings this project belongs to, so "why am I seeing this
+            fact here" has an answer where the work happens rather than only in
+            settings. Hidden on a phone; the crumbs go first there too. */}
+        {entities.length > 0 && (
+          <span className="text-fg-subtle ml-1 hidden items-center gap-1 text-[11px] lg:flex">
+            {entities.map((key) => (
+              <Link
+                key={key}
+                href={`/knowledge?entity=${key}`}
+                className="border-border hover:text-fg rounded border px-1.5 py-px font-mono transition-colors"
+              >
+                {key}
+              </Link>
+            ))}
+          </span>
+        )}
         {project.status === 'archived' && (
           <span className="border-border text-fg-subtle ml-1 rounded border px-1.5 py-px text-[10px] uppercase tracking-wide">
             Archived
