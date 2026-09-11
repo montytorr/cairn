@@ -53,7 +53,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.ComponentProps<'te
 Textarea.displayName = 'Textarea'
 
 export const Select = forwardRef<HTMLSelectElement, WithSize<React.ComponentProps<'select'>>>(({ className, size = 'md', children, ...props }, ref) => (
-  <div className="relative inline-flex w-full items-center">
+<div className="relative inline-flex items-center">
     <select
       ref={ref}
       className={cn(
