@@ -1,6 +1,6 @@
 'use client'
 
-import { InlineInput } from '@/components/ui/control'
+import { InlineInput, Select } from '@/components/ui/control'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -22,13 +22,19 @@ export const ChildrenPanel = ({
   // Not named `children`: that is React's own prop, and passing an array of
   // tasks through it reads like a mistake even when it works.
   items,
+  projects = [],
 }: {
   taskRef: string
   projectKey: string
   items: ChildTask[]
+  /** Every project the child could be filed in. A change that lands in four
+   *  repos is one parent with a child in each of their projects, and until now
+   *  this panel could only create in the project it was standing in. */
+  projects?: { key: string; title: string }[]
 }) => {
   const router = useRouter()
   const [adding, setAdding] = useState(false)
+  const [target, setTarget] = useState(projectKey)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +47,7 @@ export const ChildrenPanel = ({
     if (!value || busy) return
     setBusy(true)
     setError(null)
-    const res = await fetch(`/api/v1/projects/${projectKey}/tasks`, {
+    const res = await fetch(`/api/v1/projects/${target}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: value, parentRef: taskRef, status: 'todo' }),
@@ -128,18 +134,36 @@ export const ChildrenPanel = ({
       )}
 
       {adding && (
-        <InlineInput
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void create()
-            if (e.key === 'Escape') setAdding(false)
-          }}
-          placeholder="What is the next piece?"
-          aria-label="New sub-task title"
-          className="mt-2"
-        />
+        <div className="mt-2 flex items-center gap-2">
+          <InlineInput
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void create()
+              if (e.key === 'Escape') setAdding(false)
+            }}
+            placeholder="What is the next piece?"
+            aria-label="New sub-task title"
+            className="min-w-0 flex-1"
+          />
+          {projects.length > 1 && (
+            <Select
+              size="sm"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              aria-label="Which project the sub-task goes in"
+              title="A sub-task can live in another repo's project — that is how one change lands across several"
+              className="w-[92px]"
+            >
+              {projects.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.key}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
       )}
 
       {items.length === 0 && !adding && (

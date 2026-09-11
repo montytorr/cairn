@@ -148,6 +148,7 @@ const TaskPage = async ({ params }: { params: Promise<{ key: string; number: str
                 taskRef={`${task.project.key}-${task.number}`}
                 projectKey={task.project.key}
                 items={children}
+                projects={allProjects.map((p) => ({ key: p.key, title: p.title }))}
               />
               <AttachmentsPanel taskId={task.id} attachments={attachments} />
               <NotesPanel taskId={task.id} notes={notes} />
