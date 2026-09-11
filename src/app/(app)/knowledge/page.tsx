@@ -136,6 +136,20 @@ const KnowledgePage = async ({
         labels={labelUniverse}
       />
 
+      {/* The scope column is the only thing on this page that needs explaining,
+          and "entity" means nothing to someone meeting it here for the first
+          time. Said once, at the top, rather than in a tooltip nobody opens. */}
+      {!query && (
+        <p className="border-border text-fg-subtle border-b px-4 py-2 text-[12px] leading-relaxed">
+          Scope is how widely a fact applies:{' '}
+          <span className="text-fg-muted">a project</span> (true of that codebase),{' '}
+          <span className="text-fg-muted">an entity</span> — a grouping a fact can be true
+          of, like a business, a stack or a subsystem — or{' '}
+          <span className="text-fg-muted">global</span>, true everywhere. Narrower wins, so
+          a project fact is shown ahead of one that merely applies to it.
+        </p>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {failure ? (
           <p className="text-danger px-4 py-8 text-[13px]">{failure}</p>

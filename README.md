@@ -240,11 +240,23 @@ problem.
   argument, made about itself.
 - Results are an **index**, never bodies: each row advertises a `~tokens` cost, so an agent
   budgets what it opens instead of pulling text it will never read.
-- **Knowledge is scoped narrowest-first** — to a project, to an *entity* (a grouping of
-  projects: a business, a stack, a subsystem), or to nothing, meaning everywhere. It is
-  corrected rather than added to: `superseded_by` keeps the old claim findable and marked,
-  because two contradictory facts with no way to tell which is current is how a memory
-  store stops being worth reading.
+- **Knowledge is scoped narrowest-first**, to one of three widths:
+
+  | scope | means | example |
+  |---|---|---|
+  | a **project** | true of this codebase | "rating caches the wizard config for 60s" |
+  | an **entity** | true of a grouping the project belongs to | "Customer.io campaign ids live in the broadcast, not the template" |
+  | nothing at all | true everywhere | "this Mac's Postgres is broken; use embedded-postgres" |
+
+  An **entity is a grouping a fact can be true of** — a business, a stack, a subsystem —
+  and a project belongs to several at once. It exists because the alternatives are both
+  wrong: filing the same fact against twenty projects, or making it global and putting it
+  in front of the other forty where it is false. A project fact outranks an entity fact
+  outranks a global one, which is how "true for Dispofi, except here" gets said.
+
+  Knowledge is corrected rather than added to: `superseded_by` keeps the old claim
+  findable and marked, because two contradictory facts with no way to tell which is
+  current is how a memory store stops being worth reading.
 - **A file index** answers the question nobody asks: opening a file surfaces the tasks and
   knowledge that concern it, with no query to write.
 
