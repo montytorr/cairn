@@ -1,6 +1,6 @@
 ---
 name: cairn
-description: Shared task tracker and memory for agents. Use BEFORE starting work on any subject to check what has already been done, tried, or debugged; and to file, claim, annotate and close tasks. Triggers on "have we done this before", "check if we fixed", "what did we try for", "create a task", "log this", "what's the status of", "claim this task", "mark it done".
+description: Shared task tracker and memory for agents. Use BEFORE starting work on any subject to check what has already been done, tried, or debugged; and to file, claim, annotate, learn, checkpoint, and close tasks. Triggers on "have we done this before", "check if we fixed", "what did we try for", "create a task", "log this", "learn this", "checkpoint this", "what's the status of", "claim this task", "mark it done", "end the session".
 ---
 
 # Cairn
@@ -17,6 +17,35 @@ Cairn is the shared memory for everything worked on here. It holds four things, 
 
 Requires `cairn` on PATH. Credentials come from `CAIRN_BASE_URL` / `CAIRN_API_KEY`, or from
 `~/.cairn/env` if those are unset.
+
+## 0. Mandatory lifecycle — do not skip a gate
+
+For every non-trivial request, follow this sequence and leave evidence at each boundary:
+
+1. **Orient:** run `cairn context --cwd "$PWD"`, then `cairn check "<subject>"` before
+   reading deeply, changing anything, or delegating. Inspect relevant hits with `show`.
+2. **Own:** reuse an open task when one exists; otherwise `cairn add` one in the correct
+   project, then `cairn claim <ref>`. A task is required for durable work, investigations,
+   fixes, deployments, migrations, and delegated work; trivial read-only answers may use
+   only `check`.
+3. **Record:** write `note` entries for attempts, findings, decisions, and handoffs as
+   they happen. When a fact should survive task closure, write it with `learn` (or correct
+   it with `relearn`) instead of leaving it only in a task note.
+4. **Checkpoint:** after each meaningful milestone and before pausing, delegating, or
+   yielding, run `cairn checkpoint <ref> --summary "..."`; use `beat` during long work.
+5. **Close:** when the work is actually complete, run `cairn done <ref> --resolution
+   "..." --kind fixed` (or the accurate non-fixed kind), then verify with `show` or
+   `history`. Release a claim only when handing work back unfinished.
+
+Do not finish a durable task with only a chat reply, a dashboard update, or a vague note.
+If work is incomplete, leave the task doing with a checkpoint and explicit handoff; never
+claim done merely because the current turn is ending.
+
+Sessions are created and recorded by the runtime lifecycle; there is deliberately no
+`cairn session create` command. At session start, use `context` and `check`; at session
+end, the runtime/Stop hook writes the episodic record and auto-checkpoints held tasks.
+If a manual handoff is required and a real session id is available, use `cairn session
+end --id <id>`; never fabricate a session or substitute a second memory/task system.
 
 ## 1. Check first. Every time.
 
