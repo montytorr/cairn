@@ -7,6 +7,7 @@ import { ViewSwitch } from './view-switch'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectMenu } from './project-menu'
 import { MobileNavButton } from '@/components/mobile-nav-context'
+import { PendingLink } from '@/components/pending-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,12 +58,12 @@ const ProjectPage = async ({
 
         <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
           {closedHidden > 0 || includeClosed ? (
-            <Link
+            <PendingLink
               href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
-              className="text-fg-subtle hover:text-fg whitespace-nowrap text-[12px] transition-colors"
+              className="text-fg-subtle hover:text-fg flex items-center gap-1.5 whitespace-nowrap text-[12px] transition-colors"
             >
               {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-            </Link>
+            </PendingLink>
           ) : null}
           <ProjectMenu
             projectKey={project.key}

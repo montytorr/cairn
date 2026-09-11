@@ -6,6 +6,7 @@ import { ListView } from './projects/[key]/list-view'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectIcon } from '@/components/icons'
 import { MobileNavButton } from '@/components/mobile-nav-context'
+import { PendingLink } from '@/components/pending-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,12 +62,12 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
           {held > 0 ? <Stat label="held by an agent" value={held} /> : null}
         </span>
 
-        <Link
+        <PendingLink
           href={includeClosed ? '/' : '/?closed=1'}
-          className="text-fg-subtle hover:text-fg ml-auto shrink-0 whitespace-nowrap text-[12px] transition-colors"
+          className="text-fg-subtle hover:text-fg ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] transition-colors"
         >
           {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-        </Link>
+        </PendingLink>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

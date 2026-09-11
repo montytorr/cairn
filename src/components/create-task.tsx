@@ -1,5 +1,7 @@
 'use client'
 
+import { Spinner } from '@/components/spinner'
+
 import { InlineInput } from '@/components/ui/control'
 
 import { useRouter } from 'next/navigation'
@@ -265,7 +267,14 @@ export const CreateTask = ({
             disabled={!title.trim() || !project || pending}
             className="bg-accent text-accent-fg ml-auto h-[26px] rounded-md px-3 text-[12px] font-medium transition-opacity disabled:opacity-40"
           >
-            {pending ? 'Creating…' : 'Create'}
+            {pending ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Spinner />
+                Creating…
+              </span>
+            ) : (
+              'Create'
+            )}
           </button>
         </div>
 

@@ -40,8 +40,12 @@ const DeleteDialog = ({
         setError(json?.error?.message ?? 'Could not delete the project.')
         return
       }
-      // Nothing left to navigate back to, so go home rather than refresh.
-      router.push('/')
+      // Both calls, and in this order. `push` alone leaves the layout's
+      // cached RSC payload in place — and the sidebar's project list is
+      // rendered by that layout, so the deleted project stayed on screen
+      // until a manual reload. `refresh` is what re-runs listProjects.
+      router.replace('/')
+      router.refresh()
     } finally {
       setBusy(false)
     }
@@ -142,10 +146,11 @@ export const ProjectMenu = ({
       body: JSON.stringify({ status }),
     })
     // Archiving removes it from the sidebar, so staying on its page would
-    // leave the nav showing nothing selected. Go home instead.
+    // leave the nav showing nothing selected. Go home — and refresh, or the
+    // layout keeps serving the project list it already had.
     if (res.ok) {
-      if (status === 'archived') router.push('/')
-      else router.refresh()
+      if (status === 'archived') router.replace('/')
+      router.refresh()
     }
   }
 

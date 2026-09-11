@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
+import { Spinner } from '@/components/spinner'
+import { Search as SearchIcon, X } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: 'Backlog',
@@ -71,6 +73,11 @@ export const SearchControls = ({
   projects: { key: string; title: string }[]
 }) => {
   const router = useRouter()
+  // The query lives in the URL, so every keystroke is a server round trip.
+  // Without this the page sat completely still while it ran — a searchParams
+  // change does not reliably surface loading.tsx, so the feedback has to come
+  // from the control that started it.
+  const [running, startSearch] = useTransition()
   const [draft, setDraft] = useState(q)
   const inputRef = useRef<HTMLInputElement>(null)
   // The committed query, so the debounce does not re-push the URL it just
@@ -93,7 +100,7 @@ export const SearchControls = ({
       if (value) params.set(key, value)
     }
     committed.current = merged.q ?? ''
-    router.replace(`/search?${params.toString()}`)
+    startSearch(() => router.replace(`/search?${params.toString()}`))
   }
 
   useEffect(() => {
@@ -105,21 +112,41 @@ export const SearchControls = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft])
 
+  // True between the last keystroke and the URL catching up, so the spinner
+  // appears immediately rather than after the debounce. Compared against the
+  // `q` prop, not the ref: a ref read during render neither re-renders when it
+  // changes nor is sound under concurrent rendering.
+  const pendingDebounce = draft.trim() !== q.trim()
   const cleared = !q && !project && !type && !status
 
   return (
     <div className="border-border flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:h-[42px] sm:flex-row sm:items-center sm:px-4 sm:py-0">
-      <input
-        ref={inputRef}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setDraft('')
-        }}
-        placeholder="Has this already been done or debugged?"
-        aria-label="Search tasks"
-        className="text-fg placeholder:text-fg-subtle min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-      />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="text-fg-subtle grid size-[14px] shrink-0 place-items-center">
+          {running || pendingDebounce ? <Spinner size={13} /> : <SearchIcon size={13} aria-hidden />}
+        </span>
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setDraft('')
+          }}
+          placeholder="Has this already been done or debugged?"
+          aria-label="Search tasks"
+          className="text-fg placeholder:text-fg-subtle min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+        />
+        {draft && (
+          <button
+            type="button"
+            onClick={() => setDraft('')}
+            aria-label="Clear the search"
+            className="text-fg-subtle hover:text-fg shrink-0 sm:hidden"
+          >
+            <X size={13} aria-hidden />
+          </button>
+        )}
+      </div>
       <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
       <Filter
         value={project}

@@ -1,5 +1,7 @@
 'use client'
 
+import { Spinner } from '@/components/spinner'
+
 import { RelativeTime } from '@/components/relative-time'
 
 import { useRouter } from 'next/navigation'
@@ -84,7 +86,7 @@ export const CommentsPanel = ({
           disabled={!text.trim() || pending}
           className="w-auto self-end px-3"
         >
-          {pending ? '…' : 'Post'}
+          {pending ? <Spinner /> : 'Post'}
         </Button>
       </div>
     </section>

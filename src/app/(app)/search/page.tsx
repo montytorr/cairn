@@ -6,56 +6,10 @@ import { searchTasks, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES, type TaskStatus, type TaskType } from '@/schemas/task'
 import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { SearchControls } from './search-controls'
+import { SearchResults } from './search-results'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
-
-const RESOLUTION_LABEL: Record<string, string> = {
-  fixed: 'Fixed',
-  'wont-fix': "Won't fix",
-  duplicate: 'Duplicate',
-  'not-reproducible': 'Not reproducible',
-  superseded: 'Superseded',
-  answered: 'Answered',
-}
-
-/** The one line that says whether an answer already exists. */
-const Result = ({ row }: { row: SearchRow }) => {
-  const ref = `${row.project_key}-${row.number}`
-  return (
-    <Link
-      href={`/projects/${row.project_key}/tasks/${row.number}`}
-      prefetch
-      className="group hover:bg-surface-hover border-border block border-b px-4 py-2.5 transition-colors duration-75 last:border-0"
-    >
-      <div className="flex items-center gap-2">
-        <PriorityIcon priority={row.priority as never} />
-        <StatusIcon status={row.status as TaskStatus} />
-        <span className="text-fg min-w-0 flex-1 truncate text-[13px]">{row.title}</span>
-        <TypePill type={row.type as TaskType} />
-        <ProjectIcon size={12} projectKey={row.project_key} />
-        <code className="text-fg-subtle tabular w-[80px] shrink-0 truncate text-right text-[12px]">
-          {ref}
-        </code>
-      </div>
-
-      {/* A recorded resolution is the payload — show it here so the answer can
-          be read without opening anything. */}
-      {row.resolution ? (
-        <p className="text-fg-muted mt-1.5 line-clamp-2 pl-[42px] text-[12.5px] leading-relaxed">
-          <span className="text-status-done mr-1.5 text-[11px] font-medium">
-            {RESOLUTION_LABEL[row.resolution_kind ?? ''] ?? 'Resolved'}
-          </span>
-          {row.resolution}
-        </p>
-      ) : row.description ? (
-        <p className="text-fg-subtle mt-1 line-clamp-1 pl-[42px] text-[12.5px]">
-          {row.description}
-        </p>
-      ) : null}
-    </Link>
-  )
-}
 
 const SearchPage = async ({
   searchParams,
@@ -139,11 +93,20 @@ const SearchPage = async ({
             <p className="mt-1.5 text-[12px]">This subject looks new.</p>
           </div>
         ) : (
-          <div>
-            {rows.map((row) => (
-              <Result key={row.id} row={row} />
-            ))}
-          </div>
+          <SearchResults
+            rows={rows.map((row) => ({
+              id: row.id,
+              number: row.number,
+              title: row.title,
+              type: row.type,
+              status: row.status,
+              priority: row.priority,
+              resolution: row.resolution,
+              resolution_kind: row.resolution_kind,
+              description: row.description,
+              project_key: row.project_key,
+            }))}
+          />
         )}
       </div>
     </div>
