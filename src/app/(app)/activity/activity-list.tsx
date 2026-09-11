@@ -3,6 +3,7 @@ import { BookMarked, FileText, ListTodo, MessageSquare, Radio, Shuffle } from 'l
 import { Avatar, ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import type { ActivityRow } from '@/lib/api/activity-feed'
+import { groupActivity, type ActivityGroup } from '@/lib/activity-grouping'
 
 const KIND: Record<ActivityRow['kind'], { label: string; Icon: typeof ListTodo; tone: string }> = {
   task: { label: 'filed', Icon: ListTodo, tone: 'text-accent' },
@@ -23,7 +24,7 @@ const hrefFor = (row: ActivityRow): string | null => {
   return key && number ? `/projects/${key}/tasks/${number}` : null
 }
 
-const Row = ({ row }: { row: ActivityRow }) => {
+const Row = ({ row }: { row: ActivityGroup }) => {
   const { label, Icon, tone } = KIND[row.kind]
   const href = hrefFor(row)
   const time = row.at.slice(11, 16)
@@ -39,9 +40,13 @@ const Row = ({ row }: { row: ActivityRow }) => {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {row.actor && <Avatar name={row.actor} size={14} />}
           <span className="text-fg-subtle text-[11px]">{label}</span>
-          {row.detail && row.detail !== label && (
-            <span className="text-fg-subtle text-[11px]">· {row.detail.replace(/_/g, ' ')}</span>
-          )}
+          {row.details
+            .filter((d) => d !== label)
+            .map((d) => (
+              <span key={d} className="text-fg-subtle text-[11px]">
+                · {d.replace(/_/g, ' ')}
+              </span>
+            ))}
           {row.project_key && (
             <span className="flex shrink-0 items-center gap-1">
               <ProjectIcon size={10} projectKey={row.project_key.split(',')[0]} />
@@ -64,8 +69,10 @@ const Row = ({ row }: { row: ActivityRow }) => {
 }
 
 export const ActivityList = ({ rows }: { rows: ActivityRow[] }) => {
-  const days = new Map<string, ActivityRow[]>()
-  for (const row of rows) {
+  // Group before splitting into days: a run that straddles midnight is still
+  // one action, and splitting first would leave half of it in each day.
+  const days = new Map<string, ActivityGroup[]>()
+  for (const row of groupActivity(rows)) {
     const day = row.at.slice(0, 10)
     days.set(day, [...(days.get(day) ?? []), row])
   }
