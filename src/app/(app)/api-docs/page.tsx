@@ -1,22 +1,18 @@
-import Script from 'next/script'
+import { ApiReference } from './api-reference'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Renders the generated OpenAPI document. Deliberately not a hand-written
- * reference page — the spec comes from the same Zod schemas the routes
- * validate with, so this cannot drift from the API.
+ * The generated OpenAPI document, rendered by Scalar.
+ *
+ * Deliberately not a hand-written reference: the spec comes from the same Zod
+ * schemas the routes validate with, so it cannot drift from the API. A test
+ * also asserts every route on disk appears in it.
  */
 const ApiDocsPage = () => (
-  // `min-h-dvh` inside an overflow-hidden <main> guarantees the content is at
-  // least as tall as the viewport and then clips whatever exceeds it. The page
-  // needs to scroll itself, like every other one here.
+  // The layout's <main> is overflow-hidden, so every page scrolls itself.
   <div className="h-full overflow-y-auto">
-    <div id="scalar" data-url="/api/v1/openapi.json" />
-    <Script
-      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"
-      strategy="afterInteractive"
-    />
+    <ApiReference specUrl="/api/v1/openapi.json" />
     <noscript>
       <div className="p-8">
         <p className="text-sm">

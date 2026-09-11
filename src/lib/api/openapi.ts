@@ -452,6 +452,31 @@ export const openapiSpec = () => ({
       get: { summary: 'Get an attachment with fresh signed URLs', responses: { '200': okResponse('Attachment.') } },
       delete: { summary: 'Delete an attachment', responses: { '200': okResponse('Deleted.') } },
     },
+    '/activity': {
+      get: {
+        summary: 'One timeline of everything that happened',
+        description:
+          'A union across tasks filed, what changed on them, work-log notes, comments, ' +
+          'sessions and knowledge written or corrected — ordered together rather than ' +
+          'per-store, because the newest rows *of each kind* are not the newest rows. ' +
+          'Paged by `before`, a keyset cursor: the feed grows from the head, so an OFFSET ' +
+          'page drifts as soon as an agent writes anything. The response hands back ' +
+          '`nextBefore` so the caller does not have to dig for it.',
+        parameters: [
+          { name: 'before', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'project', in: 'query', schema: { type: 'string' } },
+          { name: 'actor', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'kinds',
+            in: 'query',
+            description: 'Comma-separated subset of task,event,note,comment,session,knowledge.',
+            schema: { type: 'string', example: 'note,knowledge' },
+          },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 200 } },
+        ],
+        responses: { '200': okResponse('The timeline.'), '400': errorResponse },
+      },
+    },
     '/events': {
       get: {
         summary: 'Change stream (SSE)',
