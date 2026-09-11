@@ -411,7 +411,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    --entity E   true of that grouping (cairn entities)
                                    neither      true everywhere
     cairn entities                 groupings a fact can be true of, and their projects
-    cairn entities assign <key> --project A,B
+    cairn entities assign|unassign <key> --project A,B
+    cairn entities rename <key> --key <new> --title "T"
     cairn know [<slug>|<query>]    read it back, or list what applies here
     cairn relearn <slug> --body -  correct it
     cairn unlearn <slug> [--superseded-by <slug>]
@@ -943,6 +944,15 @@ const commands = {
           projects: splitList(flags.project),
         }),
       )
+    }
+
+    if (verb === 'rename') {
+      const key = need(positional[0], 'usage: cairn entities rename <key> [--key <new>] [--title "T"]')
+      const patch = { key }
+      if (flags.key) patch.newKey = flags.key
+      if (flags.title) patch.title = flags.title
+      if (flags.description) patch.description = flags.description
+      return emit(await request('PATCH', '/api/v1/entities', patch))
     }
 
     if (verb === 'assign' || verb === 'unassign') {

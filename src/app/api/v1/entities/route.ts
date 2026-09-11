@@ -93,6 +93,17 @@ export const POST = route({
 
 const entityPatch = z.object({
   key: z.string().min(2).max(40),
+  /**
+   * Rename the key itself. Links are held by id, so nothing stored breaks —
+   * but anything that names the old key in prose or a habit does, which is why
+   * it is a separate field rather than something `title` quietly implies.
+   */
+  newKey: z
+    .string()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Use lowercase words separated by single hyphens.')
+    .optional(),
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2_000).optional(),
   addProjects: z.array(z.string().min(1).max(10)).max(60).default([]),
@@ -122,10 +133,15 @@ export const PATCH = route({
       return (data ?? []).map((p) => p.id as string)
     }
 
-    if (body.title !== undefined || body.description !== undefined) {
+    if (
+      body.title !== undefined ||
+      body.description !== undefined ||
+      body.newKey !== undefined
+    ) {
       const fields: Record<string, string> = {}
       if (body.title !== undefined) fields.title = body.title
       if (body.description !== undefined) fields.description = body.description
+      if (body.newKey !== undefined) fields.key = body.newKey.toLowerCase()
 
       const { error } = await admin().from('entities').update(fields).eq('id', entity.id)
       if (error) return fail('internal_error', error.message)
