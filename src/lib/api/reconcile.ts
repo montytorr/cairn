@@ -18,8 +18,16 @@ import { recordActivity } from './activity'
  * someone meant is worse than an open one: it looks answered and is not.
  */
 
-/** Matches the claim route's lease. Past this, a claim is takeable by anyone anyway. */
-const LEASE_MINUTES = 15
+/**
+ * Deliberately far longer than the 15-minute claim lease.
+ *
+ * The lease answers "may someone else take this", and 15 minutes is right for
+ * that: a takeover is recoverable. Releasing is different, and the measured
+ * reality is that agents barely heartbeat -- 3 of 6 live claims had never
+ * beaten once, and the claim this was written under had not either. A
+ * 15-minute release would have cancelled work in progress.
+ */
+const QUIET_MINUTES = 120
 
 export type Reconciled = {
   released: { ref: string; heldForMinutes: number; hadCheckpoint: boolean }[]
@@ -30,31 +38,53 @@ export const reconcileClaims = async (
   actor: Actor,
   options: { olderThanMinutes?: number; dryRun?: boolean } = {},
 ): Promise<Reconciled> => {
-  const lease = options.olderThanMinutes ?? LEASE_MINUTES
-  const cutoff = new Date(Date.now() - lease * 60_000).toISOString()
+  const quietFor = options.olderThanMinutes ?? QUIET_MINUTES
+  const cutoff = Date.now() - quietFor * 60_000
 
   if (!actor.actorId) return { released: [], quiet: [] }
 
   const { data, error } = await admin()
     .from('tasks')
     .select(
-      'id, number, status, claimed_at, heartbeat_at, checkpoint_summary, ' +
-        'project:projects!project_id!inner(key, owner_user_id)',
+      'id, number, status, claimed_at, heartbeat_at, checkpoint_at, updated_at, ' +
+        'checkpoint_summary, project:projects!project_id!inner(key, owner_user_id)',
     )
     .eq('projects.owner_user_id', actor.userId)
     .eq('claimed_by', actor.actorId)
-    .lt('heartbeat_at', cutoff)
 
   if (error) throw new Error(error.message)
 
-  const stale = (data ?? []) as unknown as {
+  const held = (data ?? []) as unknown as {
     id: string
     number: number
     claimed_at: string | null
     heartbeat_at: string | null
+    checkpoint_at: string | null
+    updated_at: string | null
     checkpoint_summary: string | null
     project: { key: string }
   }[]
+
+  // Every sign of life counts, not just an explicit beat. A task being worked
+  // on accumulates notes, checkpoints and edits whether or not anyone remembers
+  // to call `cairn beat`, and releasing over a missing beat alone would punish
+  // the agents doing the work most carefully.
+  const lastNotes = await lastNoteTimes(held.map((t) => t.id))
+
+  const lastSignOfLife = (task: (typeof held)[number]) =>
+    Math.max(
+      ...[
+        task.heartbeat_at,
+        task.claimed_at,
+        task.checkpoint_at,
+        task.updated_at,
+        lastNotes.get(task.id) ?? null,
+      ]
+        .filter(Boolean)
+        .map((iso) => new Date(iso as string).getTime()),
+    )
+
+  const stale = held.filter((task) => lastSignOfLife(task) < cutoff)
 
   const released: Reconciled['released'] = []
 
@@ -81,7 +111,7 @@ export const reconcileClaims = async (
           actor_id: actor.actorId,
           kind: 'handoff',
           note:
-            `Claim released automatically: no heartbeat for ${lease} minutes. ` +
+            `Claim released automatically: nothing happened on this task for ${quietFor} minutes. ` +
             (task.checkpoint_summary
               ? 'The checkpoint above is where it was left.'
               : 'No checkpoint was recorded, so the state is whatever the last note says.'),
@@ -102,5 +132,32 @@ export const reconcileClaims = async (
     released.push({ ref, heldForMinutes, hadCheckpoint: Boolean(task.checkpoint_summary) })
   }
 
-  return { released, quiet: [] }
+  return {
+    released,
+    quiet: held
+      .filter((task) => !stale.includes(task))
+      .map((task) => ({
+        ref: `${task.project.key}-${task.number}`,
+        lastNoteAt: lastNotes.get(task.id) ?? null,
+      })),
+  }
+}
+
+/** Most recent note per task, as the strongest evidence a claim is alive. */
+const lastNoteTimes = async (taskIds: string[]): Promise<Map<string, string>> => {
+  const out = new Map<string, string>()
+  if (taskIds.length === 0) return out
+
+  const { data, error } = await admin()
+    .from('task_notes')
+    .select('task_id, created_at')
+    .in('task_id', taskIds)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+
+  for (const row of data ?? []) {
+    const id = row.task_id as string
+    if (!out.has(id)) out.set(id, row.created_at as string)
+  }
+  return out
 }

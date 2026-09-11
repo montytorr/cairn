@@ -84,6 +84,7 @@ const cairn = (args, body) => {
 let imported = 0
 let skipped = 0
 const collisions = []
+const requalified = []
 
 for (const [dir, project] of Object.entries(PROJECTS)) {
   const memoryDir = join(ROOT, dir, 'memory')
@@ -118,15 +119,38 @@ for (const [dir, project] of Object.entries(PROJECTS)) {
       imported += 1
     } catch (error) {
       const message = String(error.stderr ?? error.message)
-      if (message.includes('already exists')) collisions.push(slug)
-      else console.error(`  ! ${slug}: ${message.trim().split('\n')[0]}`)
-      skipped += 1
+      if (!message.includes('already exists')) {
+        console.error(`  ! ${slug}: ${message.trim().split('\n')[0]}`)
+        skipped += 1
+        continue
+      }
+
+      // The same fact name recurs across projects -- every codebase has a
+      // `feedback-verify-branch-before-commit`. Slugs are unique per owner, so
+      // the first one in wins and the rest were being dropped silently: 147 of
+      // 293 files. Qualify the loser with its project rather than lose it.
+      if (!project) {
+        collisions.push(slug)
+        skipped += 1
+        continue
+      }
+
+      const qualified = `${project.toLowerCase()}-${slug}`
+      try {
+        cairn([...args.slice(0, 2), '--slug', qualified, ...args.slice(4)], full)
+        imported += 1
+        requalified.push(qualified)
+      } catch {
+        collisions.push(slug)
+        skipped += 1
+      }
     }
   }
   console.log(`${dir} -> ${project ?? 'global'}: ${files.length} files`)
 }
 
 console.log(`\nimported ${imported}, skipped ${skipped}`)
+if (requalified.length) console.log(`re-slugged to avoid a collision: ${requalified.length}`)
 if (collisions.length) {
   console.log(`slug collisions (already present): ${collisions.length}`)
   console.log(collisions.slice(0, 10).join('\n'))

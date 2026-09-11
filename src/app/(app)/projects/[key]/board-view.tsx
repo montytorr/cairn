@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownPreview } from '@/components/markdown'
-import { Avatar, LabelPill, PriorityIcon, TypePill } from '@/components/icons'
+import { Avatar, LabelPill, PriorityIcon, ProjectIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
 import { cn } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type ResolutionKind, type TaskStatus } from '@/schemas/task'
@@ -23,7 +23,18 @@ const COLUMN_LABEL: Record<TaskStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-const Card = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) => {
+export const Card = ({
+  task,
+  projectKey,
+  showProjectBadge,
+}: {
+  task: TaskListItem
+  projectKey: string
+  /** The cross-project board's whole reason for existing: which project a
+   * card belongs to. Off by default — the per-project board already has that
+   * context from its own header. */
+  showProjectBadge?: boolean
+}) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id })
 
   return (
@@ -37,6 +48,7 @@ const Card = ({ task, projectKey }: { task: TaskListItem; projectKey: string }) 
       )}
     >
       <div className="mb-1.5 flex items-center gap-2">
+        {showProjectBadge && <ProjectIcon size={11} projectKey={projectKey} />}
         <Link
           href={`/projects/${projectKey}/tasks/${task.number}`}
           className="text-fg-subtle hover:text-accent shrink-0 font-mono text-[11px]"
