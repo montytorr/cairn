@@ -51,6 +51,6 @@ export const config = {
      * extension rule below does not cover them — an icon behind a login
      * redirect is an icon the browser never gets.
      */
-    '/((?!api/v1|api/files|_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api/v1|api/auth|api/files|_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
