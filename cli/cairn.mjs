@@ -93,7 +93,7 @@ const RETRIES = 3
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const request = async (method, path, body) => {
+const request = async (method, path, body, { soft = false } = {}) => {
   if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
   let res
   for (let attempt = 0; ; attempt += 1) {
@@ -120,10 +120,15 @@ const request = async (method, path, body) => {
   try {
     payload = JSON.parse(text)
   } catch {
+    if (soft) return null
     die(`non-JSON response (${res.status}): ${text.slice(0, 200)}`)
   }
 
   if (!payload.success) {
+    // `soft` callers are probing, not asserting. `cairn know <word>` tries the
+    // word as a slug first and falls back to searching, and dying on the miss
+    // made the fallback unreachable.
+    if (soft) return null
     // Surface the server's guidance verbatim — it names valid enum values and,
     // on a refused close, suggests a resolution. Swallowing that would turn a
     // useful round-trip into a wasted one.
@@ -813,7 +818,7 @@ const commands = {
     // A bare word that is a slug we hold is a fetch; anything else is a search.
     // Agents should not have to know which, and the distinction is cheap to make.
     if (subject && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(subject)) {
-      const hit = await request('GET', `/api/v1/knowledge/${subject}`).catch(() => null)
+      const hit = await request('GET', `/api/v1/knowledge/${subject}`, undefined, { soft: true })
       if (hit) {
         if (FORMAT === 'json') return emit(hit)
         const k = hit

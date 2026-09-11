@@ -110,7 +110,16 @@ for (const [dir, project] of Object.entries(PROJECTS)) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-    const title = titles[file] || front.description?.slice(0, 200) || slug.replace(/-/g, ' ')
+    // MEMORY.md is supposed to carry a human title per file, but in several
+    // projects its link text is just the filename -- which produced 110 rows
+    // titled `project_recap_encoding_recurrence`. A title that is only the
+    // slug in disguise tells a reader nothing the slug did not.
+    const indexed = titles[file]
+    const looksLikeFilename = !indexed || /_/.test(indexed) || /^[a-z0-9-]+$/.test(indexed)
+    const title =
+      (looksLikeFilename ? front.description?.slice(0, 200) : indexed) ||
+      indexed ||
+      slug.replace(/-/g, ' ')
 
     const labels = [front.type, project ? null : 'global'].filter(Boolean)
 
