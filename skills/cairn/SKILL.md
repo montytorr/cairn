@@ -168,7 +168,27 @@ A note is bound to a task and to a moment: *"tried raising pool_size on CAI-7, n
 Knowledge is bound to nothing: *"Supavisor pools are per-tenant"*. If you would want it
 surfaced while working on an unrelated project, it is knowledge.
 
-## 8. The briefing
+## 8. Before you stop
+
+The session record and the checkpoint are written for you when a session ends, so nothing
+is lost if you forget. These are the things nothing can do on your behalf:
+
+- [ ] **Close what you finished** — `cairn done <ref> --resolution "…"`. The API refuses a
+      close without one, so a task left open is a task you did not close, not one you
+      closed badly.
+- [ ] **Say what did not work** — `cairn note <ref> --kind attempt`. The next agent will
+      otherwise try it again, and the trying is the expensive part.
+- [ ] **Record what you learned** — `cairn learn`, if it will still be true next month.
+      Scope it: `--project` if it is about one codebase, `--entity` if it is about a
+      business or a stack, neither if it is true everywhere. Unscoped is the default you
+      get by forgetting, and the CLI will say so.
+- [ ] **Release or checkpoint anything you are still holding** — `cairn release`, or
+      `cairn checkpoint --summary` if the work continues.
+
+`cairn context` shows what you are holding and flags anything that has gone quiet, so run
+it if you are unsure what you left open.
+
+## 9. The briefing
 
 ```bash
 cairn context          # what you hold, what is in flight, where the last session stopped
@@ -180,7 +200,7 @@ front of you. Run it by hand when you have lost your place, or after a long stre
 `cairn map CAIRN` tells Cairn that this directory is that project, which is what makes the
 briefing project-aware. Do it once per checkout.
 
-## 9. Dependencies
+## 10. Dependencies
 
 Before claiming, check whether something has to land first. A task with open blockers
 is not ready to start, no matter what its status says.
@@ -198,7 +218,7 @@ queries, a dependency shows up on both tasks and in `cairn deps`.
 something outside Cairn (an unavailable credential, a third party). Reach for
 `blockedby` when the blocker is another task.
 
-## 10. Closing as a duplicate
+## 11. Closing as a duplicate
 
 ```bash
 cairn done CAI-42 --duplicate-of CAI-31 --resolution "same cause as CAI-31; fixed there"
@@ -208,7 +228,7 @@ Naming the original is the point. `--kind duplicate` on its own records *that* i
 duplicate and leaves the reader to go and find *what* — which is the work the resolution
 was supposed to save.
 
-## 11. Splitting work up
+## 12. Splitting work up
 
 ```bash
 cairn add "write the migration" --project CAI --parent CAI-42
@@ -220,7 +240,7 @@ Sub-tasks are *containment*; `blockedby` is *ordering*. Use a parent when one ta
 too big for a single resolution, and a blocker when two separate things have to happen
 in an order.
 
-## 12. What already happened
+## 13. What already happened
 
 ```bash
 cairn history CAI-42     # status moves, claims, renames, resolutions — with who and when

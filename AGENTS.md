@@ -126,14 +126,28 @@ the last session in this directory stopped, what is known here. A hook runs it a
 start; run it by hand when you have lost your place. `cairn map <KEY>` tells Cairn which
 project a checkout belongs to.
 
-## 8. Output conventions
+## 8. Before you stop
+
+The session record and the checkpoint are written for you when a session ends. These are
+the things nothing can do on your behalf:
+
+- **Close what you finished** — the API refuses a close without a resolution, so an open
+  task is one you did not close, not one you closed badly.
+- **Say what did not work** — `--kind attempt`. The next agent tries it again otherwise,
+  and the trying is the expensive part.
+- **Record what you learned**, and scope it: `--project` for one codebase, `--entity` for
+  a business or a stack, neither for true everywhere. Unscoped is what you get by
+  forgetting; the CLI says so when it happens.
+- **Release or checkpoint anything you still hold.**
+
+## 9. Output conventions
 
 - Lists are TSV by default: a count line, one header row, then rows. Use `--json` if you
   are parsing programmatically, `--pretty` for a human.
 - Nulls and defaults are omitted rather than printed.
 - Errors tell you the valid values instead of just failing.
 
-## 9. What Cairn is not
+## 10. What Cairn is not
 
 Cairn holds **open loops, durable answers, and what was learned getting to them**: what
 should happen, who holds it, what was tried, how it ended, and what is now known.

@@ -486,8 +486,23 @@ const commands = {
         })),
       columns: ['kind', 'ref', 'status', 'type', 'answered', 'tokens', 'title'],
     })
-    if (FORMAT === 'tsv' && data.results.length === 0) {
+    if (FORMAT !== 'tsv') return
+
+    if (data.results.length === 0) {
       process.stderr.write('nothing found — this subject looks new\n')
+      return
+    }
+
+    // Widening only happens when the precise query came back thin, so a result
+    // set that is entirely loose means nothing actually matched the subject.
+    // Without saying so, twenty plausible-looking rows read as prior work.
+    const loose = data.results.filter((r) => r.loose).length
+    if (loose === data.results.length) {
+      process.stderr.write(
+        `no precise match — all ${loose} rows are loose word overlaps, so treat this subject as new unless one genuinely fits\n`,
+      )
+    } else if (loose > 0) {
+      process.stderr.write(`${data.results.length - loose} precise, ${loose} loose\n`)
     }
   },
 
@@ -552,7 +567,13 @@ const commands = {
       .filter((w) => w.length > 3)
       .slice(0, 6)
     const probe = terms.length ? terms.join(' OR ') : title
-    const dupes = await request('GET', `/api/v1/search?${new URLSearchParams({ q: probe })}`)
+    // Tasks only. "Has this already been filed" is a question about tasks, and
+    // answering it with a session from three weeks ago is noise in front of the
+    // one thing the agent is about to decide.
+    const dupes = await request(
+      'GET',
+      `/api/v1/search?${new URLSearchParams({ q: probe, kinds: 'task' })}`,
+    )
     if (dupes.results.length > 0) {
       process.stderr.write('similar existing work:\n')
       for (const r of dupes.results.slice(0, 3)) {
@@ -815,7 +836,19 @@ const commands = {
     if (flags.slug) payload.slug = flags.slug
     if (flags.task) payload.sourceTaskRef = flags.task
     if (flags.verified) payload.verified = true
-    emit(await request('POST', '/api/v1/knowledge', payload))
+
+    const result = await request('POST', '/api/v1/knowledge', payload)
+    emit(result)
+
+    // Global is a real answer and often the right one, but it is also what you
+    // get by forgetting. Five facts about one business ended up in front of
+    // every project that way, and nothing said a word at the time.
+    const scoped = (payload.projects ?? []).length + (payload.entities ?? []).length
+    if (FORMAT === 'tsv' && scoped === 0) {
+      process.stderr.write(
+        'recorded as global — true everywhere. If it is not, add --project <KEY> or --entity <key> (cairn entities)\n',
+      )
+    }
   },
 
   async know() {
