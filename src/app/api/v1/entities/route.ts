@@ -93,6 +93,8 @@ export const POST = route({
 
 const entityPatch = z.object({
   key: z.string().min(2).max(40),
+  title: z.string().min(1).max(120).optional(),
+  description: z.string().max(2_000).optional(),
   addProjects: z.array(z.string().min(1).max(10)).max(60).default([]),
   removeProjects: z.array(z.string().min(1).max(10)).max(60).default([]),
 })
@@ -120,6 +122,15 @@ export const PATCH = route({
       return (data ?? []).map((p) => p.id as string)
     }
 
+    if (body.title !== undefined || body.description !== undefined) {
+      const fields: Record<string, string> = {}
+      if (body.title !== undefined) fields.title = body.title
+      if (body.description !== undefined) fields.description = body.description
+
+      const { error } = await admin().from('entities').update(fields).eq('id', entity.id)
+      if (error) return fail('internal_error', error.message)
+    }
+
     const add = await resolve(body.addProjects)
     const remove = await resolve(body.removeProjects)
 
@@ -140,5 +151,50 @@ export const PATCH = route({
     }
 
     return ok({ key: body.key, added: add.length, removed: remove.length })
+  },
+})
+
+/**
+ * Deleting an entity drops its project links and unscopes any knowledge that
+ * was filed against it — which is a widening, not a loss: those facts become
+ * global rather than disappearing. Said plainly in the response so the caller
+ * can tell the difference.
+ */
+export const DELETE = route({
+  handler: async ({ actor, url }) => {
+    const key = url.searchParams.get('key')
+    if (!key) return fail('validation_failed', 'Provide ?key=<entity>.')
+
+    const { data: entity } = await admin()
+      .from('entities')
+      .select('id')
+      .eq('owner_user_id', actor.userId)
+      .eq('key', key.toLowerCase())
+      .maybeSingle()
+    if (!entity) return fail('not_found', `No entity "${key}".`)
+
+    const [{ count: projects }, { count: knowledge }] = await Promise.all([
+      admin()
+        .from('project_entities')
+        .select('project_id', { count: 'exact', head: true })
+        .eq('entity_id', entity.id),
+      admin()
+        .from('knowledge_entities')
+        .select('knowledge_id', { count: 'exact', head: true })
+        .eq('entity_id', entity.id),
+    ])
+
+    const { error } = await admin()
+      .from('entities')
+      .delete()
+      .eq('id', entity.id)
+      .eq('owner_user_id', actor.userId)
+    if (error) return fail('internal_error', error.message)
+
+    return ok({
+      deleted: key,
+      projectsUnlinked: projects ?? 0,
+      knowledgeWidenedToGlobal: knowledge ?? 0,
+    })
   },
 })
