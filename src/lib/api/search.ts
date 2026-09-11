@@ -92,3 +92,49 @@ export const searchTasks = async (
   const rows = (data ?? []) as SearchRow[]
   return { rows, widened: rows.some((r) => r.widened) }
 }
+
+/**
+ * The unified index: tasks, work-log notes, knowledge and sessions.
+ *
+ * `search_tasks` above is kept because the UI and the duplicate probe both
+ * want tasks and only tasks. This is what `cairn check` calls, because the
+ * agent asking "has this been done or debugged" does not care which table the
+ * answer happens to live in — and for two years the answer most likely to
+ * exist, a work-log note, was the one table nothing searched.
+ */
+export type SearchAllRow = {
+  kind: 'task' | 'note' | 'knowledge' | 'session'
+  id: string
+  ref: string
+  title: string
+  subtitle: string | null
+  project_key: string | null
+  status: string | null
+  type: string | null
+  answered: boolean
+  updated_at: string
+  body_bytes: number
+  rank: number
+  widened: boolean
+}
+
+export const searchAll = async (
+  userId: string,
+  q: string,
+  filters: { project?: string; kinds?: string[] },
+  limit: number,
+): Promise<{ rows: SearchAllRow[]; widened: boolean }> => {
+  const { data, error } = await admin().rpc('search_all', {
+    p_owner: userId,
+    p_query: q,
+    p_terms: widenedTerms(q),
+    p_project: filters.project ?? null,
+    p_kinds: filters.kinds && filters.kinds.length > 0 ? filters.kinds : null,
+    p_limit: limit,
+  })
+
+  if (error) throw new Error(error.message)
+
+  const rows = (data ?? []) as SearchAllRow[]
+  return { rows, widened: rows.some((r) => r.widened) }
+}

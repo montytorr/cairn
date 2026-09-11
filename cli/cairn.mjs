@@ -193,6 +193,70 @@ const emit = (data, opts = {}) => {
   for (const r of flatRows) console.log(cols.map((c) => r[c] ?? '').join('\t'))
 }
 
+/** Comma or repeated-flag list, e.g. --label a,b --label c. */
+const splitList = (v) => {
+  if (v === undefined || v === true) return []
+  const parts = Array.isArray(v) ? v : [v]
+  return parts.flatMap((p) => String(p).split(',')).map((x) => x.trim()).filter(Boolean)
+}
+
+/**
+ * The briefing, as text a model reads once at the top of a session.
+ *
+ * Ordered by what changes behaviour soonest: what you are still holding, then
+ * what is moving around you, then where the last session stopped, then what is
+ * known here. Anything with nothing to say prints nothing at all -- an empty
+ * heading is noise that trains the reader to skip the block.
+ */
+const renderContext = (d) => {
+  const out = []
+  const where = d.project ? `[${d.project}]` : '[unfiled]'
+  out.push(`## Cairn ${where}`)
+
+  if (d.held?.length) {
+    out.push('', 'You are holding:')
+    for (const t of d.held) {
+      const quiet = t.quiet ? '  <- no note in 24h; checkpoint or release it' : ''
+      out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 58)}${quiet}`)
+    }
+  }
+
+  if (d.inFlight?.length) {
+    out.push('', 'In flight here:')
+    for (const t of d.inFlight) {
+      out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 52)}${t.claimedBy ? `  (${t.claimedBy})` : ''}`)
+    }
+  }
+
+  if (d.lastSession?.nextSteps) {
+    out.push('', `Last session here left off (${d.lastSession.agent ?? 'unknown'}):`)
+    out.push(`  ${truncate(d.lastSession.nextSteps, 400)}`)
+  }
+
+  if (d.knowledge?.length) {
+    out.push('', 'Known here (cairn know <slug>):')
+    for (const k of d.knowledge) out.push(`  ${k.slug}  -- ${truncate(k.title, 58)}`)
+  }
+
+  if (d.staleClaims?.length) {
+    out.push('', 'Stale claims (lease expired, takeable):')
+    for (const t of d.staleClaims) out.push(`  ${t.ref}  held ${t.heldFor} by ${t.claimedBy}`)
+  }
+
+  if (d.file) {
+    const f = d.file
+    if (f.tasks.length || f.knowledge.length) {
+      out.push('', `About ${f.path}:`)
+      for (const t of f.tasks) out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 56)}`)
+      for (const k of f.knowledge) out.push(`  ${k.slug}  -- ${truncate(k.title, 56)}`)
+    }
+  }
+
+  if (out.length === 1) return ''
+  out.push('', 'Start with: cairn check "<subject>"')
+  return `${out.join('\n')}\n`
+}
+
 const truncate = (s, n) => (!s ? '' : s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 // ---------------------------------------------------------------------------
@@ -202,6 +266,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
 
   ALWAYS START HERE
     cairn check "<subject>"        what has already been done or debugged
+                                   searches tasks, work-log notes, knowledge and
+                                   sessions; --kinds task,note,knowledge,session
 
   read
     cairn list [--project K] [--status S] [--type T] [--label L] [--mine]
@@ -244,6 +310,16 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn project archive <KEY>                  hides it; the tasks stay searchable
     cairn project restore <KEY>
     cairn project delete <KEY> --confirm <KEY>   deletes every task in it
+
+  memory
+    cairn context                  the briefing: what you hold, what is in flight,
+                                   where the last session here stopped, what is known
+    cairn learn "<title>" --body - record what we now know (global unless --project)
+    cairn know [<slug>|<query>]    read it back, or list what applies here
+    cairn relearn <slug> --body -  correct it
+    cairn unlearn <slug> [--superseded-by <slug>]
+    cairn session list             recent sessions
+    cairn session end --id <id>    write the episodic record, checkpoint what is held
 
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
@@ -296,18 +372,21 @@ const commands = {
     const params = new URLSearchParams({ q })
     if (flags.project) params.set('project', flags.project)
     if (flags.type) params.set('type', flags.type)
+    if (flags.kinds) params.set('kinds', flags.kinds)
+    if (flags.tasks) params.set('tasksOnly', '1')
     const data = await request('GET', `/api/v1/search?${params}`)
     emit(data, {
       rows: (d) =>
         d.results.map((r) => ({
+          kind: r.kind ?? 'task',
           ref: r.ref,
-          status: r.status,
-          type: r.type,
+          status: r.status ?? '',
+          type: r.type ?? '',
           answered: r.resolved ? 'yes' : '',
           tokens: `~${r.tokens}`,
           title: truncate(r.title, 70),
         })),
-      columns: ['ref', 'status', 'type', 'answered', 'tokens', 'title'],
+      columns: ['kind', 'ref', 'status', 'type', 'answered', 'tokens', 'title'],
     })
     if (FORMAT === 'tsv' && data.results.length === 0) {
       process.stderr.write('nothing found — this subject looks new\n')
@@ -618,6 +697,150 @@ const commands = {
   async unblock() {
     const ref = need(positional[0], 'usage: cairn unblock <ref>')
     emit(await request('POST', `/api/v1/tasks/${ref}/block`, { reason: null }))
+  },
+
+  // --- knowledge ---------------------------------------------------------
+
+  async learn() {
+    const title = need(positional[0], 'usage: cairn learn "<title>" --body -')
+    const body = await resolveValue(flags.body ?? '')
+    const payload = {
+      title,
+      body,
+      labels: splitList(flags.label),
+      projects: splitList(flags.project),
+    }
+    if (flags.slug) payload.slug = flags.slug
+    if (flags.task) payload.sourceTaskRef = flags.task
+    if (flags.verified) payload.verified = true
+    emit(await request('POST', '/api/v1/knowledge', payload))
+  },
+
+  async know() {
+    const subject = positional[0]
+
+    // A bare word that is a slug we hold is a fetch; anything else is a search.
+    // Agents should not have to know which, and the distinction is cheap to make.
+    if (subject && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(subject)) {
+      const hit = await request('GET', `/api/v1/knowledge/${subject}`).catch(() => null)
+      if (hit) {
+        if (FORMAT === 'json') return emit(hit)
+        const k = hit
+        process.stdout.write(`# ${k.title}\n`)
+        if (k.labels?.length) process.stdout.write(`labels: ${k.labels.join(', ')}\n`)
+        process.stdout.write(`scope: ${k.projects?.length ? k.projects.join(', ') : 'global'}\n\n`)
+        process.stdout.write(`${k.body}\n`)
+        return
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (subject) {
+      params.set('q', subject)
+      params.set('kinds', 'knowledge')
+      const data = await request('GET', `/api/v1/search?${params}`)
+      return emit(data, {
+        rows: (d) => d.results.map((r) => ({
+          slug: r.ref,
+          scope: r.project ?? 'global',
+          tokens: `~${r.tokens}`,
+          title: truncate(r.title, 70),
+        })),
+        columns: ['slug', 'scope', 'tokens', 'title'],
+      })
+    }
+
+    if (flags.project) params.set('project', flags.project)
+    if (flags.label) params.set('label', flags.label)
+    const data = await request('GET', `/api/v1/knowledge?${params}`)
+    emit(data, {
+      rows: (d) => d.results.map((r) => ({
+        slug: r.slug,
+        scope: r.scope === 'global' ? 'global' : r.projects.join(','),
+        verified: r.verified ? 'yes' : '',
+        tokens: `~${r.tokens}`,
+        title: truncate(r.title, 70),
+      })),
+      columns: ['slug', 'scope', 'verified', 'tokens', 'title'],
+    })
+  },
+
+  async unlearn() {
+    const slug = need(positional[0], 'usage: cairn unlearn <slug> [--superseded-by <slug>]')
+    if (flags['superseded-by']) {
+      return emit(await request('PATCH', `/api/v1/knowledge/${slug}`, {
+        supersededBy: flags['superseded-by'],
+      }))
+    }
+    emit(await request('DELETE', `/api/v1/knowledge/${slug}`))
+  },
+
+  async relearn() {
+    const slug = need(positional[0], 'usage: cairn relearn <slug> [--body -] [--title T]')
+    const patch = {}
+    if (flags.body !== undefined) patch.body = await resolveValue(flags.body)
+    if (flags.title) patch.title = flags.title
+    if (flags.label) patch.labels = splitList(flags.label)
+    if (flags.project) patch.projects = splitList(flags.project)
+    if (flags.verified) patch.verified = true
+    emit(await request('PATCH', `/api/v1/knowledge/${slug}`, patch))
+  },
+
+  // --- the briefing ------------------------------------------------------
+
+  async context() {
+    const params = new URLSearchParams()
+    params.set('cwd', flags.cwd ?? process.cwd())
+    if (flags.project) params.set('project', flags.project)
+    if (flags.file) params.set('file', flags.file)
+    const data = await request('GET', `/api/v1/context?${params}`)
+    if (FORMAT === 'json') return emit(data)
+    process.stdout.write(renderContext(data))
+  },
+
+  // --- the episodic record -----------------------------------------------
+
+  async session() {
+    const verb = positional.shift() ?? 'list'
+
+    if (verb === 'end') {
+      const payload = {
+        externalId: need(flags.id, 'usage: cairn session end --id <session-id>'),
+        platformSource: flags.platform ?? 'claude',
+        cwd: flags.cwd ?? process.cwd(),
+        files: splitList(flags.files),
+        taskRefs: splitList(flags.tasks),
+      }
+      for (const [flag, field] of [
+        ['project', 'project'], ['agent', 'agentId'], ['request', 'request'],
+        ['learned', 'learned'], ['completed', 'completed'], ['next', 'nextSteps'],
+        ['started', 'startedAt'],
+      ]) {
+        if (flags[flag] !== undefined) payload[field] = await resolveValue(flags[flag])
+      }
+      if (flags['no-checkpoint']) payload.checkpointHeld = false
+      return emit(await request('POST', '/api/v1/sessions', payload))
+    }
+
+    if (verb === 'list') {
+      const params = new URLSearchParams()
+      if (flags.project) params.set('project', flags.project)
+      if (flags.cwd) params.set('cwd', flags.cwd)
+      if (flags.limit) params.set('limit', flags.limit)
+      const data = await request('GET', `/api/v1/sessions?${params}`)
+      return emit(data, {
+        rows: (d) => d.results.map((r) => ({
+          ended: (r.endedAt ?? '').slice(0, 16).replace('T', ' '),
+          agent: r.agent ?? r.platform,
+          files: r.files,
+          tasks: (r.taskRefs ?? []).join(','),
+          request: truncate(r.request ?? '', 60),
+        })),
+        columns: ['ended', 'agent', 'files', 'tasks', 'request'],
+      })
+    }
+
+    die(`unknown session verb "${verb}" — try: end, list`)
   },
 }
 

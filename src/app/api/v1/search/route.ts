@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { searchTasks, type SearchRow } from '@/lib/api/search'
+import { searchAll, searchTasks, type SearchAllRow, type SearchRow } from '@/lib/api/search'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +12,17 @@ const searchQuery = z.object({
   type: z.enum(TASK_TYPES).optional(),
   status: z.enum(TASK_STATUSES).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  /**
+   * Which stores to search. Defaults to all of them — an agent asking whether
+   * something has been debugged does not know, and should not have to guess,
+   * whether the answer was written as a task, a note, a piece of knowledge or
+   * the tail of a session.
+   */
+  kinds: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((k) => k.trim()).filter(Boolean) : undefined)),
+  tasksOnly: z.coerce.boolean().default(false),
 })
 
 /**
@@ -38,43 +49,62 @@ export const GET = route({
     if (!parsed.success) {
       return fail('validation_failed', 'Provide ?q=<subject>.', { issues: parsed.error.issues })
     }
-    const { q, project, type, status, limit } = parsed.data
+    const { q, project, type, status, limit, kinds, tasksOnly } = parsed.data
 
-    let rows: SearchRow[]
-    let widened: boolean
+    // A type or status filter is a statement about tasks, so it selects the
+    // task-only path rather than being silently ignored on the others.
+    const taskPath = tasksOnly || Boolean(type) || Boolean(status) || kinds?.join() === 'task'
+
     try {
-      ;({ rows, widened } = await searchTasks(
-        actor.userId,
-        q,
-        { project, type, status },
-        limit,
-      ))
+      if (taskPath) {
+        const { rows, widened } = await searchTasks(actor.userId, q, { project, type, status }, limit)
+        return ok({ count: rows.length, query: q, widened, results: rows.map(taskResult) })
+      }
+
+      const { rows, widened } = await searchAll(actor.userId, q, { project, kinds }, limit)
+      return ok({ count: rows.length, query: q, widened, results: rows.map(unifiedResult) })
     } catch (error) {
       return fail('internal_error', error instanceof Error ? error.message : 'Search failed.')
     }
-
-    // Rows arrive ranked by the database. Do NOT re-sort them here: ordering
-    // by anything other than ts_rank discards relevance, which is exactly the
-    // regression this replaced.
-    const results = rows.map((row) => ({
-      // ALWAYS the Cairn ref: it is what `cairn show` resolves. Returning the
-      // imported identifier here hands the caller something that looks like a
-      // ref and 404s, because no project has key "BBTRADE".
-      ref: `${row.project_key}-${row.number}`,
-      // The original identifier, for recognising old work. Not addressable.
-      externalRef: row.external_ref,
-      title: row.title,
-      type: row.type,
-      status: row.status,
-      resolved: Boolean(row.resolution),
-      resolutionKind: row.resolution_kind,
-      claimedBy: row.claimed_by,
-      updatedAt: row.updated_at,
-      // Widened hits matched loosely; say so rather than implying precision.
-      loose: row.widened,
-      tokens: estimateTokens(row.description, row.resolution),
-    }))
-
-    return ok({ count: results.length, query: q, widened, results })
   },
+})
+
+// Rows arrive ranked by the database. Do NOT re-sort them here: ordering by
+// anything other than ts_rank discards relevance, which is exactly the
+// regression 004 measured and 007 restored.
+const taskResult = (row: SearchRow) => ({
+  kind: 'task' as const,
+  // ALWAYS the Cairn ref: it is what `cairn show` resolves. Returning the
+  // imported identifier here hands the caller something that looks like a ref
+  // and 404s, because no project has key "BBTRADE".
+  ref: `${row.project_key}-${row.number}`,
+  // The original identifier, for recognising old work. Not addressable.
+  externalRef: row.external_ref,
+  title: row.title,
+  type: row.type,
+  status: row.status,
+  resolved: Boolean(row.resolution),
+  resolutionKind: row.resolution_kind,
+  claimedBy: row.claimed_by,
+  updatedAt: row.updated_at,
+  // Widened hits matched loosely; say so rather than implying precision.
+  loose: row.widened,
+  tokens: estimateTokens(row.description, row.resolution),
+})
+
+const unifiedResult = (row: SearchAllRow) => ({
+  kind: row.kind,
+  ref: row.ref,
+  title: row.title,
+  subtitle: row.subtitle,
+  project: row.project_key,
+  type: row.type,
+  status: row.status,
+  // For a task this is a recorded resolution; for a note, that it is a finding
+  // or a decision rather than an attempt; for knowledge, that it was verified.
+  // In every case: this row is likelier to contain an answer.
+  resolved: row.answered,
+  updatedAt: row.updated_at,
+  loose: row.widened,
+  tokens: Math.ceil(row.body_bytes / 4),
 })
