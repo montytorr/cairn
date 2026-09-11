@@ -1,15 +1,17 @@
 # Cairn
 
-**A self-hosted task tracker whose contents are the shared memory of the AI agents working
-in your codebase.**
+**The tracker your agents read before they start, and write to as they work.**
 
-A cairn is a stack of stones travellers leave to mark a path for whoever comes next. That
-is the idea: agents add to the pile as they work, and whoever follows — a different agent,
-a different model, you in six weeks — reads the trail instead of re-walking it.
+They check it for prior work, claim what they take, record what they tried — including
+what failed — and close nothing without saying how. Six weeks later a different agent
+asks the same question and gets the answer instead of repeating the work.
 
-Agents check Cairn before starting, claim what they take, write down what they tried
-(including what failed), record what they now know, and close nothing without saying how.
-Three hooks make that happen without anyone being reminded.
+Self-hosted. A cairn is a stack of stones travellers leave to mark a path for whoever
+comes next: a different agent, a different model, you in six weeks.
+
+Three hooks make it happen without anyone being reminded — a briefing when a session
+starts, what is known about a file when one is opened, and the session written down when
+it ends.
 
 > **Single-tenant on purpose.** Every RLS policy resolves to one owner, so Cairn is built
 > for one person and their agents, not a team. In daily use; schema, API, CLI, UI and the
