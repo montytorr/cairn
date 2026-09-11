@@ -1,5 +1,5 @@
-import { admin } from '@/lib/supabase/admin'
-import { serverClient } from '@/lib/supabase/server'
+import { admin } from '@/lib/db/client'
+import { sessionUser } from '@/lib/auth/session'
 import { hashApiKey, hashesMatch, looksLikeApiKey } from './keys'
 
 /**
@@ -29,7 +29,7 @@ const bearerToken = (req: Request): string | null => {
 
 /**
  * Agents authenticate with a bearer API key; the human UI authenticates with
- * its Supabase session cookie. Deliberately not HMAC request signing: with a
+ * its application session cookie. Deliberately not HMAC request signing: with a
  * single owner and no untrusted callers, signing buys nothing and costs every
  * caller a canonicalisation and nonce implementation.
  */
@@ -49,7 +49,7 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
 
     // Best-effort; a failed touch must never fail the request.
     //
-    // NOTE: this must be `.then(...)`, not `void <builder>`. A Supabase query
+    // NOTE: this must be `.then(...)`, not `void <builder>`. The query
     // builder is a lazy thenable — it does not issue the request until
     // something subscribes to it. `void builder` type-checks, looks like
     // fire-and-forget, and silently never runs. It meant last_used_at stayed
@@ -72,17 +72,16 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
     }
   }
 
-  const supabase = await serverClient()
-  const { data } = await supabase.auth.getUser()
-  if (!data.user) return null
+  const user = await sessionUser()
+  if (!user) return null
 
   return {
-    userId: data.user.id,
+    userId: user.id,
     actorType: 'human',
     // The email, not the uuid. `actorId` is stamped on every write and shown
     // in the activity trail as "who changed this" — a uuid there answers
     // nothing, and an agent's actorId is already its readable name.
-    actorId: data.user.email ?? data.user.id,
-    rateKey: `user:${data.user.id}`,
+    actorId: user.email ?? user.id,
+    rateKey: `user:${user.id}`,
   }
 }

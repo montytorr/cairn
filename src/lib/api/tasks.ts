@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import type { Actor } from './auth'
 
 /** Columns returned by `show`. Kept explicit so responses stay predictable. */

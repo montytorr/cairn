@@ -1,5 +1,5 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { SESSION_COOKIE } from '@/lib/auth/cookie'
 
 /**
  * Server-side route protection.
@@ -13,32 +13,13 @@ import { NextResponse, type NextRequest } from 'next/server'
  * and must stay reachable without a browser session.
  */
 export const middleware = async (req: NextRequest) => {
-  let res = NextResponse.next({ request: req })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll: (toSet) => {
-          toSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          res = NextResponse.next({ request: req })
-          toSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
-        },
-      },
-    },
-  )
-
-  // getUser() revalidates against the auth server; getSession() only decodes
-  // the cookie, which a client could have forged.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  // Middleware runs in an edge-like runtime and performs the cheap redirect.
+  // The app layout and API handlers resolve the opaque token against Postgres
+  // before they read any data.
+  const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value)
   const isLoginRoute = req.nextUrl.pathname.startsWith('/login')
 
-  if (!user && !isLoginRoute) {
+  if (!hasSession && !isLoginRoute) {
     const url = req.nextUrl.clone()
     // Carry the whole destination, query included, and clear the rest: keeping
     // the original params meant /search?q=x came back as a bare /search, and
@@ -50,14 +31,14 @@ export const middleware = async (req: NextRequest) => {
     return NextResponse.redirect(url)
   }
 
-  if (user && isLoginRoute) {
+  if (hasSession && isLoginRoute) {
     const url = req.nextUrl.clone()
     url.pathname = '/'
     url.search = ''
     return NextResponse.redirect(url)
   }
 
-  return res
+  return NextResponse.next({ request: req })
 }
 
 export const config = {
@@ -70,6 +51,6 @@ export const config = {
      * extension rule below does not cover them — an icon behind a login
      * redirect is an icon the browser never gets.
      */
-    '/((?!api/v1|_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api/v1|api/files|_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }

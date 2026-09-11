@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 export const dynamic = 'force-dynamic'
 

@@ -18,6 +18,17 @@
 
 create extension if not exists "pgcrypto";
 
+create table app_users (
+  id                 uuid primary key default gen_random_uuid(),
+  email              text not null,
+  encrypted_password text not null,
+  banned_until       timestamptz,
+  deleted_at         timestamptz,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create unique index app_users_email_unique on app_users(lower(email));
+
 -- ---------------------------------------------------------------------------
 -- Enum-ish domains, as CHECK constraints. Extending one is a one-line
 -- migration, which is cheap enough not to warrant lookup tables.
@@ -31,7 +42,7 @@ create extension if not exists "pgcrypto";
 -- user_profiles
 -- ---------------------------------------------------------------------------
 create table user_profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
+  id          uuid primary key references app_users(id) on delete cascade,
   display_name text,
   avatar_url  text,
   created_at  timestamptz not null default now(),
@@ -43,7 +54,7 @@ create table user_profiles (
 -- ---------------------------------------------------------------------------
 create table projects (
   id            uuid primary key default gen_random_uuid(),
-  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  owner_user_id uuid not null references app_users(id) on delete cascade,
   key           text not null,           -- short prefix for task ids, e.g. 'CAI'
   title         text not null,
   description   text,                    -- markdown
@@ -253,7 +264,7 @@ create index task_deps_blocking_idx on task_deps(blocking_id);
 -- ---------------------------------------------------------------------------
 create table api_keys (
   id              uuid primary key default gen_random_uuid(),
-  user_id         uuid not null references auth.users(id) on delete cascade,
+  user_id         uuid not null references app_users(id) on delete cascade,
   agent_name      text not null,         -- 'claude-code' | 'codex' | 'openclaw' | 'cli'
   platform_source text,                  -- mirrors claude-mem's column name, for later joins
   name            text not null,         -- human-facing label
@@ -306,71 +317,5 @@ end $$;
 create trigger tasks_assign_number before insert on tasks
   for each row execute function assign_task_number();
 
--- ===========================================================================
--- Row Level Security
---
--- Every policy resolves to `projects.owner_user_id = auth.uid()`. The API
--- routes authenticate bearer keys and then act via the service role (which
--- bypasses RLS), so this is the boundary for the browser client and a
--- defence-in-depth layer behind the API.
---
--- Deliberately NOT the pattern of granting `FOR SELECT TO authenticated
--- USING (true)`, which would let any signed-in user read every task.
--- ===========================================================================
-
-create or replace function owns_project(p uuid) returns boolean
-language sql security definer stable set search_path = public as $$
-  select exists (
-    select 1 from projects
-     where projects.id = p and projects.owner_user_id = auth.uid()
-  );
-$$;
-
-create or replace function owns_task(t uuid) returns boolean
-language sql security definer stable set search_path = public as $$
-  select exists (
-    select 1 from tasks
-      join projects on projects.id = tasks.project_id
-     where tasks.id = t and projects.owner_user_id = auth.uid()
-  );
-$$;
-
-alter table user_profiles        enable row level security;
-alter table projects             enable row level security;
-alter table tasks                enable row level security;
-alter table task_notes           enable row level security;
-alter table task_comments        enable row level security;
-alter table task_attachments     enable row level security;
-alter table task_activity_events enable row level security;
-alter table task_deps            enable row level security;
-alter table api_keys             enable row level security;
-
-create policy user_profiles_self on user_profiles
-  for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
-
-create policy projects_owner on projects
-  for all to authenticated
-  using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
-
-create policy tasks_owner on tasks
-  for all to authenticated
-  using (owns_project(project_id)) with check (owns_project(project_id));
-
-create policy task_notes_owner on task_notes
-  for all to authenticated using (owns_task(task_id)) with check (owns_task(task_id));
-
-create policy task_comments_owner on task_comments
-  for all to authenticated using (owns_task(task_id)) with check (owns_task(task_id));
-
-create policy task_attachments_owner on task_attachments
-  for all to authenticated using (owns_task(task_id)) with check (owns_task(task_id));
-
-create policy task_activity_owner on task_activity_events
-  for all to authenticated using (owns_task(task_id)) with check (owns_task(task_id));
-
-create policy task_deps_owner on task_deps
-  for all to authenticated using (owns_task(blocked_id)) with check (owns_task(blocked_id));
-
--- API keys: owner-scoped. `key_hash` is never returned by application code.
-create policy api_keys_owner on api_keys
-  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+-- Cairn has no browser-to-database path. Session and API-key authorization is
+-- enforced by server handlers on the private database network.

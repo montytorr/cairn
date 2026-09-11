@@ -25,7 +25,7 @@
 
 create table entities (
   id            uuid primary key default gen_random_uuid(),
-  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  owner_user_id uuid not null references app_users(id) on delete cascade,
 
   key           text not null,
   title         text not null,
@@ -64,32 +64,6 @@ create table knowledge_entities (
 );
 
 create index knowledge_entities_entity_idx on knowledge_entities (entity_id);
-
-alter table entities           enable row level security;
-alter table project_entities   enable row level security;
-alter table knowledge_entities enable row level security;
-
-create policy entities_owner on entities
-  for all to authenticated
-  using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
-
-create policy project_entities_owner on project_entities
-  for all to authenticated
-  using (owns_project(project_id))
-  with check (
-    owns_project(project_id)
-    and exists (select 1 from entities e where e.id = entity_id and e.owner_user_id = auth.uid())
-  );
-
-create policy knowledge_entities_owner on knowledge_entities
-  for all to authenticated
-  using (
-    exists (select 1 from knowledge k where k.id = knowledge_id and k.owner_user_id = auth.uid())
-  )
-  with check (
-    exists (select 1 from knowledge k where k.id = knowledge_id and k.owner_user_id = auth.uid())
-    and exists (select 1 from entities e where e.id = entity_id and e.owner_user_id = auth.uid())
-  );
 
 -- ---------------------------------------------------------------------------
 -- Seed the business split, which the data already carries: every project

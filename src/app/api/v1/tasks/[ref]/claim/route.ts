@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import { findTask, TASK_LIST_FIELDS } from '@/lib/api/tasks'
 import { CLAIM_LEASE_SECONDS } from '@/lib/utils'
 

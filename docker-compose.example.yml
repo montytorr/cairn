@@ -14,6 +14,16 @@
 # ---------------------------------------------------------------------------
 
 services:
+  migrate:
+    profiles: [tools]
+    build:
+      context: .
+      target: migrator
+    env_file:
+      - .env.local
+    networks:
+      - database
+
   cairn:
     build:
       context: .
@@ -35,6 +45,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - /srv/cairn/attachments:/data/attachments
     cap_drop:
       - ALL
     security_opt:
@@ -49,6 +61,7 @@ services:
 
     networks:
       - proxy
+      - database
 
     labels:
       - 'traefik.enable=true'
@@ -67,4 +80,7 @@ services:
 networks:
   proxy:
     name: ${CAIRN_PROXY_NETWORK}
+    external: true
+  database:
+    name: ${CAIRN_DATABASE_NETWORK:-clawdius-data}
     external: true

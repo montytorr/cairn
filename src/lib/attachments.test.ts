@@ -1,30 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { __test } from './attachments'
+import { signUrls, verifyAttachmentToken } from './attachments'
 
-describe('signed URL origin rewriting', () => {
+describe('native attachment links', () => {
   beforeEach(() => {
-    process.env.SUPABASE_INTERNAL_URL = 'http://cairn-supabase-api-gw:8000'
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://tasks.example.com/supabase'
+    process.env.CAIRN_ATTACHMENT_SIGNING_KEY = 'test-signing-key-with-enough-entropy'
   })
 
-  /**
-   * Regression guard: Supabase signs URLs against the client's own base, which
-   * server-side is an internal Docker hostname. Handing that to a browser
-   * produces a link nothing can resolve.
-   */
-  it('swaps an internal origin for the public one', () => {
-    expect(__test.toPublicOrigin('http://cairn-supabase-api-gw:8000/storage/v1/object/sign/a?token=x')).toBe(
-      'https://tasks.example.com/supabase/storage/v1/object/sign/a?token=x',
-    )
-  })
-
-  it('leaves an already-public URL alone', () => {
-    expect(__test.toPublicOrigin('https://tasks.example.com/supabase/storage/v1/x')).toBe(
-      'https://tasks.example.com/supabase/storage/v1/x',
-    )
-  })
-
-  it('returns null for a missing URL', () => {
-    expect(__test.toPublicOrigin(undefined)).toBeNull()
+  it('signs preview and download intent separately', async () => {
+    const links = await signUrls('project/tasks/task/file.pdf', 'report final.pdf', 'application/pdf')
+    const preview = new URL(links.previewUrl, 'https://tasks.example.com')
+    const download = new URL(links.downloadUrl, 'https://tasks.example.com')
+    const valid = (url: URL) => verifyAttachmentToken(
+      url.searchParams.get('path')!,
+      Number(url.searchParams.get('expires')),
+      url.searchParams.get('download') || '',
+      url.searchParams.get('mime')!,
+    )(url.searchParams.get('signature')!)
+    expect(valid(preview)).toBe(true)
+    expect(valid(download)).toBe(true)
+    preview.searchParams.set('download', 'other.pdf')
+    expect(valid(preview)).toBe(false)
   })
 })

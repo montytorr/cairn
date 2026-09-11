@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 /**
  * Query construction for prior-work discovery.

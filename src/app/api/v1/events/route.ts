@@ -1,5 +1,5 @@
 import { authenticate } from '@/lib/api/auth'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 export const dynamic = 'force-dynamic'
 

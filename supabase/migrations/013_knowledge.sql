@@ -22,7 +22,7 @@
 
 create table knowledge (
   id                uuid primary key default gen_random_uuid(),
-  owner_user_id     uuid not null references auth.users(id) on delete cascade,
+  owner_user_id     uuid not null references app_users(id) on delete cascade,
 
   slug              text not null,
   title             text not null,
@@ -85,20 +85,3 @@ create index knowledge_projects_project_idx on knowledge_projects (project_id);
 comment on table knowledge_projects is
   'Scopes a knowledge row to one or more projects. No rows at all means global '
   '-- infra, conventions, anything that is not project-specific.';
-
-alter table knowledge          enable row level security;
-alter table knowledge_projects enable row level security;
-
-create policy knowledge_owner on knowledge
-  for all to authenticated
-  using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
-
-create policy knowledge_projects_owner on knowledge_projects
-  for all to authenticated
-  using (
-    exists (select 1 from knowledge k where k.id = knowledge_id and k.owner_user_id = auth.uid())
-  )
-  with check (
-    exists (select 1 from knowledge k where k.id = knowledge_id and k.owner_user_id = auth.uid())
-    and owns_project(project_id)
-  );

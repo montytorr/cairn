@@ -59,4 +59,7 @@ const main = async () => {
   console.log(ran === 0 ? 'nothing to apply' : `applied ${ran} migration(s)`)
 }
 
-await main()
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error)
+  process.exit(1)
+})

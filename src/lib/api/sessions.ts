@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import type { Actor } from './auth'
 import type { SessionUpsert } from '@/schemas/session'
 import { recordFiles } from './files'

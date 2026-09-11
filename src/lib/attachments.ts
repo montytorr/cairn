@@ -1,8 +1,21 @@
-import { createHash } from 'node:crypto'
-import { admin } from '@/lib/supabase/admin'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 
-export const BUCKET = process.env.CAIRN_ATTACHMENT_BUCKET || 'attachments'
 export const MAX_BYTES = Number(process.env.CAIRN_ATTACHMENT_MAX_BYTES || 10_485_760)
+const attachmentRoot = () => resolve(/* turbopackIgnore: true */ process.env.CAIRN_ATTACHMENT_DIR || '/data/attachments')
+const signingKey = () => {
+  const key = process.env.CAIRN_ATTACHMENT_SIGNING_KEY
+  if (!key) throw new Error('CAIRN_ATTACHMENT_SIGNING_KEY is required')
+  return key
+}
+
+const absolutePath = (storagePath: string) => {
+  const root = attachmentRoot()
+  const target = resolve(/* turbopackIgnore: true */ root, storagePath)
+  if (target !== root && !target.startsWith(`${root}/`)) throw new Error('Invalid attachment path')
+  return target
+}
 
 /** Allowlist, because a denylist on uploads is a game you lose eventually. */
 const ALLOWED_MIME = new Set([
@@ -78,36 +91,45 @@ export const sha256 = (buffer: Buffer | Uint8Array): string =>
   createHash('sha256').update(buffer).digest('hex')
 
 /**
- * Supabase builds signed URLs relative to whatever base the client was created
- * with. Server-side that is SUPABASE_INTERNAL_URL — a Docker hostname no
- * browser can resolve — so the origin has to be rewritten to the public one
- * before the URL leaves the server. The signature covers only the path and
- * token, so swapping the origin is safe.
- */
-const toPublicOrigin = (signed: string | undefined): string | null => {
-  if (!signed) return null
-  const internal = process.env.SUPABASE_INTERNAL_URL?.replace(/\/+$/, '')
-  const publicBase = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, '')
-  if (!internal || !publicBase || internal === publicBase) return signed
-  return signed.startsWith(internal) ? `${publicBase}${signed.slice(internal.length)}` : signed
-}
-
-/**
  * Two URLs, because they are used differently: `preview` renders inline in the
  * task view, `download` forces a save. Both expire in an hour — long enough for
  * a page session, short enough that a leaked link is not a standing grant.
  */
-export const signUrls = async (storagePath: string, originalName: string) => {
-  const storage = admin().storage.from(BUCKET)
-  const [preview, download] = await Promise.all([
-    storage.createSignedUrl(storagePath, 3600),
-    storage.createSignedUrl(storagePath, 3600, { download: originalName }),
-  ])
+export const signUrls = async (storagePath: string, originalName: string, mimeType = 'application/octet-stream') => {
+  const expires = Math.floor(Date.now() / 1000) + 3600
+  const make = (download: boolean) => {
+    const value = `${storagePath}\n${expires}\n${download ? originalName : ''}\n${mimeType}`
+    const signature = createHmac('sha256', signingKey()).update(value).digest('base64url')
+    const query = new URLSearchParams({ path: storagePath, expires: String(expires), mime: mimeType, signature })
+    if (download) query.set('download', originalName)
+    return `/api/files?${query}`
+  }
   return {
-    previewUrl: toPublicOrigin(preview.data?.signedUrl),
-    downloadUrl: toPublicOrigin(download.data?.signedUrl),
+    previewUrl: make(false),
+    downloadUrl: make(true),
   }
 }
 
-/** Exported for tests only. */
-export const __test = { toPublicOrigin }
+export const verifyAttachmentToken = (storagePath: string, expires: number, download: string, mimeType: string) => {
+  if (!Number.isSafeInteger(expires) || expires < Math.floor(Date.now() / 1000)) return () => false
+  const value = `${storagePath}\n${expires}\n${download}\n${mimeType}`
+  return (signature: string) => {
+    const expected = createHmac('sha256', signingKey()).update(value).digest()
+    const supplied = Buffer.from(signature, 'base64url')
+    return supplied.length === expected.length && timingSafeEqual(supplied, expected)
+  }
+}
+
+export const writeAttachment = async (storagePath: string, bytes: Buffer) => {
+  const target = absolutePath(storagePath)
+  await mkdir(dirname(target), { recursive: true })
+  await writeFile(target, bytes, { flag: 'wx', mode: 0o600 })
+}
+
+export const readAttachment = (storagePath: string) => readFile(/* turbopackIgnore: true */ absolutePath(storagePath))
+
+export const removeAttachments = async (paths: string[]) => {
+  await Promise.all(paths.map((path) => unlink(/* turbopackIgnore: true */ absolutePath(path)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error
+  })))
+}

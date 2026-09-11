@@ -1,14 +1,15 @@
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import { findTask } from '@/lib/api/tasks'
 import {
-  BUCKET,
   buildStoragePath,
   sanitizeFilename,
   sha256,
   signUrls,
   validateUpload,
+  writeAttachment,
+  removeAttachments,
 } from '@/lib/attachments'
 
 export const dynamic = 'force-dynamic'
@@ -56,11 +57,11 @@ export const POST = route<{ ref: string }>({
     const bytes = Buffer.from(await file.arrayBuffer())
     const storagePath = buildStoragePath(projectId, task.id, file.name)
 
-    const upload = await admin()
-      .storage.from(BUCKET)
-      .upload(storagePath, bytes, { contentType: file.type, upsert: false })
-
-    if (upload.error) return fail('internal_error', `Upload failed: ${upload.error.message}`)
+    try {
+      await writeAttachment(storagePath, bytes)
+    } catch (error) {
+      return fail('internal_error', `Upload failed: ${error instanceof Error ? error.message : error}`)
+    }
 
     const { data, error } = await admin()
       .from('task_attachments')
@@ -80,10 +81,10 @@ export const POST = route<{ ref: string }>({
 
     if (error) {
       // Do not leave an orphan object behind if the row insert fails.
-      await admin().storage.from(BUCKET).remove([storagePath])
+      await removeAttachments([storagePath])
       return fail('internal_error', error.message)
     }
 
-    return ok({ ...data, ...(await signUrls(storagePath, file.name)) }, { status: 201 })
+    return ok({ ...data, ...(await signUrls(storagePath, file.name, file.type)) }, { status: 201 })
   },
 })

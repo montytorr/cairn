@@ -2,9 +2,9 @@
 #
 # Cairn backup. Configure with environment variables and run from cron.
 #
-#   CAIRN_STACK_DIR   directory holding the Supabase stack's .env  (required)
-#   CAIRN_BACKUP_DIR  where to write backups                       (required)
-#   CAIRN_DB_CONTAINER  Postgres container name        (default: supabase-db)
+#   CAIRN_BACKUP_DIR     where to write backups (default: /srv/backups/cairn)
+#   CAIRN_DB_CONTAINER   Postgres container name (default: clawdius-postgres)
+#   CAIRN_ATTACHMENT_DIR attachment tree (default: /srv/cairn/attachments)
 #
 # Backs up BOTH halves, because either alone is useless: a database dump
 # without the storage tree loses every attachment, and the storage tree
@@ -12,11 +12,11 @@
 #
 # Retention: 7 daily, 4 weekly (Sundays).
 #
-set -uo pipefail
+set -euo pipefail
 
-STACK=${CAIRN_STACK_DIR:?set CAIRN_STACK_DIR to the Supabase stack directory}
-DEST=${CAIRN_BACKUP_DIR:?set CAIRN_BACKUP_DIR to a backup destination}
-DB_CONTAINER=${CAIRN_DB_CONTAINER:-supabase-db}
+DEST=${CAIRN_BACKUP_DIR:-/srv/backups/cairn}
+DB_CONTAINER=${CAIRN_DB_CONTAINER:-clawdius-postgres}
+ATTACHMENTS=${CAIRN_ATTACHMENT_DIR:-/srv/cairn/attachments}
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 DOW=$(date -u +%u)
@@ -25,30 +25,28 @@ log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 fail() { log "FAILED: $*"; exit 1; }
 
 mkdir -p "$DEST/daily" "$DEST/weekly" || fail "cannot create $DEST"
-cd "$STACK" || fail "no stack at $STACK"
-
-PW=$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
-DB=$(grep -m1 '^POSTGRES_DB=' .env | cut -d= -f2-)
-[ -n "$PW" ] && [ -n "$DB" ] || fail "could not read credentials from $STACK/.env"
 
 DUMP="$DEST/daily/cairn-db-$STAMP.dump"
+TMP="$DUMP.tmp"
 FILES="$DEST/daily/cairn-storage-$STAMP.tar.gz"
+trap 'rm -f "$TMP"' EXIT
 
 log "starting backup $STAMP"
 
-# Custom format so pg_restore can be selective; --clean so restoring into a
-# populated scratch database is repeatable.
-if ! docker exec -e PGPASSWORD="$PW" "$DB_CONTAINER" \
-      pg_dump -U postgres -d "$DB" -Fc --clean --if-exists > "$DUMP"; then
-  rm -f "$DUMP"
+# Public is the complete application database. Supabase-owned schemas, roles,
+# owners and grants are deliberately excluded so the dump is stock-PG portable.
+if ! docker exec "$DB_CONTAINER" pg_dump -U postgres -d cairn -Fc \
+      --schema=public --no-owner --no-privileges > "$TMP"; then
   fail "pg_dump failed"
 fi
+mv "$TMP" "$DUMP"
 
 SIZE=$(stat -c%s "$DUMP" 2>/dev/null || stat -f%z "$DUMP")
 [ "$SIZE" -gt 1024 ] || fail "dump is implausibly small ($SIZE bytes)"
 log "database dumped ($SIZE bytes)"
 
-if ! tar -czf "$FILES" -C "$STACK/volumes" storage; then
+mkdir -p "$ATTACHMENTS"
+if ! tar -czf "$FILES" -C "$ATTACHMENTS" .; then
   rm -f "$FILES"
   fail "storage archive failed"
 fi

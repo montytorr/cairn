@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 /**
  * Entities, read-only, for the knowledge UI's filters and edit form.

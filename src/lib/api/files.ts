@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 /**
  * The file index: which sessions, tasks and knowledge concern a given path.

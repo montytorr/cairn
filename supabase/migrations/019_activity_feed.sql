@@ -141,7 +141,6 @@ as $$
 $$;
 
 revoke all on function activity_feed from public;
-grant execute on function activity_feed to authenticated, service_role;
 
 comment on function activity_feed is
   'One timeline across tasks filed, what changed on them, notes, comments, '

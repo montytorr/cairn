@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 /**
  * The unified timeline. The union and the ordering live in Postgres

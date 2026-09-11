@@ -1,57 +1,38 @@
 #!/bin/bash
-#
-# Restore drill. An untested backup is not a backup.
-#
-# Restores the newest dump into a throwaway database inside the running
-# Postgres, asserts the data is really there, then drops it. Touches nothing
-# the live application uses.
-#
-#   CAIRN_STACK_DIR / CAIRN_BACKUP_DIR / CAIRN_DB_CONTAINER  as in backup.sh
-#
-set -uo pipefail
+# Restore the newest portable dump into a throwaway database and verify both
+# database state and the independent attachment archive.
+set -euo pipefail
 
-STACK=${CAIRN_STACK_DIR:?set CAIRN_STACK_DIR}
-DEST=${CAIRN_BACKUP_DIR:?set CAIRN_BACKUP_DIR}
-DB_CONTAINER=${CAIRN_DB_CONTAINER:-supabase-db}
-SCRATCH=cairn_restore_drill
+DEST=${CAIRN_BACKUP_DIR:-/srv/backups/cairn}
+DB_CONTAINER=${CAIRN_DB_CONTAINER:-clawdius-postgres}
+SCRATCH="cairn_restore_drill_$(date -u +%s)"
 
-cd "$STACK" || { echo "no stack at $STACK"; exit 1; }
-PW=$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
-
-LATEST=$(ls -1t "$DEST"/daily/cairn-db-*.dump 2>/dev/null | head -1)
+LATEST=$(find "$DEST/daily" -maxdepth 1 -name 'cairn-db-*.dump' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
 [ -n "$LATEST" ] || { echo "no dump to restore"; exit 1; }
 echo "restoring $(basename "$LATEST")"
 
-q() { docker exec -e PGPASSWORD="$PW" "$DB_CONTAINER" psql -U postgres -d "$1" -qtAX -c "$2"; }
+q() { docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$1" -qtAX -c "$2"; }
+q postgres "create database $SCRATCH owner cairn_app" >/dev/null
+trap 'q postgres "drop database if exists $SCRATCH with (force)" >/dev/null' EXIT
+q "$SCRATCH" 'drop schema public' >/dev/null
 
-q postgres "drop database if exists $SCRATCH" >/dev/null
-q postgres "create database $SCRATCH" >/dev/null
+docker exec -i "$DB_CONTAINER" pg_restore -U cairn_app -d "$SCRATCH" \
+  --exit-on-error --no-owner --no-privileges < "$LATEST"
 
-# The dump references roles the scratch database lacks; --no-owner and
-# --no-privileges stop those becoming hard failures.
-docker exec -i -e PGPASSWORD="$PW" "$DB_CONTAINER" \
-  pg_restore -U postgres -d "$SCRATCH" --no-owner --no-privileges < "$LATEST" 2>/dev/null
-
-FAILED=0
 check() {
-  if [ "${2:-0}" -gt 0 ] 2>/dev/null; then echo "  PASS $1 ($2)"
-  else echo "  FAIL $1 (got '${2:-}')"; FAILED=1; fi
+  local label="$1" sql="$2" got
+  got=$(q "$SCRATCH" "$sql")
+  echo "  $label: $got"
+  [ "$got" != "0" ] && [ "$got" != "f" ] || { echo "DRILL FAILED on $label"; exit 1; }
 }
 
-check "tasks restored"        "$(q $SCRATCH 'select count(*) from public.tasks')"
-check "projects restored"     "$(q $SCRATCH 'select count(*) from public.projects')"
-check "resolutions preserved" "$(q $SCRATCH 'select count(*) from public.tasks where resolution is not null')"
-check "rls policies restored" "$(q $SCRATCH "select count(*) from pg_policies where schemaname='public'")"
-# The generated column must survive, or prior-work discovery comes back
-# silently broken while everything else looks fine.
-check "search vector works"   "$(q $SCRATCH "select count(*) from public.tasks where search_vector @@ websearch_to_tsquery('english','the')")"
+check "tasks" "select count(*) from public.tasks"
+check "projects" "select count(*) from public.projects"
+check "resolutions" "select count(*) from public.tasks where resolution is not null"
+check "app users" "select count(*) from public.app_users"
+check "search vectors" "select count(*) from public.tasks where search_vector is not null"
 
-LATEST_FILES=$(ls -1t "$DEST"/daily/cairn-storage-*.tar.gz 2>/dev/null | head -1)
-if [ -n "$LATEST_FILES" ] && tar -tzf "$LATEST_FILES" >/dev/null 2>&1; then
-  echo "  PASS storage archive readable"
-else
-  echo "  FAIL storage archive missing or corrupt"; FAILED=1
-fi
-
-q postgres "drop database $SCRATCH" >/dev/null
-[ "$FAILED" = "0" ] && echo "DRILL PASSED" || { echo "DRILL FAILED"; exit 1; }
+LATEST_FILES=$(find "$DEST/daily" -maxdepth 1 -name 'cairn-storage-*.tar.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+[ -n "$LATEST_FILES" ] && tar -tzf "$LATEST_FILES" >/dev/null
+echo "  attachment archive: readable"
+echo "DRILL PASSED"

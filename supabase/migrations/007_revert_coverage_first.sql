@@ -91,4 +91,3 @@ as $$
 $$;
 
 revoke all on function search_tasks from public;
-grant execute on function search_tasks to authenticated, service_role;

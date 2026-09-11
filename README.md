@@ -13,7 +13,7 @@ Three hooks make it happen without anyone being reminded — a briefing when a s
 starts, what is known about a file when one is opened, and the session written down when
 it ends.
 
-> **Single-tenant on purpose.** Every RLS policy resolves to one owner, so Cairn is built
+> **Single-tenant on purpose.** Every server query resolves to one owner, so Cairn is built
 > for one person and their agents, not a team. In daily use; schema, API, CLI, UI and the
 > agent contract are all in place.
 
@@ -372,11 +372,11 @@ Every response is enveloped: `{"success":true,"data":…}` or
 
 ## Self-hosting
 
-Requires Node 22+, Docker, and a Postgres/Supabase stack (Postgres, Auth and Storage).
+Requires Node 22+, Docker, and PostgreSQL 17+.
 
 ```bash
 git clone https://github.com/<you>/cairn.git && cd cairn
-cp .env.example .env.local        # fill in your Supabase URL and keys
+cp .env.example .env.local        # fill in the private PostgreSQL URL and signing key
 npm install
 npm run db:migrate                # applies supabase/migrations/*.sql in order
 npm run dev
@@ -397,31 +397,21 @@ read-only, as a non-root user, with all capabilities dropped.
 ### The first user
 
 There is no sign-up page — a single-tenant tracker does not need one, and an open
-registration form on a public host is a liability. Create the account against your
-Supabase Auth instance directly:
+registration form on a public host is a liability. Create the account after migrating:
 
 ```bash
-curl -X POST "$SUPABASE_URL/auth/v1/admin/users" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"…","email_confirm":true}'
+CAIRN_OPERATOR_EMAIL=you@example.com \
+CAIRN_OPERATOR_PASSWORD='a-long-password' \
+npm run operator:create
 ```
 
-`email_confirm: true` matters: without SMTP configured there is no confirmation mail to
-click, and an unconfirmed user cannot sign in. Then issue an agent key from **Settings**
-once you are in.
-
-> `NEXT_PUBLIC_*` values are inlined at **build** time. If you build an image once and
-> configure it per environment at run time they will be empty in the browser — Cairn
-> passes them through a runtime provider instead, which is why the root layout is
-> `force-dynamic`.
+Then issue an agent key from **Settings** once you are in.
 
 ### Secrets
 
 `.env*` is gitignored except `.env.example`, and `docker-compose.override.yml` /
 `docker-compose.prod.yml` are gitignored so host-specific configuration stays out of the
-repository. `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — keep it server-side only.
+repository. Keep `DATABASE_URL` and `CAIRN_ATTACHMENT_SIGNING_KEY` server-side only.
 
 ## Agent setup
 
@@ -486,12 +476,11 @@ knowledge.
 ## Architecture
 
 - **Next.js 16** (App Router) · React 19 · TypeScript · Tailwind v4
-- **Postgres** via Supabase — Auth for the human login, Storage for attachments
-- **Auth**: a Supabase Auth session for the UI, enforced server-side in middleware; hashed
+- **PostgreSQL 17+** over the native protocol; local filesystem storage for attachments
+- **Auth**: opaque, revocable application sessions for the UI; hashed
   bearer API keys for agents, one key per agent
-- **RLS**: every policy resolves to `projects.owner_user_id = auth.uid()`. The
-  service-role client bypasses it, so every server-side query filters by owner explicitly —
-  RLS is the browser-side boundary and defence in depth, not what protects server reads.
+- **Authorization**: every server-side query filters by owner explicitly; PostgreSQL is
+  reachable only from the private application network.
 
 **The data model**, in four groups: `projects` / `tasks` / `task_notes` / `task_comments`
 / `task_attachments` / `task_deps` / `task_activity_events` for the tracker;
@@ -510,9 +499,9 @@ tree loses every attachment, and the storage tree without the dump loses every r
 to those files.
 
 ```bash
-export CAIRN_STACK_DIR=/srv/supabase/cairn      # holds the Supabase .env
 export CAIRN_BACKUP_DIR=/srv/backups/cairn
-export CAIRN_DB_CONTAINER=supabase-db           # default: supabase-db
+export CAIRN_DB_CONTAINER=clawdius-postgres
+export CAIRN_ATTACHMENT_DIR=/srv/cairn/attachments
 
 ./scripts/backup.sh          # nightly, from cron — 7 daily, 4 weekly
 ./scripts/restore-drill.sh   # weekly — actually restores and verifies
@@ -522,26 +511,6 @@ export CAIRN_DB_CONTAINER=supabase-db           # default: supabase-db
 really there — including that the generated `search_vector` survived, which would otherwise
 break prior-work discovery silently while everything else looked fine — then drops it. An
 untested backup is not a backup.
-
-## Trimming the Supabase stack
-
-The upstream self-hosted compose starts eleven services. Cairn uses five: `db`, `auth`,
-`rest`, `storage`, `api-gw`.
-
-On a shared host the other six are not free — measured here, Studio, imgproxy, edge
-functions, postgres-meta, realtime and the pooler burned **107% CPU between them, more
-than the five actually in use**, while the app container itself sat at 0.00%.
-
-Put them behind an `optional` profile in your Supabase stack's own compose file and the
-stack's CPU drops by roughly 70%. Two `depends_on` edges have to be reset for that to
-work: `api-gw` is ordered behind Studio, and `storage` behind imgproxy. Re-enable any of
-them when a feature needs it:
-
-```bash
-docker compose --profile optional up -d realtime   # live sync
-docker compose --profile optional up -d imgproxy   # image transforms
-docker compose --profile optional up -d studio     # admin UI
-```
 
 ## Contributing
 

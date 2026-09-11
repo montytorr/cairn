@@ -3,12 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronsUpDown, Keyboard, LogOut, Settings as SettingsIcon } from 'lucide-react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
 import { Avatar } from '@/components/icons'
 import { Spinner } from '@/components/spinner'
-import { useSupabaseConfig } from '@/components/supabase-provider'
 
 /**
  * The sidebar footer.
@@ -21,7 +19,6 @@ import { useSupabaseConfig } from '@/components/supabase-provider'
  */
 export const UserMenu = ({ email, onNavigate }: { email: string; onNavigate?: () => void }) => {
   const router = useRouter()
-  const { url, anonKey } = useSupabaseConfig()
   const [open, setOpen] = useState(false)
   const [leaving, startLeaving] = useTransition()
   const [pending, setPending] = useState(false)
@@ -46,7 +43,7 @@ export const UserMenu = ({ email, onNavigate }: { email: string; onNavigate?: ()
     if (busy) return
     setPending(true)
     try {
-      await createBrowserClient(url, anonKey).auth.signOut()
+      await fetch('/api/auth/logout', { method: 'POST' })
       // Stays busy through the navigation, or the row flashes back to idle
       // while the login page is still loading.
       startLeaving(() => {

@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
+import { removeAttachments } from '@/lib/attachments'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,9 +103,7 @@ export const DELETE = route<{ id: string }>({
       (f) => f.storage_path,
     )
     if (paths.length > 0) {
-      await admin()
-        .storage.from(process.env.CAIRN_ATTACHMENT_BUCKET || 'attachments')
-        .remove(paths)
+      await removeAttachments(paths)
     }
 
     const { error } = await admin().from('projects').delete().eq('id', project.id)

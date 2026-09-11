@@ -19,7 +19,7 @@
 
 create table file_touches (
   id            uuid primary key default gen_random_uuid(),
-  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  owner_user_id uuid not null references app_users(id) on delete cascade,
 
   path          text not null,
   repo          text,
@@ -50,9 +50,3 @@ comment on table file_touches is
 comment on index file_touches_base_idx is
   'Basename lookup, for when the caller has a path rooted differently from the '
   'one that was recorded.';
-
-alter table file_touches enable row level security;
-
-create policy file_touches_owner on file_touches
-  for all to authenticated
-  using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());

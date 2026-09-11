@@ -1,17 +1,14 @@
 'use client'
 
-import { createBrowserClient } from '@supabase/ssr'
 import { useState } from 'react'
 import { Button, Field, Input } from '@/components/ui/control'
-import { useSupabaseConfig } from '@/components/supabase-provider'
 
 /**
- * Until this existed the only way to change the password was the Supabase
- * admin API over SSH — which also meant the password in use was one that had
+ * Until this existed the only way to change the password was an admin command
+ * over SSH — which also meant the password in use was one that had
  * been generated for the user rather than chosen by them.
  */
 export const PasswordSection = () => {
-  const { url, anonKey } = useSupabaseConfig()
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [state, setState] = useState<'idle' | 'saving' | 'done'>('idle')
@@ -28,11 +25,14 @@ export const PasswordSection = () => {
     setState('saving')
     setError(null)
     try {
-      const { error: updateError } = await createBrowserClient(url, anonKey).auth.updateUser({
-        password: next,
+      const response = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ password: next }),
       })
-      if (updateError) {
-        setError(updateError.message)
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null
+        setError(body?.error ?? 'Could not change the password.')
         setState('idle')
         return
       }

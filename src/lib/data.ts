@@ -1,5 +1,5 @@
-import { admin } from '@/lib/supabase/admin'
-import { serverClient } from '@/lib/supabase/server'
+import { admin } from '@/lib/db/client'
+import { sessionUser } from '@/lib/auth/session'
 import type { TaskPriority, TaskStatus, TaskType } from '@/schemas/task'
 
 export type Task = {
@@ -50,11 +50,7 @@ export type Project = {
  * defence-in-depth layer; it is not what protects these reads.
  */
 export const currentUser = async () => {
-  const supabase = await serverClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
+  return sessionUser()
 }
 
 /**

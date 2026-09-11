@@ -183,4 +183,3 @@ as $$
 $$;
 
 revoke all on function search_all from public;
-grant execute on function search_all to authenticated, service_role;

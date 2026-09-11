@@ -1,7 +1,7 @@
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { admin } from '@/lib/supabase/admin'
-import { BUCKET, signUrls } from '@/lib/attachments'
+import { admin } from '@/lib/db/client'
+import { removeAttachments, signUrls } from '@/lib/attachments'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ const findOwned = async (userId: string, id: string) => {
     .eq('tasks.projects.owner_user_id', userId)
     .maybeSingle()
   return data as unknown as
-    | { id: string; original_name: string; storage_path: string }
+    | { id: string; original_name: string; mime_type: string; storage_path: string }
     | null
 }
 
@@ -25,7 +25,7 @@ export const GET = route<{ id: string }>({
   handler: async ({ actor, params }) => {
     const row = await findOwned(actor.userId, params.id)
     if (!row) return fail('not_found', 'No such attachment.')
-    return ok({ ...row, ...(await signUrls(row.storage_path, row.original_name)) })
+    return ok({ ...row, ...(await signUrls(row.storage_path, row.original_name, row.mime_type)) })
   },
 })
 
@@ -36,8 +36,11 @@ export const DELETE = route<{ id: string }>({
 
     // Object first: a failed row delete leaves a recoverable inconsistency,
     // whereas a deleted row with a live object is an unreferenced leak.
-    const removed = await admin().storage.from(BUCKET).remove([row.storage_path])
-    if (removed.error) return fail('internal_error', `Storage delete failed: ${removed.error.message}`)
+    try {
+      await removeAttachments([row.storage_path])
+    } catch (error) {
+      return fail('internal_error', `Storage delete failed: ${error instanceof Error ? error.message : error}`)
+    }
 
     const { error } = await admin().from('task_attachments').delete().eq('id', row.id)
     if (error) return fail('internal_error', error.message)

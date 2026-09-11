@@ -50,10 +50,3 @@ $$;
 create trigger task_projects_not_home
   before insert or update on task_projects
   for each row execute function reject_home_project_link();
-
-alter table task_projects enable row level security;
-
-create policy task_projects_owner on task_projects
-  for all to authenticated
-  using (owns_task(task_id))
-  with check (owns_task(task_id) and owns_project(project_id));

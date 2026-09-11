@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import { currentUser } from '@/lib/data'
 import { PasswordSection } from './password-section'
 import { KeysSection, type KeyRow } from './keys-section'

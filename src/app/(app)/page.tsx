@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import { currentUser, listAllTasks, listProjects } from '@/lib/data'
 import { ListView } from './projects/[key]/list-view'
 import { LiveUpdates } from '@/components/live-updates'

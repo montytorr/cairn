@@ -19,7 +19,7 @@
 
 create table sessions (
   id              uuid primary key default gen_random_uuid(),
-  owner_user_id   uuid not null references auth.users(id) on delete cascade,
+  owner_user_id   uuid not null references app_users(id) on delete cascade,
 
   external_id     text not null,
   platform_source text not null check (platform_source in ('claude', 'codex', 'openclaw', 'other')),
@@ -68,12 +68,6 @@ comment on table sessions is
 comment on column sessions.next_steps is
   'Read back verbatim by `cairn context` when the next session opens in the same '
   'directory. This is the handoff between two sessions that never met.';
-
-alter table sessions enable row level security;
-
-create policy sessions_owner on sessions
-  for all to authenticated
-  using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
 
 -- knowledge.source_session_id was declared in 013 without a reference, because
 -- this table did not exist yet. Wire it up now.

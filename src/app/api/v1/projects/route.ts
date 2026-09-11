@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 import type { TaskPriority, TaskStatus, TaskType } from '@/schemas/task'
 
 /**

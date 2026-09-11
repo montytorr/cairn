@@ -32,12 +32,16 @@ jobs:
           cat > .env <<ENV
           CAIRN_DOMAIN=${{ vars.CAIRN_DOMAIN || 'tasks.montytorr.com' }}
           CAIRN_PROXY_NETWORK=${{ vars.CAIRN_PROXY_NETWORK || 'trading-v2-network' }}
+          CAIRN_DATABASE_NETWORK=${{ vars.CAIRN_DATABASE_NETWORK || 'clawdius-data' }}
           GIT_SHA=${GITHUB_SHA::7}
           ENV
           cp docker-compose.example.yml docker-compose.yml
 
       - name: build
-        run: docker compose build --quiet
+        run: docker compose --profile tools build --quiet
+
+      - name: migrate database
+        run: docker compose --profile tools run --rm migrate
 
       - name: deploy
         run: docker compose up -d --remove-orphans

@@ -21,6 +21,14 @@ RUN echo "$GIT_SHA" > public/build-version.txt || (mkdir -p public && echo "$GIT
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
+# --- migrations ------------------------------------------------------------
+FROM base AS migrator
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json* ./
+COPY scripts/migrate.ts ./scripts/migrate.ts
+COPY supabase/migrations ./supabase/migrations
+CMD ["npm", "run", "db:migrate"]
+
 # --- runtime ---------------------------------------------------------------
 FROM base AS runner
 ENV NODE_ENV=production

@@ -2,8 +2,6 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
-import { useSupabaseConfig } from '@/components/supabase-provider'
 import { Button, Input } from '@/components/ui/control'
 import { Spinner } from '@/components/spinner'
 
@@ -18,8 +16,6 @@ const safeRedirect = (value: string | null) =>
 
 export const LoginForm = () => {
   const router = useRouter()
-  const { url, anonKey } = useSupabaseConfig()
-  const configured = Boolean(url && anonKey)
   const params = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -41,14 +37,14 @@ export const LoginForm = () => {
     // how the build-time-env bug presented, and made it far harder to read
     // than it needed to be.
     try {
-      const supabase = createBrowserClient(url, anonKey)
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       })
-
-      if (signInError) {
-        setError(signInError.message)
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null
+        setError(body?.error ?? 'Sign-in failed.')
         setPending(false)
         return
       }
@@ -98,14 +94,6 @@ export const LoginForm = () => {
             />
           </label>
 
-          {!configured ? (
-            <p className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-xs leading-relaxed">
-              This instance is misconfigured: <code>NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> are not reaching the server. Check the
-              container environment.
-            </p>
-          ) : null}
-
           {error ? (
             <p className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-xs" role="alert">
               {error}
@@ -115,7 +103,7 @@ export const LoginForm = () => {
           <Button
             type="submit"
             variant="primary"
-            disabled={busy || !configured}
+            disabled={busy}
             className="mt-2"
           >
             {busy ? (
@@ -137,4 +125,3 @@ export const LoginForm = () => {
     </main>
   )
 }
-

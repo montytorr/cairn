@@ -1,4 +1,4 @@
-import { admin } from '@/lib/supabase/admin'
+import { admin } from '@/lib/db/client'
 
 /** Roughly four characters per token. Order-of-magnitude, on purpose. */
 const tokens = (text: string | null | undefined) => Math.ceil((text?.length ?? 0) / 4)
