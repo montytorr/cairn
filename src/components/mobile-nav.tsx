@@ -58,18 +58,20 @@ export const MobileNav = ({
                than leaving a filter box half-typed from the last visit. */
             key={pathname}
           >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close navigation"
-              className="text-fg-subtle hover:text-fg absolute top-[10px] right-2 z-10 grid size-[24px] place-items-center rounded"
-            >
-              <X size={14} aria-hidden />
-            </button>
             <AppSidebar
               email={email}
               projects={projects}
               onNavigate={() => setOpen(false)}
+              trailing={
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close navigation"
+                  className="text-fg-subtle hover:text-fg hover:bg-surface-raised grid size-6 place-items-center rounded transition-colors"
+                >
+                  <X size={14} aria-hidden />
+                </button>
+              }
             />
           </aside>
         </div>
