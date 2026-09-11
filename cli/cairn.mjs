@@ -864,7 +864,14 @@ const commands = {
         const k = hit
         process.stdout.write(`# ${k.title}\n`)
         if (k.labels?.length) process.stdout.write(`labels: ${k.labels.join(', ')}\n`)
-        process.stdout.write(`scope: ${k.projects?.length ? k.projects.join(', ') : 'global'}\n\n`)
+        // Both scopes, or this reports a fact scoped to an entity as true
+        // everywhere — which is the opposite of what it says.
+        const scope = k.projects?.length
+          ? k.projects.join(', ')
+          : k.entities?.length
+            ? k.entities.join(', ')
+            : 'global'
+        process.stdout.write(`scope: ${scope}\n\n`)
         process.stdout.write(`${k.body}\n`)
         return
       }
