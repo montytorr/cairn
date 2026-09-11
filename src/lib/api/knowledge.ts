@@ -245,16 +245,27 @@ const knowledgeForEntitiesOf = async (userId: string, projectKey: string): Promi
   return (data ?? []).map((r) => r.knowledge_id as string)
 }
 
-/** Rows with no project links at all — the supra-project set. */
+/**
+ * Rows scoped to nothing at all — true everywhere.
+ *
+ * Both link tables have to be checked. Checking only projects made every
+ * entity-scoped fact global as well, so scoping the Customer.io notes to
+ * `dispofi` left them showing up on the trading projects exactly as before —
+ * the change looked applied and did nothing.
+ */
 const globalIds = async (userId: string): Promise<string[]> => {
   const { data, error } = await admin()
     .from('knowledge')
-    .select('id, knowledge_projects(knowledge_id)')
+    .select('id, knowledge_projects(knowledge_id), knowledge_entities(knowledge_id)')
     .eq('owner_user_id', userId)
   if (error) throw new Error(error.message)
 
   return (data ?? [])
-    .filter((r) => ((r.knowledge_projects as unknown[]) ?? []).length === 0)
+    .filter(
+      (r) =>
+        ((r.knowledge_projects as unknown[]) ?? []).length === 0 &&
+        ((r.knowledge_entities as unknown[]) ?? []).length === 0,
+    )
     .map((r) => r.id as string)
 }
 
