@@ -8,7 +8,10 @@ export const dynamic = 'force-dynamic'
  * validate with, so this cannot drift from the API.
  */
 const ApiDocsPage = () => (
-  <div className="min-h-dvh">
+  // `min-h-dvh` inside an overflow-hidden <main> guarantees the content is at
+  // least as tall as the viewport and then clips whatever exceeds it. The page
+  // needs to scroll itself, like every other one here.
+  <div className="h-full overflow-y-auto">
     <div id="scalar" data-url="/api/v1/openapi.json" />
     <Script
       src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"

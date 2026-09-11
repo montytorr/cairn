@@ -73,6 +73,11 @@ const SettingsPage = async () => {
     .map((p) => p.key as string)
 
   return (
+    // The layout's <main> is overflow-hidden, so every page owns its own
+    // scrolling. This one never did: it fitted the viewport until Entities was
+    // added, and then simply clipped — no scrollbar, no overflow, the bottom of
+    // the page just gone.
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
       <header className="mb-8 flex items-start gap-2">
         <span className="-ml-1.5 md:hidden">
@@ -95,6 +100,7 @@ const SettingsPage = async () => {
         />
         <ArchivedSection projects={(archived ?? []) as ArchivedProject[]} />
       </div>
+    </div>
     </div>
   )
 }
