@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fullDateTime, relativeTime, shortDate } from './dates'
+import { fullDateTime, relativeTime, shortDate, timeOfDay } from './dates'
 
 /**
  * The bug these guard against: an unpinned `toLocaleDateString` formats in the
@@ -34,6 +34,10 @@ describe('date formatting', () => {
 
   it('includes the time in the tooltip form', () => {
     expect(fullDateTime(nearMidnight)).toMatch(/30 Apr 2026, 01:30/)
+  })
+
+  it('formats a bare time in the display zone, for the sessions timeline', () => {
+    expect(timeOfDay(nearMidnight)).toBe('01:30')
   })
 
   describe('relativeTime', () => {

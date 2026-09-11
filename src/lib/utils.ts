@@ -7,6 +7,17 @@ export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
 export const taskRef = (projectKey: string, number: number) => `${projectKey}-${number}`
 
 /**
+ * The inverse: a task ref scraped off a session or note into the URL that
+ * opens it. `null` for anything that is not shaped like a ref at all, so a
+ * caller can drop it rather than link to a 404.
+ */
+export const taskRefHref = (ref: string): string | null => {
+  const match = /^([A-Z][A-Z0-9]*)-(\d+)$/.exec(ref)
+  if (!match) return null
+  return `/projects/${match[1]}/tasks/${match[2]}`
+}
+
+/**
  * A claim is stale when its holder has stopped beating. Computed on read
  * rather than reaped by a background job — that is what lets the claim
  * mutex steal an abandoned lease in a single conditional UPDATE.

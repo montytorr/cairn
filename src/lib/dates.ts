@@ -34,6 +34,11 @@ export const shortDateWithYear = (iso: string) => SHORT_YEAR.format(new Date(iso
 /** `10 Sept 2026, 18:43` — for tooltips, where precision is the point. */
 export const fullDateTime = (iso: string) => FULL.format(new Date(iso))
 
+const TIME = fmt({ hour: '2-digit', minute: '2-digit' })
+
+/** `18:43` — the sessions timeline shows the date once, as a day header. */
+export const timeOfDay = (iso: string) => TIME.format(new Date(iso))
+
 /**
  * `3m ago`. Pure, so the caller decides what "now" is — which is what lets a
  * component render the absolute date on the server and refine it in the

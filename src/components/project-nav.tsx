@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
-import { Columns3, Inbox, Search, X } from 'lucide-react'
+import { BookOpen, Columns3, History, Inbox, Search, X } from 'lucide-react'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -32,13 +32,18 @@ export const ProjectNav = ({
     { href: '/', label: 'All tasks', icon: Inbox },
     { href: '/board', label: 'Board', icon: Columns3 },
     { href: '/search', label: 'Search', icon: Search },
+    { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+    { href: '/sessions', label: 'Sessions', icon: History },
   ]
 
   return (
     <nav className="flex min-h-0 flex-1 flex-col px-2">
       <ul className="-mx-0.5 mb-2">
         {links.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href
+          // Knowledge alone has a child route (/knowledge/[slug]) that
+          // should still light up this entry.
+          const active =
+            pathname === href || (href === '/knowledge' && pathname.startsWith('/knowledge/'))
           return (
             <li key={href}>
               <Link
