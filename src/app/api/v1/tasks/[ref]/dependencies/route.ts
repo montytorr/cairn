@@ -36,7 +36,7 @@ export const GET = route<{ ref: string }>({
 
     const { data } = await admin()
       .from('tasks')
-      .select('id, number, title, status, project:projects!inner(key)')
+      .select('id, number, title, status, project:projects!project_id!inner(key)')
       .in('id', ids)
 
     type Row = { id: string; number: number; title: string; status: string; project: { key: string } | { key: string }[] }

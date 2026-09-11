@@ -27,7 +27,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
     listAllTasks(user.id, { includeClosed }),
     admin()
       .from('tasks')
-      .select('id, project:projects!inner(owner_user_id)', { count: 'exact', head: true })
+      .select('id, project:projects!project_id!inner(owner_user_id)', { count: 'exact', head: true })
       .eq('projects.owner_user_id', user.id),
   ])
 

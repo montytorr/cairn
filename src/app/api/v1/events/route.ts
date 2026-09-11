@@ -29,7 +29,7 @@ export const GET = async (req: Request) => {
   const fingerprint = async (): Promise<string> => {
     let q = admin()
       .from('tasks')
-      .select('updated_at, project:projects!inner(key, owner_user_id)')
+      .select('updated_at, project:projects!project_id!inner(key, owner_user_id)')
       .eq('projects.owner_user_id', actor.userId)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -40,7 +40,7 @@ export const GET = async (req: Request) => {
       q,
       admin()
         .from('tasks')
-        .select('id, project:projects!inner(key, owner_user_id)', { count: 'exact', head: true })
+        .select('id, project:projects!project_id!inner(key, owner_user_id)', { count: 'exact', head: true })
         .eq('projects.owner_user_id', actor.userId),
     ])
 

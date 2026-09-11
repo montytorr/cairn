@@ -27,7 +27,7 @@ const refOf = async (id: unknown): Promise<string | null> => {
   if (typeof id !== 'string') return null
   const { data } = await admin()
     .from('tasks')
-    .select('number, project:projects!inner(key)')
+    .select('number, project:projects!project_id!inner(key)')
     .eq('id', id)
     .maybeSingle()
   if (!data) return null

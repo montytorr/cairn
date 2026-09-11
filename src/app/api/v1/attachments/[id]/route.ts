@@ -11,7 +11,7 @@ const findOwned = async (userId: string, id: string) => {
     .from('task_attachments')
     .select(
       'id, original_name, mime_type, size_bytes, sha256, storage_path, created_at, ' +
-        'task:tasks!inner(id, project:projects!inner(owner_user_id))',
+        'task:tasks!inner(id, project:projects!project_id!inner(owner_user_id))',
     )
     .eq('id', id)
     .eq('tasks.projects.owner_user_id', userId)

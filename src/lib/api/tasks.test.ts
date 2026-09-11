@@ -16,14 +16,14 @@ describe('task field lists', () => {
     ['TASK_FIELDS', TASK_FIELDS],
     ['TASK_LIST_FIELDS', TASK_LIST_FIELDS],
   ])('%s embeds projects with an inner join', (_name, fields) => {
-    expect(fields).toContain('projects!inner')
+    expect(fields).toContain('projects!project_id!inner')
   })
 
   it.each([
     ['TASK_FIELDS', TASK_FIELDS],
     ['TASK_LIST_FIELDS', TASK_LIST_FIELDS],
   ])('%s selects the columns the owner scope needs', (_name, fields) => {
-    expect(fields).toMatch(/projects!inner\([^)]*owner_user_id/)
+    expect(fields).toMatch(/projects!project_id!inner\([^)]*owner_user_id/)
   })
 
   // Columns added by later migrations that the API reads back.

@@ -163,7 +163,7 @@ export const getTask = async (
 ): Promise<(Task & { project: Project }) | null> => {
   const { data } = await admin()
     .from('tasks')
-    .select('*, project:projects!inner(id, key, title, description, status, task_counter, owner_user_id)')
+    .select('*, project:projects!project_id!inner(id, key, title, description, status, task_counter, owner_user_id)')
     .eq('projects.owner_user_id', userId)
     .eq('projects.key', key.toUpperCase())
     .eq('number', number)
@@ -181,7 +181,7 @@ export const getDuplicateOf = async (
 ): Promise<{ ref: string; title: string; status: string } | null> => {
   const { data } = await admin()
     .from('tasks')
-    .select('number, title, status, project:projects!inner(key)')
+    .select('number, title, status, project:projects!project_id!inner(key)')
     .eq('id', taskId)
     .maybeSingle()
   if (!data) return null
@@ -209,7 +209,7 @@ export type ChildTask = {
 export const listChildren = async (taskId: string): Promise<ChildTask[]> => {
   const { data } = await admin()
     .from('tasks')
-    .select('id, number, title, status, type, priority, project:projects!inner(key)')
+    .select('id, number, title, status, type, priority, project:projects!project_id!inner(key)')
     .eq('parent_id', taskId)
     .order('created_at')
   return ((data ?? []) as unknown as (Omit<ChildTask, 'project_key'> & {
@@ -226,7 +226,7 @@ export const getParent = async (
 ): Promise<{ ref: string; title: string; status: TaskStatus } | null> => {
   const { data } = await admin()
     .from('tasks')
-    .select('number, title, status, project:projects!inner(key)')
+    .select('number, title, status, project:projects!project_id!inner(key)')
     .eq('id', taskId)
     .maybeSingle()
   if (!data) return null
@@ -335,7 +335,7 @@ export const listAllTasks = async (
 
   let q = admin()
     .from('tasks')
-    .select(`${LIST_COLUMNS}, project:projects!inner(key, owner_user_id)`)
+    .select(`${LIST_COLUMNS}, project:projects!project_id!inner(key, owner_user_id)`)
     .eq('projects.owner_user_id', userId)
 
   if (!includeClosed) q = q.not('status', 'in', `(${closed.join(',')})`)
@@ -344,7 +344,7 @@ export const listAllTasks = async (
     q.order('updated_at', { ascending: false }).limit(limit),
     admin()
       .from('tasks')
-      .select('id, project:projects!inner(owner_user_id)', { count: 'exact', head: true })
+      .select('id, project:projects!project_id!inner(owner_user_id)', { count: 'exact', head: true })
       .eq('projects.owner_user_id', userId)
       .in('status', closed),
   ])
@@ -397,7 +397,7 @@ export const listRelations = async (taskId: string): Promise<Relation[]> => {
 
   const { data } = await admin()
     .from('tasks')
-    .select('id, number, title, status, project:projects!inner(key)')
+    .select('id, number, title, status, project:projects!project_id!inner(key)')
     .in('id', ids.map((i) => i.id))
 
   type Row = { id: string; number: number; title: string; status: string; project: { key: string } | { key: string }[] }

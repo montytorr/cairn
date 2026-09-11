@@ -8,12 +8,12 @@ export const TASK_FIELDS =
   'checkpoint_summary, checkpoint_payload, checkpoint_at, blocked_reason, blocked_at, ' +
   'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, parent_id, ' +
   'memory_session_id, observation_ids, created_at, updated_at, ' +
-  'project:projects!inner(id, key, title, owner_user_id)'
+  'project:projects!project_id!inner(id, key, title, owner_user_id)'
 
 /** Terse columns for list/search output. See the CLI's output discipline. */
 export const TASK_LIST_FIELDS =
   'id, number, title, type, status, priority, labels, claimed_by, heartbeat_at, ' +
-  'resolution, updated_at, project:projects!inner(key, owner_user_id)'
+  'resolution, updated_at, project:projects!project_id!inner(key, owner_user_id)'
 
 export type TaskRef = { key: string; number: number } | { id: string }
 
@@ -44,9 +44,9 @@ export const findTask = async (actor: Actor, raw: string, fields = TASK_FIELDS) 
   // error, which reads exactly like "no such task". Three callers passing a
   // narrow field list hit this. Appending it here rather than trusting every
   // future caller to remember.
-  const select = fields.includes('projects!inner')
+  const select = fields.includes('projects!project_id!inner')
     ? fields
-    : `${fields}, projects!inner(owner_user_id)`
+    : `${fields}, projects!project_id!inner(owner_user_id)`
 
   const query = admin().from('tasks').select(select).eq('projects.owner_user_id', actor.userId)
 
@@ -55,7 +55,13 @@ export const findTask = async (actor: Actor, raw: string, fields = TASK_FIELDS) 
       ? await query.eq('id', ref.id).maybeSingle()
       : await query.eq('number', ref.number).eq('projects.key', ref.key).maybeSingle()
 
-  if (error || !data) return null
+  // A PostgREST error is NOT "no such task" — maybeSingle() reports zero rows
+  // as data: null with no error. Swallowing it here is how adding a second
+  // tasks->projects path (task_projects, file_touches) turned every lookup in
+  // the product into "No task CAIRN-64." for a PGRST201 ambiguity that named
+  // its own fix in the response body.
+  if (error) throw new Error(`task lookup failed: ${error.message}`)
+  if (!data) return null
   return data as unknown as Record<string, unknown> & { id: string }
 }
 

@@ -20,7 +20,7 @@ export const GET = route<{ ref: string }>({
 
     const { data, error } = await admin()
       .from('tasks')
-      .select('id, number, title, type, status, priority, project:projects!inner(key)')
+      .select('id, number, title, type, status, priority, project:projects!project_id!inner(key)')
       .eq('parent_id', task.id)
       .order('created_at')
 
