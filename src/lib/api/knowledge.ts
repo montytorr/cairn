@@ -169,65 +169,70 @@ export const listKnowledge = async (
   userId: string,
   filters: { project?: string; label?: string; limit: number; includeSuperseded?: boolean },
 ): Promise<KnowledgeRow[]> => {
-  let query = admin()
-    .from('knowledge')
-    .select(COLUMNS)
-    .eq('owner_user_id', userId)
-    .order('updated_at', { ascending: false })
+  const base = () => {
+    let q = admin()
+      .from('knowledge')
+      .select(COLUMNS)
+      .eq('owner_user_id', userId)
+      .order('updated_at', { ascending: false })
 
-  if (filters.label) query = query.contains('labels', [filters.label])
-  if (!filters.includeSuperseded) query = query.is('superseded_by', null)
-
-  let scopeOf: ((row: KnowledgeRow) => 'project' | 'entity' | 'global') | null = null
-
-  if (filters.project) {
-    // What applies here is three things, not one: what was filed against this
-    // project, what was filed against a grouping this project belongs to, and
-    // what is true everywhere. An infra gotcha applies here; so does a Dispofi
-    // convention, if this is a Dispofi project.
-    //
-    // The narrowing has to happen IN the query. Filtering after a LIMIT looked
-    // identical and was not: once 200 rows existed, the twelve most recently
-    // updated all belonged to other projects, so the briefing's knowledge
-    // section silently went empty.
-    const { ids } = await resolveProjects(userId, [filters.project])
-    if (ids.length === 0) return []
-
-    const [scoped, viaEntities, globals] = await Promise.all([
-      admin().from('knowledge_projects').select('knowledge_id').eq('project_id', ids[0]),
-      knowledgeForEntitiesOf(userId, filters.project),
-      globalIds(userId),
-    ])
-    if (scoped.error) throw new Error(scoped.error.message)
-
-    const projectIds = new Set((scoped.data ?? []).map((r) => r.knowledge_id as string))
-    const entityIds = new Set(viaEntities)
-    const allowed = [...new Set([...projectIds, ...entityIds, ...globals])]
-    if (allowed.length === 0) return []
-
-    query = query.in('id', allowed)
-    scopeOf = (row) =>
-      projectIds.has(row.id) ? 'project' : entityIds.has(row.id) ? 'entity' : 'global'
+    if (filters.label) q = q.contains('labels', [filters.label])
+    if (!filters.includeSuperseded) q = q.is('superseded_by', null)
+    return q
   }
 
-  const { data, error } = await query.limit(filters.limit)
-  if (error) throw new Error(error.message)
+  if (!filters.project) {
+    const { data, error } = await base().limit(filters.limit)
+    if (error) throw new Error(error.message)
+    return withProjects((data ?? []) as unknown as KnowledgeRow[])
+  }
 
-  const rows = await withProjects((data ?? []) as unknown as KnowledgeRow[])
-  if (!scopeOf) return rows
+  // What applies here is three things: what was filed against this project,
+  // what was filed against a grouping it belongs to, and what is true
+  // everywhere. An infra gotcha applies here; so does a Dispofi convention,
+  // if this is a Dispofi project.
+  const { ids } = await resolveProjects(userId, [filters.project])
+  if (ids.length === 0) return []
 
-  // Narrower wins. A fact filed against this project outranks one filed
-  // against its business, which outranks one true everywhere -- which is how
-  // "true for Dispofi, except here" gets expressed without claiming, as
-  // superseded_by would, that one fact replaced the other.
-  const rank = { project: 0, entity: 1, global: 2 } as const
-  return rows
-    .map((row) => ({ ...row, scope: scopeOf(row) }))
-    .sort(
-      (a, b) =>
-        rank[a.scope!] - rank[b.scope!] ||
-        (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0),
-    )
+  const [scoped, viaEntities, globals] = await Promise.all([
+    admin().from('knowledge_projects').select('knowledge_id').eq('project_id', ids[0]),
+    knowledgeForEntitiesOf(userId, filters.project),
+    globalIds(userId),
+  ])
+  if (scoped.error) throw new Error(scoped.error.message)
+
+  const projectIds = (scoped.data ?? []).map((r) => r.knowledge_id as string)
+  const entityIds = viaEntities.filter((id) => !projectIds.includes(id))
+  const globalOnly = globals.filter(
+    (id) => !projectIds.includes(id) && !entityIds.includes(id),
+  )
+
+  // Narrower wins, and the narrowing has to survive the LIMIT. Sorting a page
+  // after fetching it only reorders that page: asking for twelve rows returned
+  // the twelve most recent of any scope, so a global fact could crowd out a
+  // fact about the project you are standing in. Each scope is therefore its
+  // own query, filling what the narrower one left.
+  const rows: KnowledgeRow[] = []
+  const tiers: [string[], KnowledgeRow['scope']][] = [
+    [projectIds, 'project'],
+    [entityIds, 'entity'],
+    [globalOnly, 'global'],
+  ]
+
+  for (const [ids_, scope] of tiers) {
+    const remaining = filters.limit - rows.length
+    if (remaining <= 0 || ids_.length === 0) continue
+
+    const { data, error } = await base().in('id', ids_).limit(remaining)
+    if (error) throw new Error(error.message)
+    for (const row of (data ?? []) as unknown as KnowledgeRow[]) rows.push({ ...row, scope })
+  }
+
+  // withProjects rebuilds the objects, so carry the scope across by id rather
+  // than by position — a reorder there would silently mislabel every row.
+  const scopeById = new Map(rows.map((row) => [row.id, row.scope]))
+  const withLinks = await withProjects(rows)
+  return withLinks.map((row) => ({ ...row, scope: scopeById.get(row.id) }))
 }
 
 /** Knowledge scoped to any entity the given project belongs to. */
