@@ -100,6 +100,12 @@ export const updateTaskSchema = taskFields.partial().extend({
    * means the ref changes, so this is handled apart from the field updates.
    */
   project: z.string().min(1).max(60).optional(),
+  /**
+   * Additional projects this task also belongs to, by key. Replaces the set;
+   * `[]` or `null` clears it. The home project is not one of these -- it keeps
+   * the ref, and these only widen where the task appears.
+   */
+  alsoProjects: z.array(z.string().min(1).max(10)).max(20).nullable().optional(),
 })
 
 export const createNoteSchema = z.object({

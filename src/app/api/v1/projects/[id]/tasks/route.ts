@@ -39,8 +39,21 @@ export const GET = route<{ id: string }>({
     let query = admin()
       .from('tasks')
       .select(TASK_LIST_FIELDS, { count: 'exact' })
-      .eq('project_id', project.id)
       .eq('projects.owner_user_id', actor.userId)
+
+    // A task filed elsewhere can still belong here. Its home project keeps the
+    // ref; these links only widen where it shows up, so the list is the union.
+    const { data: guests, error: guestError } = await admin()
+      .from('task_projects')
+      .select('task_id')
+      .eq('project_id', project.id)
+    if (guestError) return fail('internal_error', guestError.message)
+
+    const guestIds = (guests ?? []).map((g) => g.task_id as string)
+    query =
+      guestIds.length > 0
+        ? query.or(`project_id.eq.${project.id},id.in.(${guestIds.join(',')})`)
+        : query.eq('project_id', project.id)
 
     if (status) query = query.eq('status', status)
     if (type) query = query.eq('type', type)

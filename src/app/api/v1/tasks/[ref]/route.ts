@@ -161,7 +161,44 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       }
     }
 
+    // Secondary project links. Replaced wholesale, because an explicit list is
+    // a statement about where this work belongs, not an addition to it.
+    let alsoProjects: string[] | null = null
+    if (body.alsoProjects !== undefined) {
+      const keys = [...new Set((body.alsoProjects ?? []).map((k) => k.toUpperCase()))]
+
+      const { data: targets, error: lookupError } = await admin()
+        .from('projects')
+        .select('id, key')
+        .eq('owner_user_id', actor.userId)
+        .in('key', keys.length > 0 ? keys : ['\u0000'])
+      if (lookupError) return fail('internal_error', lookupError.message)
+
+      const found = new Map((targets ?? []).map((p) => [p.key as string, p.id as string]))
+      const missing = keys.filter((k) => !found.has(k))
+      if (missing.length > 0) return fail('not_found', `No such project: ${missing.join(', ')}`)
+
+      const { error: clearError } = await admin()
+        .from('task_projects')
+        .delete()
+        .eq('task_id', task.id)
+      if (clearError) return fail('internal_error', clearError.message)
+
+      if (keys.length > 0) {
+        const { error: linkError } = await admin()
+          .from('task_projects')
+          .insert(keys.map((k) => ({ task_id: task.id, project_id: found.get(k)! })))
+        if (linkError) {
+          // The trigger refuses a link to the task's own home project, which
+          // would list it twice in one place.
+          return fail('validation_failed', linkError.message)
+        }
+      }
+      alsoProjects = keys
+    }
+
     if (Object.keys(patch).length === 0) {
+      if (alsoProjects) return ok({ ...task, alsoProjects })
       if (moved) {
         return ok({
           ...task,
@@ -192,7 +229,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
 
     await recordActivity(diffTaskEvents(actor, task.id, task, patch))
 
-    return ok(data)
+    return ok(alsoProjects ? { ...data, alsoProjects } : data)
   },
 })
 

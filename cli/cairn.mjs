@@ -341,6 +341,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
   write
     cairn add "<title>" --project K [--type bug] [--priority high] [--body -]
     cairn update <ref> [--title T] [--status S] [--type T] [--priority P]
+    cairn update <ref> --also-project HM,AT      work that spans several projects
     cairn update <ref> --project OTHER      moves it; the ref changes
     cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
     cairn comment <ref> "<text>"
@@ -549,6 +550,9 @@ const commands = {
     if (flags['no-parent']) body.parentRef = null
     // Moving renumbers the task, so the response reports the new ref.
     if (flags.project) body.project = flags.project
+    // Widening does not: the task keeps its home project and its ref, and only
+    // starts appearing in the other projects' lists and boards too.
+    if (flags['also-project'] !== undefined) body.alsoProjects = splitList(flags['also-project'])
     if (flags['duplicate-of']) {
       body.duplicateOf = flags['duplicate-of']
       body.resolutionKind = 'duplicate'

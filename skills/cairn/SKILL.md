@@ -5,8 +5,15 @@ description: Shared task tracker and memory for agents. Use BEFORE starting work
 
 # Cairn
 
-Cairn is the shared memory for everything worked on here. Tasks, the notes on them, and
-the resolutions that close them are the record — other agents and the human read it.
+Cairn is the shared memory for everything worked on here. It holds four things, and
+`cairn check` searches all of them at once:
+
+| | what it answers |
+|---|---|
+| **tasks** | what needs doing, what was done, how it was resolved |
+| **notes** | what was tried along the way, including what did not work |
+| **knowledge** | what we now *know* — infra, conventions, gotchas — outliving any task |
+| **sessions** | what happened in a working session, and where it was left |
 
 Requires `cairn` on PATH. Credentials come from `CAIRN_BASE_URL` / `CAIRN_API_KEY`, or from
 `~/.cairn/env` if those are unset.
@@ -23,14 +30,19 @@ Returns an index — one line per prior task, whether it has a recorded answer, 
 rough token cost of opening it:
 
 ```
-#2
-ref     status  type  answered  tokens  title
-CAI-1   done    bug   yes       ~15     supavisor connection timeouts under load
-CAI-7   doing   bug             ~120    intermittent pool errors in staging
+#3
+kind       ref                       status  type         answered  tokens  title
+task       CAI-1                     done    bug          yes       ~15     supavisor timeouts under load
+knowledge  supavisor-pool-sizing     current knowledge     yes      ~90     Supavisor pools are per-tenant
+note       CAI-7                     doing   bug          yes       ~40     Tried raising pool_size, no change
 ```
 
-Open the promising ones with `cairn show CAI-1`. **Do not re-debug something already
-answered.** If it returns `#0`, the subject is new.
+Open a task with `cairn show CAI-1`, a piece of knowledge with `cairn know <slug>`, a
+task's notes with `cairn log CAI-7`. **Do not re-debug something already answered.** If it
+returns `#0`, the subject is new.
+
+`--kinds task,note,knowledge,session` narrows it; the default searches everything, because
+you do not know in advance which one holds the answer.
 
 ## 2. Then: check → show → act
 
@@ -97,7 +109,60 @@ cairn add "title" --project CAI --body -     # long markdown body from stdin
 
 `add` warns if similar work already exists — read the warning before continuing.
 
-## 7. Dependencies
+## 7. Knowledge: what we know, not what we did
+
+A task is a piece of work. Knowledge is what survives it — the thing the *next* person
+needs whether or not they ever find the task it was learned in.
+
+```bash
+cairn know                              # what applies here
+cairn know "postgrest ambiguous embed"  # search it
+cairn know postgrest-embeds-go-ambiguous-when-a-second-fk-path-appears   # read it
+```
+
+Write it the moment you learn something that will be true next month:
+
+```bash
+cairn learn "Supavisor pools are per-tenant, not per-connection-string" \
+  --label supabase,postgres --body -
+```
+
+No `--project` means **global** — infra, conventions, anything that is not one project's
+business. `--project HM,AT` scopes it to those. Scope it narrowly only when it is genuinely
+narrow; an infra gotcha filed under one project is invisible from the other four where it
+also applies.
+
+**Correct it rather than adding to it.** The failure mode of every memory store is
+accumulation without correction — two contradictory claims, equally findable, and no way to
+tell which one is current.
+
+```bash
+cairn relearn <slug> --body -                        # it changed
+cairn unlearn <old-slug> --superseded-by <new-slug>  # it was wrong
+```
+
+A superseded row stays findable and is marked as superseded, so someone holding the old
+belief can discover it was replaced.
+
+### Knowledge or a note?
+
+A note is bound to a task and to a moment: *"tried raising pool_size on CAI-7, no change"*.
+Knowledge is bound to nothing: *"Supavisor pools are per-tenant"*. If you would want it
+surfaced while working on an unrelated project, it is knowledge.
+
+## 8. The briefing
+
+```bash
+cairn context          # what you hold, what is in flight, where the last session stopped
+```
+
+Usually you will not run this: a hook runs it when a session starts and puts the result in
+front of you. Run it by hand when you have lost your place, or after a long stretch of work.
+
+`cairn map CAIRN` tells Cairn that this directory is that project, which is what makes the
+briefing project-aware. Do it once per checkout.
+
+## 9. Dependencies
 
 Before claiming, check whether something has to land first. A task with open blockers
 is not ready to start, no matter what its status says.
@@ -115,7 +180,7 @@ queries, a dependency shows up on both tasks and in `cairn deps`.
 something outside Cairn (an unavailable credential, a third party). Reach for
 `blockedby` when the blocker is another task.
 
-## 8. Closing as a duplicate
+## 10. Closing as a duplicate
 
 ```bash
 cairn done CAI-42 --duplicate-of CAI-31 --resolution "same cause as CAI-31; fixed there"
@@ -125,7 +190,7 @@ Naming the original is the point. `--kind duplicate` on its own records *that* i
 duplicate and leaves the reader to go and find *what* — which is the work the resolution
 was supposed to save.
 
-## 9. Splitting work up
+## 11. Splitting work up
 
 ```bash
 cairn add "write the migration" --project CAI --parent CAI-42
@@ -137,7 +202,7 @@ Sub-tasks are *containment*; `blockedby` is *ordering*. Use a parent when one ta
 too big for a single resolution, and a blocker when two separate things have to happen
 in an order.
 
-## 10. What already happened
+## 12. What already happened
 
 ```bash
 cairn history CAI-42     # status moves, claims, renames, resolutions — with who and when
@@ -154,5 +219,9 @@ parse, `--pretty` for a human. `cairn --help` is the full reference.
 
 ## Scope
 
-Cairn holds open loops and durable answers. It is not a session log — for "what did I do
-in that conversation last Tuesday", use your own host's memory.
+Cairn holds open loops, durable answers, and what was learned getting to them. Sessions are
+recorded automatically when they end and knowledge is written by hand, so "what did I do in
+that conversation last Tuesday" and "what do we know about this" are both `cairn check`.
+
+What it is still not: a transcript. It holds what a session concluded, never what was said
+turn by turn.

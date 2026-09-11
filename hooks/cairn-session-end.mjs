@@ -37,6 +37,15 @@ if (process.env.CAIRN_SUMMARISER === '1') process.exit(0)
 const TASK_REF = /\b([A-Z][A-Z0-9]{1,9})-(\d{1,6})\b/g
 const PATH_KEYS = ['file_path', 'notebook_path', 'path']
 
+/**
+ * Paths named inside a shell command.
+ *
+ * Structured tool inputs only cover Edit/Write/Read. A session that does its
+ * file work through heredocs and sed -- which is most shell-heavy work --
+ * recorded two files out of thirty until this existed.
+ */
+const SHELL_PATH = /(?:^|[\s'"=(])((?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|js|jsx|mjs|cjs|sql|py|rb|go|rs|java|kt|swift|sh|yml|yaml|json|toml|md|css|scss|html))\b/g
+
 const readStdin = async () => {
   let raw = ''
   for await (const chunk of process.stdin) raw += chunk
@@ -80,6 +89,7 @@ const parseTranscript = async (path) => {
     prompts: [],
     files: new Set(),
     refs: new Set(),
+    actedOn: new Set(),
     toolCalls: 0,
     assistantText: [],
   }
@@ -106,8 +116,13 @@ const parseTranscript = async (path) => {
 
     if (row.type === 'user') {
       const text = textOf(content).trim()
-      if (isHumanTurn(text)) out.prompts.push(text)
-      for (const m of text.matchAll(TASK_REF)) out.refs.add(m[0])
+      if (isHumanTurn(text)) {
+        out.prompts.push(text)
+        // Only what the human asked about. Scraping every user turn would pull
+        // refs out of tool output, which is how one session claimed to have
+        // worked on seventy-seven tasks.
+        for (const m of text.matchAll(TASK_REF)) out.refs.add(m[0])
+      }
       continue
     }
 
@@ -115,8 +130,11 @@ const parseTranscript = async (path) => {
 
     for (const block of content) {
       if (block?.type === 'text' && typeof block.text === 'string') {
+        // Narration is NOT scanned for refs. An agent that quotes a `cairn
+        // check` index is discussing twenty tasks and working on one; recording
+        // all twenty makes the file and task index answer "everything" to every
+        // question, which is the same as knowing nothing.
         out.assistantText.push(block.text)
-        for (const m of block.text.matchAll(TASK_REF)) out.refs.add(m[0])
         continue
       }
       if (block?.type !== 'tool_use') continue
@@ -127,8 +145,18 @@ const parseTranscript = async (path) => {
         if (typeof input[key] === 'string') out.files.add(input[key])
       }
       // Edits arrive as a batch on MultiEdit; the path is still file_path.
+      // A command the agent actually ran is evidence of work, unlike prose.
       if (typeof input.command === 'string') {
         for (const m of input.command.matchAll(TASK_REF)) out.refs.add(m[0])
+        for (const m of input.command.matchAll(SHELL_PATH)) out.files.add(m[1])
+
+        // Strongest evidence there is: a cairn command naming a ref is this
+        // session acting on that task, not mentioning it. When any exist, they
+        // are the answer -- a long session quotes far more refs than it works.
+        for (const line of input.command.split('\n')) {
+          if (!/\bcairn\s+\w/.test(line)) continue
+          for (const m of line.matchAll(TASK_REF)) out.actedOn.add(m[0])
+        }
       }
     }
   }
@@ -277,7 +305,8 @@ const main = async () => {
 
   if (t.startedAt) args.push('--started', t.startedAt)
   if (files.length) args.push('--files', files.join(','))
-  if (t.refs.size) args.push('--tasks', [...t.refs].slice(0, 400).join(','))
+  const refs = t.actedOn.size > 0 ? t.actedOn : t.refs
+  if (refs.size) args.push('--tasks', [...refs].slice(0, 400).join(','))
   if (process.env.CAIRN_AGENT) args.push('--agent', process.env.CAIRN_AGENT)
 
   const request = summary.request || t.prompts[0]?.slice(0, 500)
