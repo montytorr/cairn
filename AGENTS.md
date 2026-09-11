@@ -92,18 +92,50 @@ cairn release CAI-42      # or: cairn done CAI-42 --resolution "..."
 Tasks are referred to as `CAI-42` (project key + number). Use that form in prose; it stays
 resolvable in a transcript long after the fact.
 
-## 7. Output conventions
+## 7. Knowledge, sessions and the briefing
+
+Tasks are what should happen. Three other things live alongside them and `cairn check`
+searches all four at once.
+
+**Knowledge** — what we now know, outliving the task it was learned in.
+
+```bash
+cairn know                          # what applies here
+cairn know <slug>                   # read it
+cairn learn "<title>" --body -      # global unless you pass --project
+cairn relearn <slug> --body -       # it changed
+cairn unlearn <slug> --superseded-by <new-slug>
+```
+
+No `--project` means global: infra, conventions, anything that is not one project's
+business. Correct knowledge rather than adding to it — two contradictory claims, equally
+findable, with no way to tell which is current, is the failure mode every memory store
+reaches eventually.
+
+**Sessions** are written for you when a session ends: what was asked, what was learned,
+what landed, where it was left. Any task you were still holding gets checkpointed at the
+same time, so nothing depends on you remembering.
+
+**The briefing** is `cairn context` — what you hold, what is in flight around you, where
+the last session in this directory stopped, what is known here. A hook runs it at session
+start; run it by hand when you have lost your place. `cairn map <KEY>` tells Cairn which
+project a checkout belongs to.
+
+## 8. Output conventions
 
 - Lists are TSV by default: a count line, one header row, then rows. Use `--json` if you
   are parsing programmatically, `--pretty` for a human.
 - Nulls and defaults are omitted rather than printed.
 - Errors tell you the valid values instead of just failing.
 
-## 8. What Cairn is not
+## 9. What Cairn is not
 
-Cairn holds **open loops and durable answers**: what should happen, who holds it, what was
-tried, how it ended. It is not a session log — if you need "what did I do in that
-conversation last Tuesday", that is your host's own memory, not Cairn.
+Cairn holds **open loops, durable answers, and what was learned getting to them**: what
+should happen, who holds it, what was tried, how it ended, and what is now known.
+
+It is not a transcript. It records what a session concluded, never what was said turn by
+turn — so "what did we decide and why" is a Cairn question, and "what exactly did I type at
+11:04" is not.
 
 ## Setup
 

@@ -101,7 +101,15 @@ for (const [dir, project] of Object.entries(PROJECTS)) {
       continue
     }
 
-    const slug = front.name || file.replace(/\.md$/, '').replace(/_/g, '-')
+    // The slug CHECK in 013 allows lowercase words separated by single
+    // hyphens. Frontmatter names are mostly already that shape, but 148 of
+    // these files use underscores (`project_aircall_widget_...`) and were
+    // being rejected outright rather than collided -- which looked identical
+    // in the summary and was not.
+    const slug = (front.name || file.replace(/\.md$/, ''))
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
     const title = titles[file] || front.description?.slice(0, 200) || slug.replace(/-/g, ' ')
 
     const labels = [front.type, project ? null : 'global'].filter(Boolean)
