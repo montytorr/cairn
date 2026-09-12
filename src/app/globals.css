@@ -52,6 +52,16 @@
   --status-done:      #4f5bc4;
   --status-cancelled: #697280;
 
+  /* type — each reads as text, not only as a dot, so the pill on every row
+     carries its colour. Chosen for 4.5 against this theme's ground, which is
+     why the light set is not simply the dark set. */
+  --type-feature:     #7c3aed;
+  --type-bug:         #c52828;
+  --type-improvement: #1d6fd0;
+  --type-chore:       #565d68;
+  --type-spike:       #a16207;
+  --type-docs:        #15803d;
+
   --priority-urgent: #d97706;
   --priority-high:   #b45309;
   --priority-medium: #61656c;
@@ -98,6 +108,13 @@
   --status-in-review: #4cb782;
   --status-done:      #7b86e8;
   --status-cancelled: #757a82;
+
+  --type-feature:     #bb87fc;
+  --type-bug:         #eb5757;
+  --type-improvement: #4ea7fc;
+  --type-chore:       #95a2b3;
+  --type-spike:       #f2c94c;
+  --type-docs:        #4cb782;
 
   /* Urgent is a filled square, the others are bars, so colour is the second
      signal rather than the only one. High gets amber because three of the four

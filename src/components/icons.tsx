@@ -176,22 +176,39 @@ export const PriorityIcon = ({
   )
 }
 
-const TYPE_META: Record<TaskType, { label: string; color: string }> = {
-  feature: { label: 'Feature', color: '#bb87fc' },
-  bug: { label: 'Bug', color: '#eb5757' },
-  improvement: { label: 'Improvement', color: '#4ea7fc' },
-  chore: { label: 'Chore', color: '#95a2b3' },
-  spike: { label: 'Spike', color: '#f2c94c' },
-  docs: { label: 'Docs', color: '#4cb782' },
+const TYPE_LABEL: Record<TaskType, string> = {
+  feature: 'Feature',
+  bug: 'Bug',
+  improvement: 'Improvement',
+  chore: 'Chore',
+  spike: 'Spike',
+  docs: 'Docs',
 }
 
-/** A label pill: coloured dot plus text, as Linear renders labels. */
+/**
+ * The type of a task, on every row.
+ *
+ * The colour used to be a 7px dot beside grey text, which is the smallest
+ * possible place to put the one attribute that says what kind of work this is.
+ * The text now carries it too, and the border takes a wash of it — each value
+ * has a theme-specific hex chosen to clear 4.5 against that theme's ground,
+ * which is why they are tokens rather than one shared palette.
+ */
 export const TypePill = ({ type }: { type: TaskType }) => {
-  const meta = TYPE_META[type]
+  const color = `var(--type-${type})`
   return (
-    <span className="border-border text-fg-muted inline-flex h-[20px] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[11px] whitespace-nowrap">
-      <span className="size-[7px] rounded-full" style={{ backgroundColor: meta.color }} />
-      {meta.label}
+    <span
+      className="inline-flex h-[20px] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[11px] whitespace-nowrap"
+      style={{
+        color,
+        // An unsupported color-mix is simply ignored, leaving the border the
+        // class underneath draws.
+        borderColor: `color-mix(in srgb, ${color} 38%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${color} 8%, transparent)`,
+      }}
+    >
+      <span className="size-[7px] rounded-full" style={{ backgroundColor: color }} />
+      {TYPE_LABEL[type]}
     </span>
   )
 }
