@@ -30,7 +30,7 @@ import { recordActivity } from './activity'
 const QUIET_MINUTES = 120
 
 export type Reconciled = {
-  released: { ref: string; heldForMinutes: number; hadCheckpoint: boolean }[]
+  released: { ref: string; heldForMinutes: number; hadCheckpoint: boolean; reopened: boolean }[]
   quiet: { ref: string; lastNoteAt: string | null }[]
 }
 
@@ -57,6 +57,7 @@ export const reconcileClaims = async (
   const held = (data ?? []) as unknown as {
     id: string
     number: number
+    status: string
     claimed_at: string | null
     heartbeat_at: string | null
     checkpoint_at: string | null
@@ -94,10 +95,25 @@ export const reconcileClaims = async (
       ? Math.round((Date.now() - new Date(task.claimed_at).getTime()) / 60_000)
       : 0
 
+    // Releasing the claim without touching the status left the worst of
+    // both: the board went on saying "in progress" while nobody was on it,
+    // and the task fell out of every list that would have surfaced it again —
+    // not "held by someone", not "stale claim, takeable", just a row in the
+    // In Progress column that nobody owned. Ten had piled up that way.
+    //
+    // Moving it back to todo is not closing it. The checkpoint and the notes
+    // are untouched; what changes is that `doing` starts meaning what it says.
+    const reopen = task.status === 'doing'
+
     if (!options.dryRun) {
       const { error: releaseError } = await admin()
         .from('tasks')
-        .update({ claimed_by: null, claimed_at: null, heartbeat_at: null })
+        .update({
+          claimed_by: null,
+          claimed_at: null,
+          heartbeat_at: null,
+          ...(reopen ? { status: 'todo' } : {}),
+        })
         .eq('id', task.id)
       if (releaseError) throw new Error(releaseError.message)
 
@@ -113,8 +129,11 @@ export const reconcileClaims = async (
           note:
             `Claim released automatically: nothing happened on this task for ${quietFor} minutes. ` +
             (task.checkpoint_summary
-              ? 'The checkpoint above is where it was left.'
-              : 'No checkpoint was recorded, so the state is whatever the last note says.'),
+              ? 'The checkpoint above is where it was left. '
+              : 'No checkpoint was recorded, so the state is whatever the last note says. ') +
+            (reopen
+              ? 'Moved back to todo, because nobody is working on it — pick it up and finish it, or close it with a resolution.'
+              : ''),
           content_hash: `reconcile-${task.id}-${task.heartbeat_at ?? 'none'}`,
         })
 
@@ -124,12 +143,17 @@ export const reconcileClaims = async (
           actor_type: actor.actorType,
           actor_id: actor.actorId ?? 'unknown',
           event: 'released',
-          data: { reason: 'reconcile', heldForMinutes },
+          data: { reason: 'reconcile', heldForMinutes, reopened: reopen },
         },
       ])
     }
 
-    released.push({ ref, heldForMinutes, hadCheckpoint: Boolean(task.checkpoint_summary) })
+    released.push({
+      ref,
+      heldForMinutes,
+      hadCheckpoint: Boolean(task.checkpoint_summary),
+      reopened: reopen,
+    })
   }
 
   return {

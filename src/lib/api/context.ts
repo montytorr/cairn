@@ -34,7 +34,21 @@ export type ContextPayload = {
     lastNoteAt: string | null
     quiet: boolean
   }[]
-  inFlight: { ref: string; title: string; status: string; claimedBy: string | null }[]
+  inFlight: {
+    ref: string
+    title: string
+    status: string
+    claimedBy: string | null
+    /** How long since anything happened on it, for the reader to judge. */
+    quietFor: string
+    /**
+     * In progress, nobody on it, and quiet long enough that it is not being
+     * worked on. Work that was started and dropped is the easiest thing in
+     * the tracker to lose: it is not in anyone's held list and not a stale
+     * claim either, so nothing surfaces it again.
+     */
+    stalled: boolean
+  }[]
   lastSession: {
     endedAt: string | null
     request: string | null
@@ -47,7 +61,7 @@ export type ContextPayload = {
 }
 
 const TASK_SELECT =
-  'id, number, title, status, claimed_by, claimed_at, heartbeat_at, ' +
+  'id, number, title, status, claimed_by, claimed_at, heartbeat_at, updated_at, ' +
   'project:projects!project_id!inner(key, owner_user_id)'
 
 type TaskRow = {
@@ -58,6 +72,7 @@ type TaskRow = {
   claimed_by: string | null
   claimed_at: string | null
   heartbeat_at: string | null
+  updated_at: string | null
   project: { key: string }
 }
 
@@ -147,12 +162,18 @@ export const buildContext = async (
       .order('updated_at', { ascending: false })
       .limit(8)
     if (error) throw new Error(error.message)
-    inFlight = ((data ?? []) as unknown as TaskRow[]).map((row) => ({
-      ref: refOf(row),
-      title: row.title,
-      status: row.status,
-      claimedBy: row.claimed_by,
-    }))
+    inFlight = ((data ?? []) as unknown as TaskRow[]).map((row) => {
+      const quietSince = row.heartbeat_at ?? row.updated_at
+      const quietMs = quietSince ? Date.now() - new Date(quietSince).getTime() : 0
+      return {
+        ref: refOf(row),
+        title: row.title,
+        status: row.status,
+        claimedBy: row.claimed_by,
+        quietFor: humanDuration(quietSince),
+        stalled: !row.claimed_by && quietMs > QUIET_HOURS * 3_600_000,
+      }
+    })
   }
 
   // --- where the last session here stopped ------------------------------

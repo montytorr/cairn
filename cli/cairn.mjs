@@ -312,9 +312,26 @@ const renderContext = (d, { fileOnly = false } = {}) => {
   }
 
   if (d.inFlight?.length) {
-    out.push('', 'In flight here:')
-    for (const t of d.inFlight) {
-      out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 52)}${t.claimedBy ? `  (${t.claimedBy})` : ''}`)
+    // Separated on purpose. "In flight" reads as work someone is on, and a
+    // dropped task sitting in that list looked exactly like a live one --
+    // which is how ten of them accumulated without anyone noticing.
+    const live = d.inFlight.filter((t) => !t.stalled)
+    const stalled = d.inFlight.filter((t) => t.stalled)
+
+    if (live.length) {
+      out.push('', 'In flight here:')
+      for (const t of live) {
+        const who = t.claimedBy ? `  (${t.claimedBy})` : ''
+        out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 52)}${who}`)
+      }
+    }
+
+    if (stalled.length) {
+      out.push('', 'Started and dropped here -- nobody is on these:')
+      for (const t of stalled) {
+        out.push(`  ${t.ref}  ${t.status}  ${truncate(t.title, 44)}  quiet ${t.quietFor}`)
+      }
+      out.push('  Finish one and close it with a resolution, or move it back to todo.')
     }
   }
 
