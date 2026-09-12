@@ -1,7 +1,13 @@
 import { redirect } from 'next/navigation'
 import { AlertTriangle, Info } from 'lucide-react'
 import { currentUser } from '@/lib/data'
-import { assess, readVitalsFor, type Vitals } from '@/lib/api/vitals'
+import {
+  assess,
+  readVitalsFor,
+  readWorkShapeFor,
+  type Vitals,
+  type WorkShape,
+} from '@/lib/api/vitals'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
@@ -37,9 +43,10 @@ const VitalsPage = async () => {
   if (!user) redirect('/login')
 
   let vitals: Vitals | null = null
+  let work: WorkShape | null = null
   let failure: string | null = null
   try {
-    vitals = await readVitalsFor(user.id)
+    ;[vitals, work] = await Promise.all([readVitalsFor(user.id), readWorkShapeFor(user.id)])
   } catch (error) {
     failure = error instanceof Error ? error.message : 'Could not read the vital signs.'
   }
@@ -129,9 +136,100 @@ const VitalsPage = async () => {
                 )}
               </Section>
 
+              {work ? (
+                <>
+                  <Section title={`Where work is stuck · ${work.openTotal} open`}>
+                    {work.projects.length === 0 ? (
+                      <p className="text-fg-muted text-[13px]">Nothing open.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[12.5px]">
+                          <thead>
+                            <tr className="text-fg-subtle border-border border-b text-left text-[11px]">
+                              <th className="py-1.5 font-medium">project</th>
+                              <th className="py-1.5 text-right font-medium">open</th>
+                              <th className="py-1.5 text-right font-medium">stalled</th>
+                              <th className="py-1.5 text-right font-medium">never touched</th>
+                              <th className="py-1.5 text-right font-medium">oldest</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {work.projects.map((p) => (
+                              <tr key={p.key} className="border-border border-b last:border-0">
+                                <td className="text-fg py-1.5">{p.key}</td>
+                                <td className="text-fg tabular py-1.5 text-right">{p.open}</td>
+                                <td
+                                  className={`tabular py-1.5 text-right ${p.stalled > 0 ? 'text-danger' : 'text-fg-subtle'}`}
+                                >
+                                  {p.stalled}
+                                </td>
+                                <td className="text-fg-muted tabular py-1.5 text-right">
+                                  {p.neverTouched}
+                                </td>
+                                <td className="text-fg-muted tabular py-1.5 text-right">
+                                  {p.oldestDays}d
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="text-fg-subtle mt-2 text-[11px] leading-relaxed">
+                      <strong className="font-medium">Never touched</strong> is filed and not
+                      edited since — nobody has picked it up at all.{' '}
+                      <strong className="font-medium">Stalled</strong> is in progress with nobody
+                      holding it.
+                    </p>
+                  </Section>
+
+                  <Section title="Held right now">
+                    {work.holding.length === 0 ? (
+                      <p className="text-fg-muted text-[13px]">Nothing is claimed.</p>
+                    ) : (
+                      work.holding.map((h) => (
+                        <Row
+                          key={h.ref}
+                          label={`${h.ref} · ${h.title}`}
+                          value={
+                            h.heldMinutes >= 120
+                              ? `${Math.round(h.heldMinutes / 60)}h`
+                              : `${h.heldMinutes}m`
+                          }
+                          hint={h.agent}
+                        />
+                      ))
+                    )}
+                  </Section>
+
+                  {work.dropped.length > 0 ? (
+                    <Section title="Started and walked away from">
+                      {work.dropped.map((d) => (
+                        <Row key={d.agent} label={d.agent} value={String(d.count)} hint="tasks" />
+                      ))}
+                    </Section>
+                  ) : null}
+
+                  <Section title="Work that came back">
+                    <Row label="reopened after being closed" value={String(work.rework.reopened)} />
+                    <Row
+                      label="resolutions revised"
+                      value={String(work.rework.resolutionsRevised)}
+                    />
+                    <Row label="filed as a duplicate" value={String(work.rework.duplicatesFiled)} />
+                    <p className="text-fg-subtle mt-2 text-[11px] leading-relaxed">
+                      The one quality signal here that is hard to game: moving it means not
+                      making a mess in the first place.
+                    </p>
+                  </Section>
+                </>
+              ) : null}
+
               <p className="text-fg-subtle text-[11px] leading-relaxed">
                 Counts cover the last {window}, against the week before it. A count on its own
                 says little — every check here compares the two, scaled to the same length.
+                There is deliberately no ranking of agents: Cairn is their working memory, and a
+                visible score would be something to optimise.
               </p>
             </>
           ) : null}

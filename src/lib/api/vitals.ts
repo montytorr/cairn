@@ -127,6 +127,30 @@ export const assess = (v: Vitals): Finding[] => {
   return findings
 }
 
+/**
+ * The shape of the work, as opposed to the health of the system.
+ *
+ * Deliberately not a leaderboard. The agents read Cairn -- it is their working
+ * memory -- so a visible closure score creates an incentive to close things,
+ * which is the one behaviour least worth optimising. Per agent there is only
+ * what is actionable: what it holds now, and what it walked away from.
+ */
+export type WorkShape = {
+  windowHours: number
+  openTotal: number
+  stalledTotal: number
+  projects: { key: string; open: number; stalled: number; oldestDays: number; neverTouched: number }[]
+  holding: { agent: string; ref: string; title: string; heldMinutes: number }[]
+  dropped: { agent: string; count: number }[]
+  rework: { reopened: number; resolutionsRevised: number; duplicatesFiled: number }
+}
+
+export const readWorkShapeFor = async (userId: string, hours = 24): Promise<WorkShape> => {
+  const { data, error } = await admin().rpc('cairn_work_shape', { p_owner: userId, p_hours: hours })
+  if (error) throw new Error(error.message)
+  return data as unknown as WorkShape
+}
+
 export const readVitalsFor = async (userId: string, hours = 24): Promise<Vitals> => {
   const { data, error } = await admin().rpc('cairn_vitals', { p_owner: userId, p_hours: hours })
   if (error) throw new Error(error.message)
