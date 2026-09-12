@@ -37,6 +37,18 @@ jobs:
           ENV
           cp docker-compose.example.yml docker-compose.yml
 
+      - name: note what is running
+        id: previous
+        # Captured BEFORE the build, because building overwrites the image tag
+        # and leaves the old image dangling — reachable by id, and by nothing
+        # else. Without this there is nothing to go back to.
+        run: |
+          image=$(docker inspect cairn --format '{{.Image}}' 2>/dev/null || true)
+          name=$(docker inspect cairn --format '{{.Config.Image}}' 2>/dev/null || true)
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "name=${name:-cairn-cairn}" >> "$GITHUB_OUTPUT"
+          echo "currently running ${image:-nothing}"
+
       - name: build
         run: docker compose --profile tools build --quiet
 
@@ -69,8 +81,34 @@ jobs:
 
       - name: roll back on failure
         if: failure()
-        # The previous image is still on the host; restarting the last known
-        # good container beats leaving the site down while someone reads logs.
+        # This used to be `docker compose up -d --no-build` alone, which rolled
+        # forward: the build step had already replaced the image tag, so the
+        # "previous container" it started was the code that had just failed.
+        # A migration failed, the rollback ran, and the new build went live
+        # anyway while the job reported failure — the one state this exists to
+        # prevent.
         run: |
-          echo "deploy failed — restarting the previous container"
-          docker compose up -d --no-build || true
+          set -uo pipefail
+          previous='${{ steps.previous.outputs.image }}'
+          name='${{ steps.previous.outputs.name }}'
+
+          if [ -z "$previous" ]; then
+            echo "::error::deploy failed and nothing was running to fall back to"
+            exit 1
+          fi
+
+          echo "deploy failed — restoring $previous"
+          docker tag "$previous" "$name"
+          docker compose up -d --no-build
+
+          for _ in $(seq 1 18); do
+            state=$(docker inspect cairn --format '{{.State.Health.Status}}' 2>/dev/null || echo starting)
+            if [ "$state" = healthy ]; then
+              echo "rolled back to the previous build, healthy"
+              exit 1   # the deploy still failed; say so
+            fi
+            sleep 5
+          done
+
+          echo "::error::rollback did not become healthy — the site may be down"
+          exit 1
