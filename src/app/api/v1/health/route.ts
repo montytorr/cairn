@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { NextResponse } from 'next/server'
+import { version as RELEASE } from '../../../../../package.json'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
  * could answer "is my fix live yet?" sits behind the login redirect, so the
  * only honest answer was to trust the deploy log.
  */
-const version = (() => {
+const build = (() => {
   try {
     return readFileSync('public/build-version.txt', 'utf8').trim() || 'unknown'
   } catch {
@@ -27,5 +28,14 @@ const version = (() => {
 export const GET = () =>
   NextResponse.json({
     success: true,
-    data: { status: 'ok', service: 'cairn', version, time: new Date().toISOString() },
+    data: {
+      status: 'ok',
+      service: 'cairn',
+      // The released version, and the exact commit it was built from. The
+      // first tells a CLI whether it is out of step; the second tells a human
+      // whether their fix is live.
+      version: RELEASE,
+      build,
+      time: new Date().toISOString(),
+    },
   })

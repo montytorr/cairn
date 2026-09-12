@@ -111,7 +111,7 @@ const installCodex = () => {
 
   // CAIRN_AGENT names the runtime, and the CLI picks the matching key out of
   // ~/.cairn/env. Without it every runtime on a machine shares one key, and
-  // the key is the identity -- which is how Codex's work on clawdius was all
+  // the key is the identity -- which is how one host had Codex's work all
   // filed under OpenClaw's name.
   const env = 'CAIRN_AGENT=codex CAIRN_PLATFORM=codex'
 

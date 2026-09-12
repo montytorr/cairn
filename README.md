@@ -1,5 +1,9 @@
 # Cairn
 
+[![CI](https://github.com/montytorr/cairn/actions/workflows/ci.yml/badge.svg)](https://github.com/montytorr/cairn/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](./LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](./CHANGELOG.md)
+
 **The tracker your agents read before they start, and write to as they work.**
 
 They check it for prior work, claim what they take, record what they tried — including
@@ -16,6 +20,14 @@ it ends.
 > **Single-tenant on purpose.** Every server query resolves to one owner, so Cairn is built
 > for one person and their agents, not a team. In daily use; schema, API, CLI, UI and the
 > agent contract are all in place.
+>
+> **Pre-1.0.** Stable in practice and running in production, but a minor version may still
+> change the schema or the API. Anything that breaks an existing install is called out in
+> the [changelog](./CHANGELOG.md).
+
+**Jump to:** [Self-hosting](#self-hosting) · [Agent setup](#agent-setup) · [The CLI](#the-cli) ·
+[API](#api) · [Scheduled maintenance](#scheduled-maintenance--optional) ·
+[Architecture](#architecture) · [Contributing](#contributing)
 
 It holds **four stores**, and one verb — `cairn check` — searches all four in a single
 pass:
@@ -572,7 +584,7 @@ to those files.
 
 ```bash
 export CAIRN_BACKUP_DIR=/srv/backups/cairn
-export CAIRN_DB_CONTAINER=clawdius-postgres
+export CAIRN_DB_CONTAINER=cairn-postgres
 export CAIRN_ATTACHMENT_DIR=/srv/cairn/attachments
 
 ./scripts/backup.sh          # nightly, from cron — 7 daily, 4 weekly
@@ -587,9 +599,21 @@ untested backup is not a backup.
 ## Contributing
 
 Cairn is a personal tool published in the open; issues and PRs are welcome, but the
-maintainer's own use drives the roadmap. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the
-traps worth knowing about before you change something — Zod's `.partial()` and defaults,
-IMMUTABLE generated columns, and the markdown round-trip in the editor.
+maintainer's own use drives the roadmap. If you are thinking of something large, open an
+issue before building it — not to gatekeep, but because this is a small codebase with
+strong opinions and it would be a shame to waste your evening.
+
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — the traps worth knowing before you change
+  something: Zod's `.partial()` and defaults, IMMUTABLE generated columns, the markdown
+  round-trip in the editor, and how releases are cut.
+- [`CHANGELOG.md`](./CHANGELOG.md) — what changed, and what breaks.
+- [`SECURITY.md`](./SECURITY.md) — the threat model, and how to report a vulnerability
+  privately.
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — short, and the usual.
+
+One habit worth borrowing if you send a patch: the comments here explain **why**, not
+what. The code says what it does; the comment exists for the next person who wonders why
+it does it that way, and half of them are a bug someone already paid for.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build

@@ -41,6 +41,15 @@ const fileEnv = () => {
   }
 }
 
+/**
+ * Kept in step with package.json by a test, because this file is copied to
+ * machines rather than installed from a registry: it is the copy on the box
+ * that matters, and nothing else would notice it going stale. A CLI three days
+ * old was found writing under the wrong identity exactly once, which was
+ * enough.
+ */
+const VERSION = '0.1.0'
+
 const FILE_ENV = fileEnv()
 const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://localhost:3000')
   .replace(/\/+$/, '')
@@ -50,12 +59,12 @@ const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://l
  *
  * The API key IS the identity -- an actor_id comes from the key, not from
  * anything the caller says -- and one key per machine meant every runtime on
- * the server wrote as whoever owned that file. On clawdius that was openclaw,
- * so Codex's tasks, claims and closes were filed under OpenClaw's name and no
- * agent could be held to its own behaviour.
+ * a host wrote as whoever owned that file — so on one machine every Codex
+ * task, claim and close was filed under OpenClaw's name, and no agent could be
+ * held to its own behaviour.
  *
- * Per-user key files cannot fix it either: Codex runs as both caladmin and
- * root there, and OpenClaw shares caladmin with it.
+ * Per-user key files cannot fix it either: Codex may run as more than one
+ * user on the same box, and share a user with OpenClaw.
  *
  * So the runtime names itself, and the file can carry a key per runtime.
  * `CLAUDECODE` is set by Claude Code itself; the others are set where the
@@ -66,7 +75,7 @@ const detectAgent = () => {
   if (process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT) return 'claude-code'
 
   // OpenClaw runs Codex underneath, pointed at a CODEX_HOME of its own
-  // (/root/.openclaw/agents/main/agent/codex-home on clawdius). Testing for
+  // (an `.openclaw/.../codex-home` of its own). Testing for
   // Codex first would therefore file every one of OpenClaw's writes as Codex
   // -- the same misattribution this exists to fix, pointing the other way.
   const codexHome = process.env.CODEX_HOME ?? ''
@@ -467,6 +476,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
 
   projects
     cairn map [<KEY>|none]                       which project this directory is
+    cairn --version                              this CLI, the server, and whether they match
     cairn projects [--archived]                  --archived includes retired ones
     cairn project rename <KEY> "<title>"
     cairn project archive <KEY>                  hides it; the tasks stay searchable
@@ -1219,6 +1229,30 @@ const commands = {
 }
 
 const command = positional.shift()
+
+if (flags.version || command === 'version') {
+  // Asks the server too, and says when they disagree. A stale copy is
+  // invisible otherwise: it goes on working, just not the way the docs say.
+  let server = null
+  try {
+    const res = await fetch(`${BASE}/api/v1/health`)
+    server = (await res.json())?.data ?? null
+  } catch {
+    // Offline, or not pointed at a server yet. The local version still answers.
+  }
+  process.stdout.write(`cairn ${VERSION}\n`)
+  if (server) {
+    process.stdout.write(`server ${server.version ?? '?'} (${server.build ?? '?'}) ${BASE}\n`)
+    if (server.version && server.version !== VERSION) {
+      process.stderr.write(
+        `\nthis CLI is ${VERSION}, the server is ${server.version} — ` +
+          `run scripts/sync-agent-files.mjs, or copy cli/cairn.mjs over\n`,
+      )
+    }
+  }
+  process.exit(0)
+}
+
 if (!command || flags.help || command === 'help') {
   process.stdout.write(HELP)
   process.exit(0)

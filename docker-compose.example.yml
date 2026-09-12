@@ -82,5 +82,5 @@ networks:
     name: ${CAIRN_PROXY_NETWORK}
     external: true
   database:
-    name: ${CAIRN_DATABASE_NETWORK:-clawdius-data}
+    name: ${CAIRN_DATABASE_NETWORK:-cairn-data}
     external: true

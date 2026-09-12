@@ -25,14 +25,26 @@ jobs:
         # Secrets live outside the workspace, owned by the runner user, and
         # are never checked out. The compose file reads .env.local for the
         # container and .env for label interpolation.
+        env:
+          CAIRN_DOMAIN: ${{ vars.CAIRN_DOMAIN }}
+          CAIRN_PROXY_NETWORK: ${{ vars.CAIRN_PROXY_NETWORK }}
+          CAIRN_DATABASE_NETWORK: ${{ vars.CAIRN_DATABASE_NETWORK }}
         run: |
           set -euo pipefail
           test -f "$HOME/cairn-secrets/app.env" || { echo "missing app.env"; exit 1; }
           install -m 600 "$HOME/cairn-secrets/app.env" .env.local
+          # Required, not defaulted. A fallback here meant one person's
+          # hostname and container names sat in a public file, and a fork that
+          # forgot to configure them would deploy against names that are not
+          # theirs — failing confusingly instead of immediately.
+          : "${CAIRN_DOMAIN:?set the CAIRN_DOMAIN repository variable}"
+          : "${CAIRN_PROXY_NETWORK:?set the CAIRN_PROXY_NETWORK repository variable}"
+          : "${CAIRN_DATABASE_NETWORK:?set the CAIRN_DATABASE_NETWORK repository variable}"
+
           cat > .env <<ENV
-          CAIRN_DOMAIN=${{ vars.CAIRN_DOMAIN || 'tasks.montytorr.com' }}
-          CAIRN_PROXY_NETWORK=${{ vars.CAIRN_PROXY_NETWORK || 'trading-v2-network' }}
-          CAIRN_DATABASE_NETWORK=${{ vars.CAIRN_DATABASE_NETWORK || 'clawdius-data' }}
+          CAIRN_DOMAIN=${CAIRN_DOMAIN}
+          CAIRN_PROXY_NETWORK=${CAIRN_PROXY_NETWORK}
+          CAIRN_DATABASE_NETWORK=${CAIRN_DATABASE_NETWORK}
           GIT_SHA=${GITHUB_SHA::7}
           ENV
           cp docker-compose.example.yml docker-compose.yml
@@ -73,9 +85,11 @@ jobs:
       - name: smoke test
         # Through the public URL, so this exercises Traefik and TLS too — a
         # container that is healthy but unreachable is still a failed deploy.
+        env:
+          CAIRN_DOMAIN: ${{ vars.CAIRN_DOMAIN }}
         run: |
           set -euo pipefail
-          code=$(curl -s -o /dev/null -w '%{http_code}' https://tasks.montytorr.com/api/v1/health)
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${CAIRN_DOMAIN}/api/v1/health")
           [ "$code" = "200" ] || { echo "health endpoint returned $code"; exit 1; }
           echo "deployed $GITHUB_SHA"
 

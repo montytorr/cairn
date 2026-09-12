@@ -3,7 +3,7 @@
 # Cairn backup. Configure with environment variables and run from cron.
 #
 #   CAIRN_BACKUP_DIR     where to write backups (default: /srv/backups/cairn)
-#   CAIRN_DB_CONTAINER   Postgres container name (default: clawdius-postgres)
+#   CAIRN_DB_CONTAINER   Postgres container name (default: cairn-postgres)
 #   CAIRN_ATTACHMENT_DIR attachment tree (default: /srv/cairn/attachments)
 #
 # Backs up BOTH halves, because either alone is useless: a database dump
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DEST=${CAIRN_BACKUP_DIR:-/srv/backups/cairn}
-DB_CONTAINER=${CAIRN_DB_CONTAINER:-clawdius-postgres}
+DB_CONTAINER=${CAIRN_DB_CONTAINER:-cairn-postgres}
 DB_NAME=${CAIRN_DB_NAME:-cairn}
 ATTACHMENTS=${CAIRN_ATTACHMENT_DIR:-/srv/cairn/attachments}
 

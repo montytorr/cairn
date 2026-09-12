@@ -40,7 +40,7 @@ const RAW = env('CAIRN_RAW_BASE', 'https://raw.githubusercontent.com/montytorr/c
 const HOOKS = env('CAIRN_HOOKS_DIR', join(homedir(), '.cairn/hooks'))
 
 /** Where a runtime keeps transcripts nothing else will hand us. */
-const OPENCLAW_SESSIONS = env('CAIRN_OPENCLAW_SESSIONS', '/root/.openclaw/agents/main/agent/codex-home/sessions')
+const OPENCLAW_SESSIONS = env('CAIRN_OPENCLAW_SESSIONS', '')
 
 /** Tasks the jobs report into. Empty disables reporting for that job. */
 const NOTIFY_FILES = env('CAIRN_NOTIFY_FILES', '')

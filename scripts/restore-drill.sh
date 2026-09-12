@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DEST=${CAIRN_BACKUP_DIR:-/srv/backups/cairn}
-DB_CONTAINER=${CAIRN_DB_CONTAINER:-clawdius-postgres}
+DB_CONTAINER=${CAIRN_DB_CONTAINER:-cairn-postgres}
 SCRATCH="cairn_restore_drill_$(date -u +%s)"
 
 LATEST=$(find "$DEST/daily" -maxdepth 1 -name 'cairn-db-*.dump' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)

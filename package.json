@@ -1,9 +1,25 @@
 {
   "name": "cairn",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montytorr/cairn.git"
+  },
+  "homepage": "https://github.com/montytorr/cairn#readme",
+  "bugs": {
+    "url": "https://github.com/montytorr/cairn/issues"
+  },
+  "keywords": [
+    "agents",
+    "task-tracker",
+    "memory",
+    "self-hosted",
+    "claude-code",
+    "codex",
+    "postgres"
+  ],
   "private": false,
   "license": "MIT",
-  "description": "Self-hosted, agent-first task tracker whose tasks double as shared memory for AI coding agents.",
   "engines": {
     "node": ">=22"
   },

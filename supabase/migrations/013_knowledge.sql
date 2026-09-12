@@ -4,8 +4,8 @@
 -- Every row in Cairn so far hangs off a task, and a task hangs off exactly one
 -- project. That leaves nowhere to put the thing an agent most often needs:
 -- "one overflow axis set to auto forces the other from visible to auto", or
--- "the Mac cannot reach clawdius' public IP, and it is WireGuard, not
--- Tailscale". Those belong to no task, and usually to no single project.
+-- "this laptop cannot reach that host's public IP, and it is the VPN rather
+-- than the DNS". Those belong to no task, and usually to no single project.
 --
 -- Two design decisions worth stating, because both are reactions to measured
 -- failures in the store this replaces:

@@ -41,6 +41,29 @@ ProseMirror, so writing an untouched body can rewrite what an agent authored. Se
 by owner explicitly. RLS is the browser-side boundary and defence in depth, not what
 protects server-side reads.
 
+## Versions and releases
+
+Semantic versioning, and pre-1.0: the schema, API and CLI are stable in practice but a
+minor bump may still change them. Anything that breaks an existing install is called out
+under **Breaking** in [`CHANGELOG.md`](./CHANGELOG.md), with what to do about it.
+
+Cutting a release:
+
+```bash
+# 1. version in package.json AND in cli/cairn.mjs — a test fails if they disagree
+# 2. move Unreleased into a dated section in CHANGELOG.md
+npm test && git commit -am "release: v0.2.0" && git tag v0.2.0 && git push --follow-tags
+```
+
+The CLI carries its own version number because it is copied onto machines rather than
+installed from a registry — there is no package.json beside the copy in `/usr/local/bin`.
+That makes it exactly the kind of constant that goes stale silently, so a test pins it,
+and `cairn --version` asks the server as well and says when the two disagree.
+
+`/api/v1/health` reports both: `version` is the release, `build` the commit it was built
+from. The first tells a CLI whether it is out of step, the second tells you whether your
+fix is actually live.
+
 ## Secrets
 
 `.env*` is gitignored except `.env.example`, and GitHub secret scanning with push
