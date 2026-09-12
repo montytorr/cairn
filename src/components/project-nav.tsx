@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
-import { Activity, BookOpen, Columns3, History, Inbox, Search, X } from 'lucide-react'
+import { Activity, BookOpen, Columns3, HeartPulse, History, Inbox, Search, X } from 'lucide-react'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -35,6 +35,7 @@ export const ProjectNav = ({
     { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
     { href: '/sessions', label: 'Sessions', icon: History },
     { href: '/activity', label: 'Activity', icon: Activity },
+    { href: '/vitals', label: 'Vitals', icon: HeartPulse },
   ]
 
   return (

@@ -7,6 +7,7 @@ import { Shortcuts } from '@/components/shortcuts'
 import { ProjectKeysProvider } from '@/components/project-keys'
 import { MobileNavProvider } from '@/components/mobile-nav-context'
 import { ToastHost } from '@/components/toast'
+import { HealthBanner } from '@/components/health-banner'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const user = await currentUser()
@@ -28,7 +29,12 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
                 <AppSidebar email={email} projects={projectList} />
               </aside>
 
+              {/* Beside the content, not above the sidebar: the shell is a flex
+                row, and a banner spanning it would push the whole app down. */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <HealthBanner userId={user.id} />
               <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
+            </div>
               <CommandPalette projects={projectList} />
               <Shortcuts />
             </div>

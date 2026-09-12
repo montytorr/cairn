@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import { admin } from '@/lib/db/client'
 import type { Actor } from './auth'
 
@@ -126,11 +127,23 @@ export const assess = (v: Vitals): Finding[] => {
   return findings
 }
 
-export const readVitals = async (actor: Actor, hours = 24): Promise<Vitals> => {
-  const { data, error } = await admin().rpc('cairn_vitals', {
-    p_owner: actor.userId,
-    p_hours: hours,
-  })
+export const readVitalsFor = async (userId: string, hours = 24): Promise<Vitals> => {
+  const { data, error } = await admin().rpc('cairn_vitals', { p_owner: userId, p_hours: hours })
   if (error) throw new Error(error.message)
   return data as unknown as Vitals
 }
+
+export const readVitals = (actor: Actor, hours = 24) => readVitalsFor(actor.userId, hours)
+
+/**
+ * The same read, cached, for the pages that show it.
+ *
+ * The aggregate takes ~45ms, which is fine once and wasteful on every
+ * navigation — and a health summary five minutes stale is still a health
+ * summary. The API route deliberately does not use this: a monitor asking the
+ * question deserves the current answer.
+ */
+export const cachedVitals = (userId: string, hours = 24) =>
+  unstable_cache(() => readVitalsFor(userId, hours), ['cairn-vitals', userId, String(hours)], {
+    revalidate: 300,
+  })()
