@@ -316,6 +316,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
 | `cairn session list` · `cairn session end --id <id>` | The episodic record |
 | `cairn reconcile` | Release your own claims that went quiet |
+| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong |
 | `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
 | `cairn map <KEY>` | Tell Cairn which project this directory is |
 
@@ -327,7 +328,8 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 schemas the routes validate against, so it cannot drift. Browsable at `/api-docs`.
 
 ```
-/health                         unauthenticated probe
+/health                         unauthenticated probe; reports the commit it was built from
+/vitals                         whether the memory is still being written, and what looks wrong
 /search                         the read half of Cairn-as-memory
 /projects  /projects/{id}       list, create, read, rename, delete
 /projects/{id}/tasks            list and create within a project
@@ -355,6 +357,8 @@ docs cannot fall behind the surface — which they had, by six routes, before th
 Authenticate with `Authorization: Bearer sk_live_…`. Keys are stored as a sha256 hash: the
 plaintext is shown once, at creation, and never again. Issue **one key per agent**, so
 writes are attributable and any single agent can be revoked without disturbing the others.
+This is not a convention — the key is the only thing that says who is writing, so agents
+sharing one are indistinguishable in every count and every history afterwards.
 
 Every response is enveloped: `{"success":true,"data":…}` or
 `{"success":false,"error":"…","code":"…"}`.
@@ -426,6 +430,24 @@ chmod 600 ~/.cairn/env
 install -m 755 cli/cairn.mjs /usr/local/bin/cairn
 ```
 
+**One key per runtime, where a machine runs more than one.** The key *is* the identity —
+`actor_id` comes from the key, never from what the caller claims — so a single key shared
+by Claude Code, Codex and OpenClaw files all of their work under one name, and no agent
+can be held to its own behaviour. Add a key per runtime and the CLI picks the right one:
+
+```bash
+CAIRN_API_KEY=sk_live_...              # the fallback, when nothing else matches
+CAIRN_API_KEY_CODEX=sk_live_...
+CAIRN_API_KEY_CLAUDE_CODE=sk_live_...
+```
+
+It works out which runtime it is in from the environment — `CLAUDECODE`, `CODEX_HOME` —
+and `CAIRN_AGENT=<name>` says so explicitly when that is not enough. One trap worth
+knowing: OpenClaw *is* Codex with a `CODEX_HOME` of its own, so a `CODEX_HOME` under an
+OpenClaw path resolves to `openclaw`, not `codex`. Codex itself reads `CODEX_HOME` without
+necessarily setting it, which is what [`scripts/codex-wrapper.sh`](./scripts/codex-wrapper.sh)
+is for.
+
 The CLI is deliberately dependency-free — Node 22's built-in `fetch` is enough — so it can
 be dropped onto a box and run with no install step.
 
@@ -472,6 +494,56 @@ Codex rejects a literal `bearer_token`; for an HTTP transport it wants
 **Existing memory.** If you already keep curated agent memory as one markdown file per
 fact, `node scripts/import-memory-files.mjs --dry-run` shows what it would bring in as
 knowledge.
+
+## Scheduled maintenance — optional
+
+Cairn works with none of these. They are the difference between a tracker that notices its
+own problems and one that waits to be asked, and each is independent: install none, some,
+or all.
+
+```bash
+node scripts/install-cron.mjs              # print the block, change nothing
+node scripts/install-cron.mjs --install    # write it into the crontab
+node scripts/install-cron.mjs --only vitals --install
+node scripts/install-cron.mjs --remove
+```
+
+Printing is the default on purpose. The lines live between two markers and the installer
+only ever touches what is between them, so it can be re-run without duplicating and
+without disturbing anything else in the crontab — it backs the whole thing up first
+regardless. Any job whose prerequisites are missing on that machine is skipped rather than
+installed broken.
+
+| Job | What it is for |
+|---|---|
+| `reconcile` (30 min) | Releases a claim an agent stopped working on, and moves the task back to todo so `doing` keeps meaning somebody is on it |
+| `vitals` (daily) | Asks whether the memory is still being written, and reports **only** when something looks wrong |
+| `agent-files` (hourly) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
+| `openclaw-sessions` (30 min) | OpenClaw has no session-end event, so its transcripts are swept instead of waiting to be handed over |
+
+Host-specific paths come from the environment, because a machine's layout does not belong
+in this repository: `CAIRN_CLI_PATH`, `CAIRN_NODE_PATH`, `CAIRN_LOG_DIR`,
+`CAIRN_SYNC_SCRIPT`, `CAIRN_RAW_BASE`, `CAIRN_HOOKS_DIR`, `CAIRN_OPENCLAW_SESSIONS`, and
+`CAIRN_SYNC_ALSO` for copies outside the running user's home. `CAIRN_NOTIFY_VITALS` and
+`CAIRN_NOTIFY_FILES` name a task to report into; leave them unset and the jobs stay quiet.
+
+Run the jobs under an identity of their own — `CAIRN_AGENT=maintenance` with a matching
+`CAIRN_API_KEY_MAINTENANCE` — or every automatic release reads as whichever agent happens
+to own the machine's default key.
+
+### Keeping the copies honest
+
+The skill, the CLI and both hooks are read from a directory per runtime, so the same file
+exists five or six times on a busy host. They drift silently.
+
+```bash
+node scripts/sync-agent-files.mjs --check   # report drift, write nothing
+node scripts/sync-agent-files.mjs           # repair every reachable copy
+```
+
+`--source <url>` takes the canonical files from the repository rather than a checkout,
+which is what lets it run on a host that has none. A CLI is only ever updated where one is
+already installed — `/usr/local/bin` existing is not consent to install into it.
 
 ## Architecture
 

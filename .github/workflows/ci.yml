@@ -28,12 +28,10 @@ jobs:
         run: npm test
 
       - name: build
+        # Nothing to inject: the build reaches no database, and the Supabase
+        # placeholders that used to sit here were read by nothing once the
+        # runtime moved to the native PostgreSQL driver.
         run: npm run build
-        env:
-          # Build-time placeholders. The real values are injected at runtime;
-          # nothing secret belongs in CI for a public repository.
-          NEXT_PUBLIC_SUPABASE_URL: http://localhost:8000
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
 
       - name: agent guide stays within budget
         run: |

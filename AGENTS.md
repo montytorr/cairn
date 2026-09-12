@@ -79,7 +79,9 @@ cairn release ACME-42      # or: cairn done ACME-42 --resolution "..."
 - If `claim` fails, another agent holds it — **pick different work**, do not force it.
 - A claim whose heartbeat has stopped for 15 minutes is stale and can be taken over.
 - Leave a `checkpoint` before you stop. It is what lets a different agent resume without
-  reading your transcript.
+  reading your transcript. Two hours of silence releases the claim and moves the task back
+  to `todo`; the notes and checkpoint stay, and the checkpoint is the only part that tells
+  whoever picks it up where you got to.
 
 ## 6. Vocabulary
 
