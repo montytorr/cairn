@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { mutate } from '@/lib/api/mutate'
 
 /**
  * A badge you can change in place.
@@ -73,17 +74,13 @@ export const useQuickPatch = (taskRef: string, updatedAt: string) => {
   const patch = async (values: Record<string, unknown>) => {
     setOptimistic({ at: updatedAt, values })
     setError(null)
-    const res = await fetch(`/api/v1/tasks/${taskRef}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    })
-    if (!res.ok) {
-      const json = await res.json().catch(() => null)
+    // There was no try/catch here, so a dropped connection left the overlay
+    // in place forever — the row went on showing a value that was never
+    // written, with nothing to say so.
+    const result = await mutate(`/api/v1/tasks/${taskRef}`, { method: 'PATCH', body: values })
+    if (!result.ok) {
       setOptimistic(null)
-      // Closing needs a resolution, and a list row is the wrong place to
-      // compose one. Say so rather than failing silently.
-      setError(json?.error ?? 'That change was refused.')
+      setError(result.error)
       return false
     }
     router.refresh()

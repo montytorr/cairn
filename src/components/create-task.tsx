@@ -5,6 +5,7 @@ import { Spinner } from '@/components/spinner'
 import { InlineInput } from '@/components/ui/control'
 
 import { useRouter } from 'next/navigation'
+import { mutate } from '@/lib/api/mutate'
 import { useEffect, useRef, useState } from 'react'
 import { PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import {
@@ -96,28 +97,28 @@ export const CreateTask = ({
     setPending(true)
     setError(null)
 
-    const res = await fetch(`/api/v1/projects/${project}/tasks`, {
+    const result = await mutate<{ number: number }>(`/api/v1/projects/${project}/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         title: title.trim(),
         description: body.trim() || undefined,
-        type, status, priority,
+        type,
+        status,
+        priority,
         labels: labels
           .split(',')
           .map((l) => l.trim())
           .filter(Boolean),
-      }),
+      },
     })
-    const payload = await res.json().catch(() => null)
     setPending(false)
 
-    if (!payload?.success) {
-      setError(payload?.error ?? 'Could not create the task.')
+    if (!result.ok) {
+      setError(result.error)
       return
     }
     onClose()
-    router.push(`/projects/${project}/tasks/${payload.data.number}`)
+    router.push(`/projects/${project}/tasks/${result.data.number}`)
     router.refresh()
   }
 

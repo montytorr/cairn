@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { useMutate } from '@/lib/api/use-mutate'
 
 /**
  * The projects a task belongs to beyond the one that owns its ref.
@@ -26,6 +27,7 @@ export const AlsoIn = ({
   projects: { key: string; title: string }[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [current, setCurrent] = useState(alsoProjects)
@@ -34,13 +36,12 @@ export const AlsoIn = ({
     const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
     setCurrent(next)
     setBusy(true)
-    const res = await fetch(`/api/v1/tasks/${taskRef}`, {
+    const result = await request(`/api/v1/tasks/${taskRef}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ alsoProjects: next }),
+      body: { alsoProjects: next },
     })
     setBusy(false)
-    if (!res.ok) {
+    if (!result.ok) {
       setCurrent(current) // put it back rather than leave the panel lying
       return
     }

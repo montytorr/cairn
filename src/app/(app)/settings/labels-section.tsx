@@ -4,6 +4,7 @@ import { InlineInput } from '@/components/ui/control'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { mutate } from '@/lib/api/mutate'
 import { LabelPill } from '@/components/icons'
 
 export type LabelRow = { label: string; task_count: number }
@@ -25,22 +26,20 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
   const apply = async (from: string, to: string | null) => {
     setBusy(true)
     setMessage(null)
-    const res = await fetch('/api/v1/labels', {
+    const result = await mutate<{ tasksChanged: number }>('/api/v1/labels', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to }),
+      body: { from, to },
     })
-    const json = await res.json().catch(() => null)
     setBusy(false)
-    if (!res.ok) {
-      setMessage(json?.error ?? 'That did not work.')
+    if (!result.ok) {
+      setMessage(result.error)
       return
     }
     setEditing(null)
     setMessage(
       to === null
-        ? `Removed “${from}” from ${json.data.tasksChanged} task(s).`
-        : `${json.data.tasksChanged} task(s) now carry “${to}”.`,
+        ? `Removed “${from}” from ${result.data.tasksChanged} task(s).`
+        : `${result.data.tasksChanged} task(s) now carry “${to}”.`,
     )
     router.refresh()
   }

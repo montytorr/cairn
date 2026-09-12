@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '../projects/[key]/board-view'
 import { ResolutionDialog } from '../projects/[key]/resolution-dialog'
+import { useMutate } from '@/lib/api/use-mutate'
 import { BoardToolbar } from './board-toolbar'
 import { cn } from '@/lib/utils'
 import { Avatar, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
@@ -122,6 +123,7 @@ export const CrossProjectBoard = ({
   projects: BoardProject[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const [tasks, setTasks] = useState(initial)
   // Adjusted during render rather than in an effect (the pattern React's docs
   // recommend for "reset state when a prop changes"): `router.refresh()`
@@ -191,32 +193,32 @@ export const CrossProjectBoard = ({
     // own endpoints with concurrency rules (stealing a lease, refusing to
     // steal a live one), and reusing them here is what keeps a drag honest
     // about "held by someone else" rather than silently overwriting it.
-    const res =
+    const result =
       filters.groupBy === 'agent'
         ? value === UNASSIGNED
-          ? await fetch(`/api/v1/tasks/${ref}/release`, { method: 'POST' })
-          : await fetch(`/api/v1/tasks/${ref}/claim`, {
+          ? await request(`/api/v1/tasks/${ref}/release`, { method: 'POST' })
+          : await request(`/api/v1/tasks/${ref}/claim`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ agent: value, setDoing: false }),
+              body: { agent: value, setDoing: false },
             })
-        : await fetch(`/api/v1/tasks/${ref}`, {
+        : await request(`/api/v1/tasks/${ref}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(
-              close
-                ? {
-                    [filters.groupBy]: value,
-                    resolution: close.resolution,
-                    resolutionKind: close.kind,
-                    ...(close.duplicateOf ? { duplicateOf: close.duplicateOf } : {}),
-                  }
-                : { [filters.groupBy]: value },
-            ),
+            body: close
+              ? {
+                  [filters.groupBy]: value,
+                  resolution: close.resolution,
+                  resolutionKind: close.kind,
+                  ...(close.duplicateOf ? { duplicateOf: close.duplicateOf } : {}),
+                }
+              : { [filters.groupBy]: value },
           })
 
-    if (!res.ok) {
-      setTasks(previous) // roll back rather than leave the board lying
+    // Grouped by agent this is the board's own way of reassigning work, and
+    // the claim is refused while the current holder's lease is still live.
+    // Rolling the card back without a word made that look like a glitch
+    // rather than "someone else is holding this".
+    if (!result.ok) {
+      setTasks(previous)
       return false
     }
     router.refresh()

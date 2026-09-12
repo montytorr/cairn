@@ -20,6 +20,7 @@ import { shortDateWithYear } from '@/lib/dates'
 import { RelativeTime } from '@/components/relative-time'
 import { useRenderedClaimStale } from '@/lib/use-mounted'
 import type { Task, Project, Relation } from '@/lib/data'
+import { useMutate } from '@/lib/api/use-mutate'
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
@@ -98,6 +99,7 @@ export const Properties = ({
   projects?: { key: string; title: string }[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const stale = useRenderedClaimStale(task.heartbeat_at)
   const [pendingClose, setPendingClose] = useState<TaskStatus | null>(null)
   // An optimistic overlay, stamped with the version of the task it was applied
@@ -116,14 +118,16 @@ export const Properties = ({
     // the round trip is over a second, and waiting for it reads as a dropped
     // click.
     setOptimistic({ at: task.updated_at, values: body as Partial<Task> })
-    const res = await fetch(`/api/v1/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (res.ok) router.refresh()
-    else setOptimistic(null)
-    return res.ok
+    const result = await request(`/api/v1/tasks/${task.id}`, { method: 'PATCH', body })
+    // Status asks for a resolution before it gets here, but priority and type
+    // had no guard at all: any refusal rolled the dropdown back with nothing
+    // said, which is indistinguishable from a dropped click.
+    if (!result.ok) {
+      setOptimistic(null)
+      return false
+    }
+    router.refresh()
+    return true
   }
 
   const onStatus = (next: TaskStatus) => {

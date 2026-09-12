@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useMutate } from '@/lib/api/use-mutate'
 import { ProjectIcon } from '@/components/icons'
 
 export type ArchivedProject = { id: string; key: string; title: string; task_counter: number }
@@ -13,17 +14,17 @@ export type ArchivedProject = { id: string; key: string; title: string; task_cou
  */
 export const ArchivedSection = ({ projects }: { projects: ArchivedProject[] }) => {
   const router = useRouter()
+  const request = useMutate()
   const [busy, setBusy] = useState<string | null>(null)
 
   const restore = async (key: string) => {
     setBusy(key)
-    const res = await fetch(`/api/v1/projects/${key}`, {
+    const result = await request(`/api/v1/projects/${key}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'active' }),
+      body: { status: 'active' },
     })
     setBusy(null)
-    if (res.ok) router.refresh()
+    if (result.ok) router.refresh()
   }
 
   return (

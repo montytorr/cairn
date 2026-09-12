@@ -4,6 +4,7 @@ import { InlineInput } from '@/components/ui/control'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { mutate as write } from '@/lib/api/mutate'
 import Link from 'next/link'
 import { StatusIcon } from '@/components/icons'
 import type { TaskStatus } from '@/schemas/task'
@@ -173,21 +174,17 @@ export const DependencyEditor = ({
       setError(null)
       try {
         // DELETE takes query params — the API does not read DELETE bodies.
-        const res = await fetch(
+        // `json.error.message` was always undefined, so the one refusal
+        // with something precise to say — "that would be a loop" — showed a
+        // generic sentence instead.
+        const result = await write(
           method === 'DELETE'
             ? `/api/v1/tasks/${taskRef}/dependencies?${new URLSearchParams({ ref, direction })}`
             : `/api/v1/tasks/${taskRef}/dependencies`,
-          method === 'DELETE'
-            ? { method }
-            : {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ref, direction }),
-              },
+          method === 'DELETE' ? { method } : { method, body: { ref, direction } },
         )
-        if (!res.ok) {
-          const json = await res.json().catch(() => null)
-          setError(json?.error?.message ?? 'Could not save that link.')
+        if (!result.ok) {
+          setError(result.error)
           return
         }
         setOpen(null)

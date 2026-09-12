@@ -6,6 +6,7 @@ import { TaskCreationProvider } from '@/components/task-creation'
 import { Shortcuts } from '@/components/shortcuts'
 import { ProjectKeysProvider } from '@/components/project-keys'
 import { MobileNavProvider } from '@/components/mobile-nav-context'
+import { ToastHost } from '@/components/toast'
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const user = await currentUser()
@@ -18,21 +19,23 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const projectList = projects.map((p) => ({ key: p.key, title: p.title }))
 
   return (
-    <ProjectKeysProvider keys={projectList.map((p) => p.key)}>
-      <TaskCreationProvider projects={projectList}>
-        <MobileNavProvider email={email} projects={projectList}>
-          <div className="bg-bg flex h-dvh">
-            <aside className="border-border bg-bg-elevated hidden w-[220px] shrink-0 flex-col border-r md:flex">
-              <AppSidebar email={email} projects={projectList} />
-            </aside>
+    <ToastHost>
+      <ProjectKeysProvider keys={projectList.map((p) => p.key)}>
+        <TaskCreationProvider projects={projectList}>
+          <MobileNavProvider email={email} projects={projectList}>
+            <div className="bg-bg flex h-dvh">
+              <aside className="border-border bg-bg-elevated hidden w-[220px] shrink-0 flex-col border-r md:flex">
+                <AppSidebar email={email} projects={projectList} />
+              </aside>
 
-            <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
-            <CommandPalette projects={projectList} />
-            <Shortcuts />
-          </div>
-        </MobileNavProvider>
-      </TaskCreationProvider>
-    </ProjectKeysProvider>
+              <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
+              <CommandPalette projects={projectList} />
+              <Shortcuts />
+            </div>
+          </MobileNavProvider>
+        </TaskCreationProvider>
+      </ProjectKeysProvider>
+    </ToastHost>
   )
 }
 

@@ -10,6 +10,7 @@ import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
 import { Button } from '@/components/ui/control'
 import { Spinner } from '@/components/spinner'
 import type { Note } from '@/lib/data'
+import { useMutate } from '@/lib/api/use-mutate'
 
 const KIND_STYLE: Record<string, string> = {
   finding: 'text-status-todo',
@@ -52,6 +53,7 @@ const RailMarker = ({
  */
 export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: Note[] }) => {
   const router = useRouter()
+  const request = useMutate()
   // Appended locally on submit rather than re-rendering the whole page.
   // router.refresh() re-runs every server component on the route, which is
   // needless work for "add one row to a list" and very noticeable when the
@@ -79,21 +81,20 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
   const submit = async () => {
     if (!text.trim() || pending) return
     setPending(true)
-    const res = await fetch(`/api/v1/tasks/${taskId}/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note: text.trim(), kind }),
-    })
+    const result = await request<Note & { duplicate?: boolean }>(
+      `/api/v1/tasks/${taskId}/notes`,
+      { method: 'POST', body: { note: text.trim(), kind } },
+    )
     setPending(false)
-    if (!res.ok) return
+    // The toast carries the reason, and the draft stays where it was typed.
+    if (!result.ok) return
 
-    const payload = await res.json().catch(() => null)
-    const created = payload?.data
+    const created = result.data
     setText('')
 
     if (created?.duplicate) return // identical note already recorded
     if (created?.id) {
-      setNotes((current) => [created as Note, ...current])
+      setNotes((current) => [created, ...current])
     } else {
       router.refresh() // unexpected shape; fall back to a reload
     }

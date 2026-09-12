@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { mutate } from '@/lib/api/mutate'
 import { Button, InlineInput } from '@/components/ui/control'
 import { ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
@@ -39,22 +40,24 @@ export const EntitiesSection = ({
   const [newKey, setNewKey] = useState('')
   const [newTitle, setNewTitle] = useState('')
 
-  const call = async (method: string, path: string, body?: unknown) => {
+  const call = async (
+    method: 'POST' | 'PATCH' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ): Promise<{ knowledgeWidenedToGlobal?: number } | null> => {
     setBusy(true)
     setMessage(null)
-    const res = await fetch(path, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    })
-    const json = await res.json().catch(() => null)
+    // A key like "Business Unit" is refused by a regex, and the envelope says
+    // only "Validation failed" — the useful half is in `issues`, which this
+    // never read. `mutate` unpacks it, so the message names the field.
+    const result = await mutate<{ knowledgeWidenedToGlobal?: number }>(path, { method, body })
     setBusy(false)
-    if (!res.ok) {
-      setMessage(json?.error ?? 'That did not work.')
+    if (!result.ok) {
+      setMessage(result.error)
       return null
     }
     router.refresh()
-    return json?.data ?? {}
+    return result.data ?? {}
   }
 
   const toggleProject = async (entity: EntityRow, project: string) => {
@@ -84,7 +87,7 @@ export const EntitiesSection = ({
     const done = await call('DELETE', `/api/v1/entities?key=${encodeURIComponent(entity.key)}`)
     if (done) {
       setMessage(
-        done.knowledgeWidenedToGlobal > 0
+        (done.knowledgeWidenedToGlobal ?? 0) > 0
           ? `Deleted “${entity.key}”. ${done.knowledgeWidenedToGlobal} fact(s) are now global rather than scoped to it.`
           : `Deleted “${entity.key}”.`,
       )

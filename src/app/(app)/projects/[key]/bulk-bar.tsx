@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusIcon, PriorityIcon } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
+import { mutate } from '@/lib/api/mutate'
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -33,17 +34,20 @@ const applyAll = async (
   onProgress: (done: number) => void,
 ) => {
   const failures: string[] = []
+  let reason: string | null = null
   let done = 0
   for (const id of ids) {
-    const res = await fetch(`/api/v1/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    })
-    if (!res.ok) failures.push(id)
+    const result = await mutate(`/api/v1/tasks/${id}`, { method: 'PATCH', body: patch })
+    if (!result.ok) {
+      failures.push(id)
+      // One reason is enough: a bulk edit fails the same way forty times.
+      // Before this a thrown fetch also escaped the loop entirely, freezing
+      // the counter mid-run with nothing said.
+      reason ??= result.error
+    }
     onProgress(++done)
   }
-  return failures
+  return { failures, reason }
 }
 
 const Action = <T extends string>({
@@ -132,10 +136,10 @@ export const BulkBar = ({
   const run = async (patch: Record<string, unknown>) => {
     setError(null)
     setProgress(0)
-    const failures = await applyAll(ids, patch, setProgress)
+    const { failures, reason } = await applyAll(ids, patch, setProgress)
     setProgress(null)
     if (failures.length > 0) {
-      setError(`${failures.length} of ${ids.length} could not be changed.`)
+      setError(`${failures.length} of ${ids.length} could not be changed — ${reason}`)
       return false
     }
     onClear()

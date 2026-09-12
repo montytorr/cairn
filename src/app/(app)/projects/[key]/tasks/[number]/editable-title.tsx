@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import { useMutate } from '@/lib/api/use-mutate'
 
 /**
  * Click-to-edit title.
@@ -13,6 +14,7 @@ import { useEffect, useRef, useState } from 'react'
  */
 export const EditableTitle = ({ taskId, initial }: { taskId: string; initial: string }) => {
   const router = useRouter()
+  const request = useMutate()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -36,19 +38,20 @@ export const EditableTitle = ({ taskId, initial }: { taskId: string; initial: st
       return
     }
     setSaving(true)
-    const res = await fetch(`/api/v1/tasks/${taskId}`, {
+    const result = await request(`/api/v1/tasks/${taskId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: next }),
+      body: { title: next },
     })
     setSaving(false)
-    if (res.ok) {
-      setEditing(false)
-      router.refresh()
-    } else {
-      setValue(initial)
-      setEditing(false)
+    if (!result.ok) {
+      // Stay in edit mode with the text intact. Reverting to the old title
+      // and closing the editor — which is what this did — threw away what
+      // had just been typed, and a title over 300 characters is refused
+      // every time, so a pasted sentence vanished without a word.
+      return
     }
+    setEditing(false)
+    router.refresh()
   }
 
   if (!editing) {
@@ -74,6 +77,7 @@ export const EditableTitle = ({ taskId, initial }: { taskId: string; initial: st
       ref={ref}
       value={value}
       disabled={saving}
+      maxLength={300}
       onChange={(e) => {
         setValue(e.target.value)
         e.target.style.height = 'auto'

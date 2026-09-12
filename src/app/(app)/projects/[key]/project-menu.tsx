@@ -5,6 +5,8 @@ import { InlineInput } from '@/components/ui/control'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
+import { mutate } from '@/lib/api/mutate'
+import { useMutate } from '@/lib/api/use-mutate'
 
 /**
  * Deleting a project takes every task in it. The confirmation asks for the
@@ -31,13 +33,14 @@ const DeleteDialog = ({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(
+      // `json.error.message` was always undefined — the envelope carries
+      // `error` as a plain string — so this only ever showed its fallback.
+      const result = await mutate(
         `/api/v1/projects/${projectKey}?confirm=${encodeURIComponent(projectKey)}`,
         { method: 'DELETE' },
       )
-      if (!res.ok) {
-        const json = await res.json().catch(() => null)
-        setError(json?.error?.message ?? 'Could not delete the project.')
+      if (!result.ok) {
+        setError(result.error)
         return
       }
       // Both calls, and in this order. `push` alone leaves the layout's
@@ -116,6 +119,7 @@ export const ProjectMenu = ({
   archived: boolean
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const [open, setOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -140,30 +144,27 @@ export const ProjectMenu = ({
 
   const setStatus = async (status: 'active' | 'archived') => {
     setOpen(false)
-    const res = await fetch(`/api/v1/projects/${projectKey}`, {
+    const result = await request(`/api/v1/projects/${projectKey}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: { status },
     })
+    if (!result.ok) return
     // Archiving removes it from the sidebar, so staying on its page would
     // leave the nav showing nothing selected. Go home — and refresh, or the
     // layout keeps serving the project list it already had.
-    if (res.ok) {
-      if (status === 'archived') router.replace('/')
-      router.refresh()
-    }
+    if (status === 'archived') router.replace('/')
+    router.refresh()
   }
 
   const rename = async () => {
     const next = draft.trim()
     setRenaming(false)
     if (!next || next === title) return
-    const res = await fetch(`/api/v1/projects/${projectKey}`, {
+    const result = await request(`/api/v1/projects/${projectKey}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: next }),
+      body: { title: next },
     })
-    if (res.ok) router.refresh()
+    if (result.ok) router.refresh()
     else setDraft(title)
   }
 

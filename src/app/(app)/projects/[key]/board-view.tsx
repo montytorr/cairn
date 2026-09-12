@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { MarkdownPreview } from '@/components/markdown'
 import { Avatar, LabelPill, PriorityIcon, ProjectIcon, TypePill } from '@/components/icons'
 import { ResolutionDialog } from './resolution-dialog'
+import { useMutate } from '@/lib/api/use-mutate'
 import { cn } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type ResolutionKind, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
@@ -140,6 +141,7 @@ export const BoardView = ({
   projectKey: string
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const [tasks, setTasks] = useState(initial)
   const [dragging, setDragging] = useState<TaskListItem | null>(null)
   const [pendingClose, setPendingClose] = useState<{ task: TaskListItem; status: TaskStatus } | null>(null)
@@ -156,23 +158,23 @@ export const BoardView = ({
     const previous = tasks
     setTasks((current) => current.map((t) => (t.id === task.id ? { ...t, status } : t)))
 
-    const res = await fetch(`/api/v1/tasks/${task.id}`, {
+    const result = await request(`/api/v1/tasks/${task.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        close
-          ? {
-              status,
-              resolution: close.resolution,
-              resolutionKind: close.kind,
-              ...(close.duplicateOf ? { duplicateOf: close.duplicateOf } : {}),
-            }
-          : { status },
-      ),
+      body: close
+        ? {
+            status,
+            resolution: close.resolution,
+            resolutionKind: close.kind,
+            ...(close.duplicateOf ? { duplicateOf: close.duplicateOf } : {}),
+          }
+        : { status },
     })
 
-    if (!res.ok) {
-      setTasks(previous) // roll back rather than leave the board lying
+    // Rolling back silently made a refused drag look like a card that would
+    // not stay put. A dropped connection was worse: the fetch threw, this
+    // line never ran, and the card stayed in a lane it never reached.
+    if (!result.ok) {
+      setTasks(previous)
       return false
     }
     router.refresh()

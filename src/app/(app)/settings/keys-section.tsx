@@ -3,6 +3,8 @@
 import { RelativeTime } from '@/components/relative-time'
 
 import { useRouter } from 'next/navigation'
+import { mutate } from '@/lib/api/mutate'
+import { useMutate } from '@/lib/api/use-mutate'
 import { useState } from 'react'
 import { Check, Copy, KeyRound } from 'lucide-react'
 import { Button, Input, Select } from '@/components/ui/control'
@@ -23,6 +25,7 @@ const AGENTS = ['claude-code', 'codex', 'openclaw', 'cli'] as const
 
 export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
   const router = useRouter()
+  const request = useMutate()
   const [agent, setAgent] = useState<string>('claude-code')
   const [label, setLabel] = useState('')
   const [creating, setCreating] = useState(false)
@@ -35,27 +38,27 @@ export const KeysSection = ({ keys }: { keys: KeyRow[] }) => {
   const create = async () => {
     setCreating(true)
     setError(null)
-    const res = await fetch('/api/v1/keys', {
+    const result = await mutate<{ key: string }>('/api/v1/keys', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentName: agent, name: label.trim() || `${agent} key` }),
+      body: { agentName: agent, name: label.trim() || `${agent} key` },
     })
-    const payload = await res.json().catch(() => null)
     setCreating(false)
 
-    if (!payload?.success) {
-      setError(payload?.error ?? 'Could not create the key.')
+    if (!result.ok) {
+      setError(result.error)
       return
     }
-    setFresh({ key: payload.data.key, agent })
+    setFresh({ key: result.data.key, agent })
     setLabel('')
     router.refresh()
   }
 
   const revoke = async (id: string, agentName: string) => {
     if (!confirm(`Revoke the ${agentName} key? That agent stops working immediately.`)) return
-    await fetch(`/api/v1/keys/${id}`, { method: 'DELETE' })
-    router.refresh()
+    // The confirmation promises the agent stops working immediately, so a
+    // revoke that quietly failed was worse here than anywhere else.
+    const result = await request(`/api/v1/keys/${id}`, { method: 'DELETE' })
+    if (result.ok) router.refresh()
   }
 
   const active = keys.filter((k) => !k.revoked_at)

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import type { Comment } from '@/lib/data'
 import { Button, Textarea } from '@/components/ui/control'
+import { useMutate } from '@/lib/api/use-mutate'
 
 /** Conversation aimed at the human, kept separate from the agent work log. */
 export const CommentsPanel = ({
@@ -19,6 +20,7 @@ export const CommentsPanel = ({
   comments: Comment[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
   // Appended locally; see the note in notes-panel.tsx.
   const [comments, setComments] = useState(initial)
   const [text, setText] = useState('')
@@ -27,19 +29,17 @@ export const CommentsPanel = ({
   const submit = async () => {
     if (!text.trim() || pending) return
     setPending(true)
-    const res = await fetch(`/api/v1/tasks/${taskId}/comments`, {
+    const result = await request<Comment>(`/api/v1/tasks/${taskId}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text.trim() }),
+      body: { content: text.trim() },
     })
     setPending(false)
-    if (!res.ok) return
+    // The toast carries the reason. What was typed stays in the box, because
+    // the one thing worse than a refused comment is a lost one.
+    if (!result.ok) return
 
-    const payload = await res.json().catch(() => null)
-    const created = payload?.data
     setText('')
-
-    if (created?.id) setComments((current) => [...current, created as Comment])
+    if (result.data?.id) setComments((current) => [...current, result.data])
     else router.refresh()
   }
 

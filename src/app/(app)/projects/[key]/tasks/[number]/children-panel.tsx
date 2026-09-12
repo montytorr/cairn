@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { PriorityIcon, StatusIcon } from '@/components/icons'
 import { isTerminal } from '@/schemas/task'
 import type { ChildTask } from '@/lib/data'
+import { mutate } from '@/lib/api/mutate'
+import { useMutate } from '@/lib/api/use-mutate'
 
 /**
  * Direct children, with a rollup.
@@ -33,6 +35,7 @@ export const ChildrenPanel = ({
   projects?: { key: string; title: string }[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
   const [adding, setAdding] = useState(false)
   const [target, setTarget] = useState(projectKey)
   const [title, setTitle] = useState('')
@@ -47,15 +50,13 @@ export const ChildrenPanel = ({
     if (!value || busy) return
     setBusy(true)
     setError(null)
-    const res = await fetch(`/api/v1/projects/${target}/tasks`, {
+    const result = await mutate(`/api/v1/projects/${target}/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: value, parentRef: taskRef, status: 'todo' }),
+      body: { title: value, parentRef: taskRef, status: 'todo' },
     })
     setBusy(false)
-    if (!res.ok) {
-      const json = await res.json().catch(() => null)
-      setError(json?.error ?? 'Could not create that sub-task.')
+    if (!result.ok) {
+      setError(result.error)
       return
     }
     setTitle('')
@@ -64,13 +65,14 @@ export const ChildrenPanel = ({
 
   const detach = async (child: ChildTask) => {
     setBusy(true)
-    await fetch(`/api/v1/tasks/${child.project_key}-${child.number}`, {
+    // This ignored the response entirely: a refused detach still refreshed,
+    // so the sub-task simply stayed where it was with no explanation.
+    const result = await request(`/api/v1/tasks/${child.project_key}-${child.number}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parentRef: null }),
+      body: { parentRef: null },
     })
     setBusy(false)
-    router.refresh()
+    if (result.ok) router.refresh()
   }
 
   return (

@@ -4,6 +4,9 @@ import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { Download, File, Image as ImageIcon, Paperclip, Trash2 } from 'lucide-react'
 import type { Attachment } from '@/lib/data'
+import { mutate } from '@/lib/api/mutate'
+import { useMutate } from '@/lib/api/use-mutate'
+import { useNotify } from '@/components/toast'
 
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`
@@ -19,6 +22,8 @@ export const AttachmentsPanel = ({
   attachments: Attachment[]
 }) => {
   const router = useRouter()
+  const request = useMutate()
+  const notify = useNotify()
   const input = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,13 +36,12 @@ export const AttachmentsPanel = ({
     const form = new FormData()
     form.append('file', file)
 
-    const res = await fetch(`/api/v1/tasks/${taskId}/attachments`, { method: 'POST', body: form })
-    const payload = await res.json().catch(() => null)
+    // The API names the acceptable types, so show that rather than "failed".
+    const result = await mutate(`/api/v1/tasks/${taskId}/attachments`, { method: 'POST', form })
     setPending(false)
 
-    if (!payload?.success) {
-      // The API names the acceptable types, so show that rather than "failed".
-      setError(payload?.error ?? 'Upload failed.')
+    if (!result.ok) {
+      setError(result.error)
       return
     }
     router.refresh()
@@ -45,17 +49,22 @@ export const AttachmentsPanel = ({
 
   /** Signed URLs are short-lived, so fetch one on demand rather than up front. */
   const openSigned = async (id: string, name: string, mime: string) => {
-    const res = await fetch(`/api/v1/attachments/${id}`)
-    const payload = await res.json().catch(() => null)
-    if (!payload?.success) return
+    const res = await fetch(`/api/v1/attachments/${id}`).catch(() => null)
+    const payload = await res?.json().catch(() => null)
+    if (!payload?.success) {
+      notify(payload?.error ?? 'Could not open that file.')
+      return
+    }
     const { previewUrl, downloadUrl } = payload.data
     if (mime.startsWith('image/') && previewUrl) setLightbox({ url: previewUrl, name })
     else if (downloadUrl) window.open(downloadUrl, '_blank', 'noopener')
   }
 
   const remove = async (id: string) => {
-    await fetch(`/api/v1/attachments/${id}`, { method: 'DELETE' })
-    router.refresh()
+    // Unchecked, this refreshed either way, so a refused delete looked like a
+    // file that simply refused to go.
+    const result = await request(`/api/v1/attachments/${id}`, { method: 'DELETE' })
+    if (result.ok) router.refresh()
   }
 
   return (

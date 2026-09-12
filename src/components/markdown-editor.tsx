@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { editorExtensions } from '@/lib/editor/markdown'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
+import { mutate } from '@/lib/api/mutate'
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
@@ -60,13 +61,15 @@ export const MarkdownEditor = ({
     }
 
     setState('saving')
-    const res = await fetch(`/api/v1/tasks/${taskId}`, {
+    // Without a try/catch a dropped connection never resolved this, and the
+    // button sat on "Saving…" until the page was left — with the edit still
+    // unsaved.
+    const result = await mutate(`/api/v1/tasks/${taskId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: markdown }),
+      body: { description: markdown },
     })
 
-    if (!res.ok) {
+    if (!result.ok) {
       setState('error')
       return
     }
