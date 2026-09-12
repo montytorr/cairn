@@ -151,6 +151,29 @@ export const readWorkShapeFor = async (userId: string, hours = 24): Promise<Work
   return data as unknown as WorkShape
 }
 
+/**
+ * Whether anybody consults what is already known.
+ *
+ * Every other number in here describes what was written; none described
+ * whether any of it was read. A store nobody queries is an expensive way to
+ * write into a drawer.
+ */
+export type MemoryUse = {
+  windowHours: number
+  searches: number
+  zeroResults: number
+  byAgent: { agent: string; searches: number }[]
+  tasksFiled: number
+  tasksFiledWithoutChecking: number
+  recentMisses: string[]
+}
+
+export const readMemoryUseFor = async (userId: string, hours = 24): Promise<MemoryUse> => {
+  const { data, error } = await admin().rpc('cairn_memory_use', { p_owner: userId, p_hours: hours })
+  if (error) throw new Error(error.message)
+  return data as unknown as MemoryUse
+}
+
 export const readVitalsFor = async (userId: string, hours = 24): Promise<Vitals> => {
   const { data, error } = await admin().rpc('cairn_vitals', { p_owner: userId, p_hours: hours })
   if (error) throw new Error(error.message)

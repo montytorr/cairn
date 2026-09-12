@@ -3,8 +3,10 @@ import { AlertTriangle, Info } from 'lucide-react'
 import { currentUser } from '@/lib/data'
 import {
   assess,
+  readMemoryUseFor,
   readVitalsFor,
   readWorkShapeFor,
+  type MemoryUse,
   type Vitals,
   type WorkShape,
 } from '@/lib/api/vitals'
@@ -44,9 +46,14 @@ const VitalsPage = async () => {
 
   let vitals: Vitals | null = null
   let work: WorkShape | null = null
+  let memory: MemoryUse | null = null
   let failure: string | null = null
   try {
-    ;[vitals, work] = await Promise.all([readVitalsFor(user.id), readWorkShapeFor(user.id)])
+    ;[vitals, work, memory] = await Promise.all([
+      readVitalsFor(user.id),
+      readWorkShapeFor(user.id),
+      readMemoryUseFor(user.id),
+    ])
   } catch (error) {
     failure = error instanceof Error ? error.message : 'Could not read the vital signs.'
   }
@@ -223,6 +230,51 @@ const VitalsPage = async () => {
                     </p>
                   </Section>
                 </>
+              ) : null}
+
+              {memory ? (
+                <Section title="Is the memory being read">
+                  <Row label="searches" value={String(memory.searches)} />
+                  <Row
+                    label="that found nothing"
+                    value={String(memory.zeroResults)}
+                    hint={
+                      memory.searches > 0
+                        ? `(${Math.round((memory.zeroResults / memory.searches) * 100)}%)`
+                        : undefined
+                    }
+                  />
+                  <Row
+                    label="tasks filed without checking first"
+                    value={`${memory.tasksFiledWithoutChecking} of ${memory.tasksFiled}`}
+                  />
+                  {memory.byAgent.map((a) => (
+                    <Row key={a.agent} label={a.agent} value={String(a.searches)} hint="searches" />
+                  ))}
+
+                  {memory.recentMisses.length > 0 ? (
+                    <div className="mt-3">
+                      <p className="text-fg-subtle mb-1 text-[11px] font-medium">
+                        Asked for and not found
+                      </p>
+                      <ul className="flex flex-col gap-0.5">
+                        {memory.recentMisses.map((q) => (
+                          <li key={q} className="text-fg-muted truncate text-[12px]">
+                            {q}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <p className="text-fg-subtle mt-2 text-[11px] leading-relaxed">
+                    The premise of Cairn is that an agent checks before starting, and until now
+                    nothing recorded whether that happened. A search returning nothing is the
+                    most informative row here — it says what the memory was asked for and did
+                    not have. Counting starts from when this shipped, so the first day is
+                    short by construction.
+                  </p>
+                </Section>
               ) : null}
 
               <p className="text-fg-subtle text-[11px] leading-relaxed">

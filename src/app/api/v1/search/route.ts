@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { searchAll, searchTasks, type SearchAllRow, type SearchRow } from '@/lib/api/search'
+import { recordSearch } from '@/lib/api/search-events'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -58,10 +59,12 @@ export const GET = route({
     try {
       if (taskPath) {
         const { rows, widened } = await searchTasks(actor.userId, q, { project, type, status }, limit)
+        await recordSearch(actor, q, ['task'], rows.length)
         return ok({ count: rows.length, query: q, widened, results: rows.map(taskResult) })
       }
 
       const { rows, widened } = await searchAll(actor.userId, q, { project, kinds }, limit)
+      await recordSearch(actor, q, kinds ?? null, rows.length)
       return ok({ count: rows.length, query: q, widened, results: rows.map(unifiedResult) })
     } catch (error) {
       return fail('internal_error', error instanceof Error ? error.message : 'Search failed.')
