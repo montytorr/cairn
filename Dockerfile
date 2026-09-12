@@ -26,7 +26,7 @@ FROM base AS migrator
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json* ./
 COPY scripts/migrate.ts ./scripts/migrate.ts
-COPY supabase/migrations ./supabase/migrations
+COPY migrations ./migrations
 CMD ["npm", "run", "db:migrate"]
 
 # --- runtime ---------------------------------------------------------------

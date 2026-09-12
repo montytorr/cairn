@@ -30,9 +30,8 @@ deploy/local/
 cli/dist/
 cli/node_modules/
 
-# supabase local state
-supabase/.branches/
-supabase/.temp/
+# Supabase local state, from when the database was reached through PostgREST.
+# Kept ignored so an old working copy does not suddenly start offering them.
 .supabase/
 
 # misc

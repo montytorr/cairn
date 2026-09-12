@@ -1,5 +1,5 @@
 /**
- * Applies supabase/migrations/*.sql in filename order, inside a transaction,
+ * Applies migrations/*.sql in filename order, inside a transaction,
  * recording what has run in a `_cairn_migrations` table.
  *
  * Deliberately plain: numbered SQL files are easier to reason about than a
@@ -10,7 +10,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Client } from 'pg'
 
-const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations')
+const MIGRATIONS_DIR = join(process.cwd(), 'migrations')
 
 const main = async () => {
   const url = process.env.DATABASE_URL

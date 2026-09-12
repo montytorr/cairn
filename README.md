@@ -246,8 +246,8 @@ problem.
   measurement rather than taste, and so did two rejections: ranking by term coverage first
   tested worse (87% → 81%) and was reverted, and re-sorting in the application dropped
   recall from 75% to 6%. The reasoning is written into
-  [`004_search_ranked.sql`](./supabase/migrations/004_search_ranked.sql) and
-  [`016_search_all.sql`](./supabase/migrations/016_search_all.sql); the measurements
+  [`004_search_ranked.sql`](./migrations/004_search_ranked.sql) and
+  [`016_search_all.sql`](./migrations/016_search_all.sql); the measurements
   themselves are in Cairn, on the tasks that produced them — which is the product's own
   argument, made about itself.
 - Results are an **index**, never bodies: each row advertises a `~tokens` cost, so an agent
@@ -394,7 +394,7 @@ Requires Node 22+, Docker, and PostgreSQL 17+.
 git clone https://github.com/<you>/cairn.git && cd cairn
 cp .env.example .env.local        # fill in the private PostgreSQL URL and signing key
 npm install
-npm run db:migrate                # applies supabase/migrations/*.sql in order
+npm run db:migrate                # applies migrations/*.sql in order
 npm run dev
 ```
 
@@ -573,8 +573,8 @@ already installed — `/usr/local/bin` existing is not consent to install into i
 groupings that sit between one project and everything.
 
 The migrations are the best description of it — each one is commented with *why*, not
-what. [`001_initial.sql`](./supabase/migrations/001_initial.sql) is the tracker;
-[`013_knowledge.sql`](./supabase/migrations/013_knowledge.sql) onward is the memory layer.
+what. [`001_initial.sql`](./migrations/001_initial.sql) is the tracker;
+[`013_knowledge.sql`](./migrations/013_knowledge.sql) onward is the memory layer.
 
 ## Backups
 

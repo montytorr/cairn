@@ -9,6 +9,14 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Changed
+
+- Migrations moved from `supabase/migrations/` to `migrations/`. The directory was named
+  after a dependency the project no longer has — the runtime moved to the native
+  PostgreSQL driver — and a newcomer reading the tree would reasonably conclude Supabase
+  was required. No migration content changed, and the applied-migrations ledger records
+  filenames rather than paths, so existing installs need nothing.
+
 ## [0.1.0] — 2026-09-12
 
 First tagged release. Cairn has been in daily use since 2026-09-10; this is the point at

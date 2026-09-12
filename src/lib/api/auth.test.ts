@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 /**
  * Regression guard for a bug that made a whole feature inert.
  *
- * `last_used_at` never updated because the code was `void <supabase builder>`.
+ * `last_used_at` never updated because the code was `void <query builder>`.
  * A builder is a lazy thenable: nothing is sent until something subscribes,
  * so `void` type-checks, reads as fire-and-forget, and does nothing at all.
  * This asserts the shape of the mistake so it cannot come back unnoticed.
