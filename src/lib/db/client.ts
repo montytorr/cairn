@@ -28,6 +28,22 @@ type ForeignKey = {
   targetColumn: string
 }
 
+/**
+ * PostgREST returned database timestamps as JSON strings. node-postgres
+ * materialises timestamp columns as Date objects, so preserve the old client
+ * contract at this adapter boundary before rows reach application code.
+ */
+export const normalizeDatabaseValue = (value: unknown): unknown => {
+  if (value instanceof Date) return value.toISOString()
+  if (Array.isArray(value)) return value.map(normalizeDatabaseValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, normalizeDatabaseValue(item)]),
+    )
+  }
+  return value
+}
+
 const runtime = globalThis as typeof globalThis & { __cairnPool?: Pool }
 
 const connectionString = () => {
@@ -403,6 +419,7 @@ class DirectQuery<T = DynamicRow[]> implements PromiseLike<Result<T>> {
   }
 
   private shape(rows: DynamicRow[], count: number | null, status = 200): Result<any> {
+    rows = normalizeDatabaseValue(rows) as DynamicRow[]
     if (this.cardinality === 'single' && rows.length !== 1) {
       return { data: null, error: { code: 'PGRST116', message: `Expected one row, found ${rows.length}`, details: null, hint: null }, count, status: 406 }
     }
@@ -428,9 +445,10 @@ class RpcQuery<T = any> implements PromiseLike<Result<T>> {
       const entries = Object.entries(this.args)
       const invocation = entries.map(([key], index) => `${identifier(key)} => $${index + 1}`).join(', ')
       const { rows } = await pool().query(`select * from ${identifier(this.name)}(${invocation})`, entries.map(([, value]) => value))
-      let data: any = rows
-      if (rows.length === 1 && Object.keys(rows[0]!).length === 1 && this.name in rows[0]!) data = rows[0]![this.name]
-      else if (this.cardinality !== 'many') data = rows[0] ?? null
+      const normalizedRows = normalizeDatabaseValue(rows) as DynamicRow[]
+      let data: any = normalizedRows
+      if (normalizedRows.length === 1 && Object.keys(normalizedRows[0]!).length === 1 && this.name in normalizedRows[0]!) data = normalizedRows[0]![this.name]
+      else if (this.cardinality !== 'many') data = normalizedRows[0] ?? null
       return { data, error: null, count: null, status: 200 } as Result<T>
     } catch (error) {
       return errorResult(error) as Result<T>
