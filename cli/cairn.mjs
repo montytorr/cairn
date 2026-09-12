@@ -44,7 +44,44 @@ const fileEnv = () => {
 const FILE_ENV = fileEnv()
 const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://localhost:3000')
   .replace(/\/+$/, '')
-const KEY = process.env.CAIRN_API_KEY || FILE_ENV.CAIRN_API_KEY || ''
+
+/**
+ * Which runtime is speaking.
+ *
+ * The API key IS the identity -- an actor_id comes from the key, not from
+ * anything the caller says -- and one key per machine meant every runtime on
+ * the server wrote as whoever owned that file. On clawdius that was openclaw,
+ * so Codex's tasks, claims and closes were filed under OpenClaw's name and no
+ * agent could be held to its own behaviour.
+ *
+ * Per-user key files cannot fix it either: Codex runs as both caladmin and
+ * root there, and OpenClaw shares caladmin with it.
+ *
+ * So the runtime names itself, and the file can carry a key per runtime.
+ * `CLAUDECODE` is set by Claude Code itself; the others are set where the
+ * runtime is launched, which is the only place that knows.
+ */
+const detectAgent = () => {
+  if (process.env.CAIRN_AGENT) return process.env.CAIRN_AGENT.trim().toLowerCase()
+  if (process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT) return 'claude-code'
+  if (process.env.CODEX_HOME || process.env.CODEX_SANDBOX) return 'codex'
+  if (process.env.OPENCLAW_SESSION || process.env.OPENCLAW_HOME) return 'openclaw'
+  return ''
+}
+
+const AGENT = detectAgent()
+
+/**
+ * An explicit CAIRN_API_KEY in the environment always wins -- it is how a
+ * one-off command borrows another identity. Otherwise the runtime's own key is
+ * preferred, and the plain one is the fallback, so a machine that has not been
+ * split yet keeps working exactly as before.
+ */
+const KEY =
+  process.env.CAIRN_API_KEY ||
+  (AGENT && FILE_ENV[`CAIRN_API_KEY_${AGENT.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]) ||
+  FILE_ENV.CAIRN_API_KEY ||
+  ''
 
 const die = (msg, code = 1) => {
   process.stderr.write(`${msg}\n`)

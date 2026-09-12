@@ -18,7 +18,9 @@
  * useful; a session that was never recorded is not.
  */
 import { spawn } from 'node:child_process'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 const CLI = process.env.CAIRN_CLI ?? 'cairn'
@@ -33,6 +35,8 @@ const MAX_DIGEST_CHARS = 24_000
  * this guard the SessionEnd hook would summarise the summariser, forever.
  */
 if (process.env.CAIRN_SUMMARISER === '1') process.exit(0)
+
+const DRY_RUN = process.argv.includes('--dry-run')
 
 const TASK_REF = /\b([A-Z][A-Z0-9]{1,9})-(\d{1,6})\b/g
 const PATH_KEYS = ['file_path', 'notebook_path', 'path']
@@ -165,6 +169,183 @@ const parseTranscript = async (path) => {
 }
 
 /**
+ * Codex keeps its own transcript, in its own shape.
+ *
+ * Its rollout files are JSONL like Claude's, and that is where the similarity
+ * ends: every row is wrapped in `{type, payload}`, turns are `response_item`
+ * rows carrying a `message`, tool calls are `custom_tool_call` rows whose
+ * `input` is a JavaScript snippet rather than a structured object, and the cwd
+ * lives on `turn_context`. Handing one of these to the Claude parser produces
+ * a session with no prompts, no files and no tool calls -- which is filtered
+ * out as "nothing happened", which is why zero Codex sessions were ever
+ * recorded despite the hook being wired and firing.
+ */
+const parseCodexRollout = async (path) => {
+  const out = {
+    cwd: null,
+    branch: null,
+    startedAt: null,
+    endedAt: null,
+    prompts: [],
+    files: new Set(),
+    refs: new Set(),
+    actedOn: new Set(),
+    toolCalls: 0,
+    assistantText: [],
+  }
+
+  const stream = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
+
+  for await (const line of stream) {
+    let row
+    try {
+      row = JSON.parse(line)
+    } catch {
+      continue
+    }
+
+    if (row.timestamp) {
+      if (!out.startedAt) out.startedAt = row.timestamp
+      out.endedAt = row.timestamp
+    }
+
+    const p = row.payload
+    if (!p || typeof p !== 'object') continue
+
+    if (row.type === 'turn_context' && typeof p.cwd === 'string' && !out.cwd) {
+      out.cwd = p.cwd
+      continue
+    }
+
+    if (row.type !== 'response_item') continue
+
+    if (p.type === 'message') {
+      // `developer` is the skills and instructions preamble, not a person.
+      const text = codexText(p.content).trim()
+      if (p.role === 'user') {
+        if (isHumanTurn(text)) {
+          out.prompts.push(text)
+          for (const m of text.matchAll(TASK_REF)) out.refs.add(m[0])
+        }
+      } else if (p.role === 'assistant' && text) {
+        out.assistantText.push(text)
+      }
+      continue
+    }
+
+    if (p.type === 'custom_tool_call') {
+      out.toolCalls += 1
+      // The whole snippet, not a parsed command: Codex wraps the command in a
+      // `tools.exec_command({...})` call with its own quoting, and the regexes
+      // want the text either way.
+      const input = typeof p.input === 'string' ? p.input : ''
+      if (!input) continue
+      for (const m of input.matchAll(TASK_REF)) out.refs.add(m[0])
+      for (const m of input.matchAll(SHELL_PATH)) out.files.add(m[1])
+      for (const part of input.split(/\\n|\n/)) {
+        if (!/\bcairn\s+\w/.test(part)) continue
+        for (const m of part.matchAll(TASK_REF)) out.actedOn.add(m[0])
+      }
+    }
+  }
+
+  return out
+}
+
+/** Codex content blocks are `input_text` / `output_text`, not `text`. */
+const codexText = (content) => {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter((b) => typeof b?.text === 'string')
+    .map((b) => b.text)
+    .join('\n')
+}
+
+/**
+ * The newest Codex rollout, for when the hook payload does not name one.
+ *
+ * Codex's Stop hook does not hand over a transcript path the way Claude's
+ * SessionEnd does, and the hook simply returned when it found none. The files
+ * are laid out as sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl, and
+ * the id in the filename is the session id, so the newest one touched in the
+ * last few hours is the session that just stopped.
+ */
+const RECENT_MS = 6 * 60 * 60 * 1000
+
+/**
+ * The session id carried by the filename.
+ *
+ * Codex writes `rollout-<timestamp>-<uuid>.jsonl`; Claude names the file after
+ * the session itself. Either way the id is there, which is what makes
+ * `--dry-run <path>` work for both without a hook payload to read it from.
+ */
+const idFromRollout = (path) => {
+  const name = path.split('/').pop() ?? ''
+  return (
+    /rollout-.*?-([0-9a-f-]{36})\.jsonl$/.exec(name)?.[1] ??
+    /^([0-9a-f-]{36})\.jsonl$/.exec(name)?.[1] ??
+    null
+  )
+}
+
+const newestRollout = () => {
+  const root = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions')
+  let best = null
+  try {
+    for (const entry of readdirSync(root, { recursive: true })) {
+      const name = String(entry)
+      if (!name.endsWith('.jsonl')) continue
+      const path = join(root, name)
+      let mtime
+      try {
+        mtime = statSync(path).mtimeMs
+      } catch {
+        continue
+      }
+      if (Date.now() - mtime > RECENT_MS) continue
+      if (!best || mtime > best.mtime) {
+        const id = idFromRollout(name)
+        if (id) best = { path, id, mtime }
+      }
+    }
+  } catch {
+    return null
+  }
+  return best
+}
+
+/**
+ * Codex wraps every row in `{type, payload}`; Claude does not.
+ *
+ * Read generously and drop the last line, which the slice may have cut in
+ * half. Codex's opening `session_meta` row carries the whole instructions
+ * preamble and runs to tens of kilobytes on its own, so a small window plus a
+ * single JSON.parse decided every Codex transcript was a Claude one.
+ */
+const CODEX_ROWS = new Set(['session_meta', 'response_item', 'turn_context', 'event_msg'])
+
+const looksLikeCodex = (path) => {
+  try {
+    const lines = readFileSync(path, 'utf8').slice(0, 512_000).split('\n').slice(0, -1)
+    for (const line of lines) {
+      if (!line.trim()) continue
+      let row
+      try {
+        row = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (CODEX_ROWS.has(row?.type)) return true
+      if (row?.type === 'user' || row?.type === 'assistant') return false
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+/**
  * Files worth recording: source, not scratch.
  *
  * Recording every path a session glanced at would make the file index answer
@@ -275,13 +456,57 @@ const post = (args) =>
   })
 
 const main = async () => {
-  const payload = await readStdin()
-  const transcriptPath = payload.transcript_path
-  const sessionId = payload.session_id
-  if (!transcriptPath || !sessionId) return
+  const dryIndex = process.argv.indexOf('--dry-run')
+  const payload = DRY_RUN ? { transcript_path: process.argv[dryIndex + 1] } : await readStdin()
 
-  const t = await parseTranscript(transcriptPath).catch(() => null)
+  let transcriptPath = payload.transcript_path
+  let sessionId = payload.session_id
+
+  // Claude's SessionEnd names the transcript. Codex's Stop does not, so find
+  // the rollout it just finished writing.
+  if (!transcriptPath) {
+    const rollout = newestRollout()
+    if (!rollout) return
+    transcriptPath = rollout.path
+    sessionId = sessionId ?? rollout.id
+  }
+  // A runtime that names the transcript but not the session still has the id:
+  // Codex puts it in the filename.
+  sessionId = sessionId ?? idFromRollout(transcriptPath)
+  if (!sessionId) return
+
+  // Sniffed rather than taken from CAIRN_PLATFORM: the format is a fact about
+  // the file, and a mislabelled platform should not silently produce an empty
+  // session.
+  const parse = looksLikeCodex(transcriptPath) ? parseCodexRollout : parseTranscript
+
+  const t = await parse(transcriptPath).catch(() => null)
   if (!t) return
+
+  // `--dry-run <path>` parses and reports, writing nothing. Without it the
+  // only way to find out whether a runtime's transcript is being read was to
+  // end a session and go looking for a row that might never appear -- which is
+  // how Codex went two days recording nothing.
+  if (DRY_RUN) {
+    console.log(
+      JSON.stringify(
+        {
+          transcript: transcriptPath,
+          format: parse === parseCodexRollout ? 'codex' : 'claude',
+          sessionId,
+          cwd: payload.cwd ?? t.cwd,
+          prompts: t.prompts.length,
+          toolCalls: t.toolCalls,
+          files: keepFiles(t.files, payload.cwd ?? t.cwd).length,
+          refs: [...(t.actedOn.size > 0 ? t.actedOn : t.refs)].slice(0, 12),
+          firstPrompt: t.prompts[0]?.slice(0, 120) ?? null,
+        },
+        null,
+        2,
+      ),
+    )
+    return
+  }
 
   // Nothing happened. A row saying so is noise in every later search.
   if (t.toolCalls === 0 && t.prompts.length === 0) return

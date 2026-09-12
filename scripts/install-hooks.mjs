@@ -109,17 +109,21 @@ const installCodex = () => {
     config.hooks[event] = groups
   }
 
-  replace('SessionStart', 'startup|resume|clear', mine(`node ${CONTEXT}`, { timeout: 10 }))
-  replace('PreToolUse', 'Read', mine(`node ${CONTEXT}`, { timeout: 10, async: true }))
-  replace(
-    'Stop',
-    null,
-    mine(`CAIRN_PLATFORM=codex node ${SESSION_END}`, { timeout: 120, async: true }),
-  )
+  // CAIRN_AGENT names the runtime, and the CLI picks the matching key out of
+  // ~/.cairn/env. Without it every runtime on a machine shares one key, and
+  // the key is the identity -- which is how Codex's work on clawdius was all
+  // filed under OpenClaw's name.
+  const env = 'CAIRN_AGENT=codex CAIRN_PLATFORM=codex'
+
+  replace('SessionStart', 'startup|resume|clear', mine(`${env} node ${CONTEXT}`, { timeout: 10 }))
+  replace('PreToolUse', 'Read', mine(`${env} node ${CONTEXT}`, { timeout: 10, async: true }))
+  replace('Stop', null, mine(`${env} node ${SESSION_END}`, { timeout: 120, async: true }))
 
   writeJson(path, config)
   log('  codex: SessionStart, PreToolUse(Read), Stop')
   log('  codex: entries must be trusted on next launch — [hooks.state] in config.toml')
+  log('  codex: needs CAIRN_API_KEY_CODEX in ~/.cairn/env, or it writes as whoever')
+  log('         owns the plain CAIRN_API_KEY there')
 }
 
 // --- OpenClaw ---------------------------------------------------------------
@@ -134,6 +138,8 @@ const openclawNotes = () => {
   log('  openclaw: manual — extend /root/clawd/hooks/task-enforcer/handler.ts')
   log('            push `cairn context --project <KEY>` output as a bootstrap file')
   log('            and schedule `cairn reconcile` via `openclaw automations`')
+  log('            export CAIRN_AGENT=openclaw where it is launched, so a box')
+  log('            it shares with Codex still attributes writes correctly')
 }
 
 const version = () => {
