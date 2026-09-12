@@ -64,8 +64,16 @@ const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://l
 const detectAgent = () => {
   if (process.env.CAIRN_AGENT) return process.env.CAIRN_AGENT.trim().toLowerCase()
   if (process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT) return 'claude-code'
-  if (process.env.CODEX_HOME || process.env.CODEX_SANDBOX) return 'codex'
+
+  // OpenClaw runs Codex underneath, pointed at a CODEX_HOME of its own
+  // (/root/.openclaw/agents/main/agent/codex-home on clawdius). Testing for
+  // Codex first would therefore file every one of OpenClaw's writes as Codex
+  // -- the same misattribution this exists to fix, pointing the other way.
+  const codexHome = process.env.CODEX_HOME ?? ''
+  if (/openclaw/i.test(codexHome)) return 'openclaw'
   if (process.env.OPENCLAW_SESSION || process.env.OPENCLAW_HOME) return 'openclaw'
+
+  if (codexHome || process.env.CODEX_SANDBOX) return 'codex'
   return ''
 }
 
