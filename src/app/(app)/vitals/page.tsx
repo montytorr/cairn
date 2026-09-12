@@ -70,7 +70,7 @@ const VitalsPage = async () => {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-4 py-5">
+        <div className="max-w-3xl px-4 py-5 md:px-6">
           {failure ? <p className="text-danger text-[13px]">{failure}</p> : null}
 
           {vitals ? (

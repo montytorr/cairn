@@ -165,8 +165,11 @@ export const PriorityIcon = ({
           width="3"
           height={bar.h}
           rx="1"
-          fill="var(--fg-muted)"
-          opacity={i < filled ? 1 : 0.28}
+          // Per priority, not one grey for all three. High, medium and low
+          // differed only by how many bars were filled, which is a difference
+          // you have to stop and count — invisible while scanning a list.
+          fill={`var(--priority-${priority})`}
+          opacity={i < filled ? 1 : 0.22}
         />
       ))}
     </svg>
@@ -195,7 +198,13 @@ export const TypePill = ({ type }: { type: TaskType }) => {
 
 export const LabelPill = ({ children }: { children: React.ReactNode }) => (
   <span className="border-border text-fg-muted inline-flex h-[20px] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[11px] whitespace-nowrap">
-    <span className="bg-fg-subtle size-[7px] rounded-full" />
+    <span
+      className="size-[7px] rounded-full"
+      style={{
+        backgroundColor:
+          typeof children === 'string' ? labelColor(children) : 'var(--fg-subtle)',
+      }}
+    />
     {children}
   </span>
 )
@@ -240,11 +249,23 @@ const PROJECT_COLORS = [
 ]
 
 /** Stable across renders, machines and reloads — it is derived, not stored. */
-export const projectColor = (key: string) => {
+const pick = (key: string, palette: readonly string[]) => {
   let hash = 0
   for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
-  return PROJECT_COLORS[hash % PROJECT_COLORS.length] as string
+  return palette[hash % palette.length] as string
 }
+
+export const projectColor = (key: string) => pick(key, PROJECT_COLORS)
+
+/**
+ * A label's own colour, derived the same way.
+ *
+ * Every label dot was the same grey, so a row carrying three labels carried
+ * three identical marks and the colour said nothing. Deriving it means a label
+ * looks the same everywhere it appears without anybody choosing or storing a
+ * colour — and `bug` reads differently from `infra` at a glance.
+ */
+export const labelColor = (label: string) => pick(label, PROJECT_COLORS)
 
 /**
  * The hexagon Linear uses for a project.

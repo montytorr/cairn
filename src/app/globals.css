@@ -26,7 +26,8 @@
 
   --fg:             #0d0e10;
   --fg-muted:       #61656c;
-  --fg-subtle:      #8a8f98;
+  /* 3.25 against white, which is below the line for 11-13px text. */
+  --fg-subtle:      #6f747c;
 
   --border:         #e6e7e9;
   --border-strong:  #d3d5d9;
@@ -39,17 +40,21 @@
   --danger:         #c52828;
   --danger-subtle:  #fdeaea;
 
-  /* status — the six, as ring colours */
-  --status-backlog:   #9ca3af;
-  --status-todo:      #6b7280;
-  --status-doing:     #f2994a;
-  --status-in-review: #4cb782;
-  --status-done:      #5e6ad2;
-  --status-cancelled: #95a2b3;
+  /* status — the six.
+     Darker than they look like they should be, because on white the pastel
+     versions measured 2.2 to 2.6 against the ground: below the 3.0 floor for
+     an icon, let alone the 4.5 for the group headings that now carry them.
+     A status ring you have to hunt for is not carrying its meaning. */
+  --status-backlog:   #6f757e;
+  --status-todo:      #565d68;
+  --status-doing:     #b45309;
+  --status-in-review: #15803d;
+  --status-done:      #4f5bc4;
+  --status-cancelled: #697280;
 
-  --priority-urgent: #f2994a;
-  --priority-high:   #8a8f98;
-  --priority-medium: #8a8f98;
+  --priority-urgent: #d97706;
+  --priority-high:   #b45309;
+  --priority-medium: #61656c;
   --priority-low:    #8a8f98;
 
   /* Row heights are applied directly in the markup: a --spacing-* theme token
@@ -67,8 +72,14 @@
   --surface-hover:  #1a1b1e;
 
   --fg:             #f7f8f8;
-  --fg-muted:       #8a8f98;
-  --fg-subtle:      #62666d;
+  /* Measured, not chosen by eye. Against --bg these are 18.7 : 7.6 : 5.3, and
+     against --surface-raised — popovers, the bulk bar, the raised rows — still
+     6.6 and 4.6. The old pair sat at 6.1 and 3.4, so every timestamp, ref,
+     count and hint in the product was below the 4.5 readable line, and on a
+     raised surface subtle fell to 3.0. Three tiers are still three tiers; they
+     are just all readable now. */
+  --fg-muted:       #9aa0a9;
+  --fg-subtle:      #7f848c;
 
   --border:         #1f2023;
   --border-strong:  #2c2e33;
@@ -81,17 +92,21 @@
   --danger:         #eb5757;
   --danger-subtle:  #2a1618;
 
-  --status-backlog:   #6b7078;
-  --status-todo:      #8a8f98;
+  --status-backlog:   #7c828b;
+  --status-todo:      #9298a1;
   --status-doing:     #f2c94c;
   --status-in-review: #4cb782;
   --status-done:      #7b86e8;
-  --status-cancelled: #5c6066;
+  --status-cancelled: #757a82;
 
+  /* Urgent is a filled square, the others are bars, so colour is the second
+     signal rather than the only one. High gets amber because three of the four
+     priorities used to be the same grey — the bar count was the entire
+     difference, which is invisible while scanning. */
   --priority-urgent: #f2994a;
-  --priority-high:   #8a8f98;
-  --priority-medium: #8a8f98;
-  --priority-low:    #8a8f98;
+  --priority-high:   #e8a33d;
+  --priority-medium: #9aa0a9;
+  --priority-low:    #7f848c;
 }
 
 @theme inline {

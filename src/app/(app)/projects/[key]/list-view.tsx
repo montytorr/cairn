@@ -499,7 +499,18 @@ export const ListView = ({
               ) : (
                 <StatusIcon status={group.status} size={13} />
               )}
-              <span className="text-fg text-[12px] font-medium">
+              {/* The heading takes its status colour. Six groups otherwise read
+                  as six identical grey rings above six identical grey words,
+                  and the eye has nothing to land on when scrolling a long
+                  list. */}
+              <span
+                className="text-[12px] font-medium"
+                style={
+                  group.status === 'recent'
+                    ? undefined
+                    : { color: `var(--status-${group.status})` }
+                }
+              >
                 {GROUP_LABEL[group.status]}
               </span>
               <span className="text-fg-subtle tabular text-[12px]">
