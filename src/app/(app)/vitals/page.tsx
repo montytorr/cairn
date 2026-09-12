@@ -236,11 +236,11 @@ const VitalsPage = async () => {
                 <Section title="Is the memory being read">
                   <Row label="searches" value={String(memory.searches)} />
                   <Row
-                    label="that found nothing"
-                    value={String(memory.zeroResults)}
+                    label="that had to guess"
+                    value={String(memory.widened)}
                     hint={
                       memory.searches > 0
-                        ? `(${Math.round((memory.zeroResults / memory.searches) * 100)}%)`
+                        ? `(${Math.round((memory.widened / memory.searches) * 100)}%)`
                         : undefined
                     }
                   />
@@ -268,10 +268,13 @@ const VitalsPage = async () => {
                   ) : null}
 
                   <p className="text-fg-subtle mt-2 text-[11px] leading-relaxed">
-                    The premise of Cairn is that an agent checks before starting, and until now
-                    nothing recorded whether that happened. A search returning nothing is the
-                    most informative row here — it says what the memory was asked for and did
-                    not have. Counting starts from when this shipped, so the first day is
+                    The premise of Cairn is that an agent checks before starting, and until
+                    now nothing recorded whether that happened. The searches that had to guess
+                    are the informative ones: search runs precise first and widens to an OR of
+                    the terms when that matches nothing, so it almost never comes back empty —
+                    a query about something Cairn had never heard of returned twenty loose
+                    matches. Widening, not emptiness, is what &ldquo;we do not have this&rdquo;
+                    looks like. Counting starts from when this shipped, so the first day is
                     short by construction.
                   </p>
                 </Section>

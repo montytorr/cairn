@@ -17,6 +17,12 @@ export const recordSearch = async (
   query: string,
   kinds: string[] | null,
   resultCount: number,
+  /**
+   * The precise query matched nothing and the search fell back to an OR of the
+   * terms. This, not an empty result, is what "the memory did not have it"
+   * looks like — two-pass search practically never returns zero rows.
+   */
+  widened: boolean,
 ) => {
   try {
     await admin().from('search_events').insert({
@@ -25,6 +31,7 @@ export const recordSearch = async (
       query: query.slice(0, 500),
       kinds,
       result_count: resultCount,
+      widened,
     })
   } catch {
     // Nothing to do about it, and nothing worth failing the search over.

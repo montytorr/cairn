@@ -161,6 +161,7 @@ export const readWorkShapeFor = async (userId: string, hours = 24): Promise<Work
 export type MemoryUse = {
   windowHours: number
   searches: number
+  widened: number
   zeroResults: number
   byAgent: { agent: string; searches: number }[]
   tasksFiled: number

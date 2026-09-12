@@ -59,12 +59,12 @@ export const GET = route({
     try {
       if (taskPath) {
         const { rows, widened } = await searchTasks(actor.userId, q, { project, type, status }, limit)
-        await recordSearch(actor, q, ['task'], rows.length)
+        await recordSearch(actor, q, ['task'], rows.length, widened)
         return ok({ count: rows.length, query: q, widened, results: rows.map(taskResult) })
       }
 
       const { rows, widened } = await searchAll(actor.userId, q, { project, kinds }, limit)
-      await recordSearch(actor, q, kinds ?? null, rows.length)
+      await recordSearch(actor, q, kinds ?? null, rows.length, widened)
       return ok({ count: rows.length, query: q, widened, results: rows.map(unifiedResult) })
     } catch (error) {
       return fail('internal_error', error instanceof Error ? error.message : 'Search failed.')
