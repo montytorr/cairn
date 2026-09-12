@@ -43,6 +43,11 @@ Do not finish a durable task with only a chat reply, a dashboard update, or a va
 If work is incomplete, leave the task doing with a checkpoint and explicit handoff; never
 claim done merely because the current turn is ending.
 
+A checkpoint is what makes leaving it open safe. Two hours with nothing happening on a
+claim releases it and moves the task back to todo, so the board stops saying someone is
+working on it — the notes and the checkpoint are kept, and the checkpoint is the only
+thing that tells whoever picks it up where you got to.
+
 Sessions are created and recorded by the runtime lifecycle; there is deliberately no
 `cairn session create` command. At session start, use `context` and `check`; at session
 end, the runtime/Stop hook writes the episodic record and auto-checkpoints held tasks.
@@ -214,7 +219,8 @@ is lost if you forget. These are the things nothing can do on your behalf:
       business or a stack, neither if it is true everywhere. Unscoped is the default you
       get by forgetting, and the CLI will say so.
 - [ ] **Release or checkpoint anything you are still holding** — `cairn release`, or
-      `cairn checkpoint --summary` if the work continues.
+      `cairn checkpoint --summary` if the work continues. Going quiet does the release for
+      you and sends the task back to todo, but it cannot write the checkpoint for you.
 
 `cairn context` shows what you are holding and flags anything that has gone quiet, so run
 it if you are unsure what you left open.
@@ -227,6 +233,11 @@ cairn context          # what you hold, what is in flight, where the last sessio
 
 Usually you will not run this: a hook runs it when a session starts and puts the result in
 front of you. Run it by hand when you have lost your place, or after a long stretch of work.
+
+Read **"Started and dropped here"** when it appears. Those are tasks somebody began and
+walked away from — nobody is holding them, and nothing else will surface them again. Pick
+one up and finish it, or close it with a resolution saying why it is not worth finishing.
+Leaving them is how a tracker fills with work that looks live and is not.
 
 `cairn map CAIRN` tells Cairn that this directory is that project, which is what makes the
 briefing project-aware. Do it once per checkout.
