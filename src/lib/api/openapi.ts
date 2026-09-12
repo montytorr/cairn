@@ -612,6 +612,24 @@ export const openapiSpec = () => ({
         responses: { '200': okResponse('What was released.') },
       },
     },
+    '/vitals': {
+      get: {
+        summary: "Cairn's own vital signs, and what looks wrong",
+        description:
+          'Counts for the last `hours` (default 24, max 720) against the week before, plus ' +
+          '`findings` — the ones worth acting on. Separate from `/health`, which reports on ' +
+          'the process: that probe stayed green through two days of recording no sessions ' +
+          'at all. Intended for a scheduled job that speaks only when findings are present.',
+        parameters: [
+          {
+            name: 'hours',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 720, default: 24 },
+          },
+        ],
+        responses: { '200': okResponse('Vital signs and findings.') },
+      },
+    },
     '/labels': {
       get: {
         summary: 'Every label in use, with a task count',

@@ -255,6 +255,14 @@ const emit = (data, opts = {}) => {
   if (FORMAT === 'json') return console.log(JSON.stringify(data, null, 2))
   if (FORMAT === 'pretty') return console.log(JSON.stringify(data, null, 2))
 
+  // Some answers are sentences, not a table. Forcing them through the
+  // key/value flattener turns a finding worth reading into nine numbered rows
+  // nobody reads.
+  if (opts.lines) {
+    for (const line of opts.lines(data)) console.log(line)
+    return
+  }
+
   const rows = opts.rows ? opts.rows(data) : Array.isArray(data) ? data : null
   if (!rows) {
     const flat = flatten(data)
@@ -481,6 +489,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn session list             recent sessions
     cairn session end --id <id>    write the episodic record, checkpoint what is held
     cairn reconcile                release your own claims that went quiet
+    cairn vitals [--hours 24] [--all]   is the memory still being written
+    cairn vitals --notify <ref>         post findings as a note, silent if none
 
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
@@ -1086,6 +1096,61 @@ const commands = {
     mkdirSync(dirname(PROJECT_MAP_PATH), { recursive: true })
     writeFileSync(PROJECT_MAP_PATH, `${JSON.stringify(map, null, 2)}\n`)
     emit({ path: dir, project: map[dir] ?? null })
+  },
+
+  /**
+   * Is the memory still being written?
+   *
+   * Prints the findings and nothing else when there are any, because a report
+   * nobody reads is the same as no report. `--all` shows the counts behind
+   * them. `--notify <ref>` posts the findings as a note and says nothing when
+   * there are none, which is what makes it safe to run on a schedule.
+   */
+  async vitals() {
+    const hours = Number(flags.hours ?? 24)
+    const data = await request('GET', `/api/v1/vitals?hours=${hours}`)
+    const findings = data.findings ?? []
+
+    if (flags.notify) {
+      if (findings.length === 0) {
+        emit({ findings: 0, notified: false }, { lines: () => ['nothing to report'] })
+        return
+      }
+      const note =
+        `Cairn vitals, last ${data.windowHours}h:\n` +
+        findings.map((f) => `  [${f.severity}] ${f.message}`).join('\n') +
+        `\n\nSessions ${data.sessions.recent} (${data.sessions.recentWithFiles} naming files), ` +
+        `tasks ${data.tasks.opened} opened / ${data.tasks.closed} closed, ` +
+        `${data.tasks.stalled} stalled, ${data.autoReleased} claims auto-released.`
+      await request('POST', `/api/v1/tasks/${encodeURIComponent(flags.notify)}/notes`, {
+        note,
+        kind: 'finding',
+      })
+      emit({ findings: findings.length, notified: true })
+      return
+    }
+
+    emit(data, {
+      lines: (d) => {
+        const out = []
+        if (d.findings.length === 0) out.push(`nothing wrong in the last ${d.windowHours}h`)
+        for (const f of d.findings) out.push(`[${f.severity}] ${f.message}`)
+        if (flags.all || d.findings.length === 0) {
+          out.push('')
+          out.push(
+            `sessions ${d.sessions.recent} (${d.sessions.recentWithFiles} with files), ` +
+              `week before ${d.sessions.baseline} (${d.sessions.baselineWithFiles})`,
+          )
+          out.push(
+            `tasks ${d.tasks.opened} opened, ${d.tasks.closed} closed, ` +
+              `${d.tasks.stalled} stalled, ${d.tasks.held} held`,
+          )
+          out.push(`claims auto-released ${d.autoReleased}, knowledge written ${d.knowledgeWritten}`)
+          for (const a of d.agents) out.push(`  ${a.agent}: ${a.recent} writes (week before ${a.baseline})`)
+        }
+        return out
+      },
+    })
   },
 
   async reconcile() {
