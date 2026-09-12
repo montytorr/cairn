@@ -18,9 +18,9 @@
  * useful; a session that was never recorded is not.
  */
 import { spawn } from 'node:child_process'
-import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 const CLI = process.env.CAIRN_CLI ?? 'cairn'
@@ -37,6 +37,11 @@ const MAX_DIGEST_CHARS = 24_000
 if (process.env.CAIRN_SUMMARISER === '1') process.exit(0)
 
 const DRY_RUN = process.argv.includes('--dry-run')
+
+const arg = (name) => {
+  const index = process.argv.indexOf(name)
+  return index === -1 ? null : process.argv[index + 1]
+}
 
 const TASK_REF = /\b([A-Z][A-Z0-9]{1,9})-(\d{1,6})\b/g
 const PATH_KEYS = ['file_path', 'notebook_path', 'path']
@@ -79,6 +84,12 @@ const textOf = (content) => {
 const isHumanTurn = (text) =>
   text &&
   !text.startsWith('<') &&
+  // A runtime talking to itself is not a person asking for something.
+  // OpenClaw prefixes every turn with its own context ("runtime context",
+  // "assembled context"), and wakes the agent on a schedule to check it is
+  // alive. Taking the first user turn recorded those as the request.
+  !/^OpenClaw \w+ context for this turn/i.test(text) &&
+  !/^Reply with exactly one word/i.test(text) &&
   !text.includes('<system-reminder>') &&
   !text.includes('<command-name>') &&
   !text.includes('<local-command') &&
@@ -233,12 +244,17 @@ const parseCodexRollout = async (path) => {
       continue
     }
 
-    if (p.type === 'custom_tool_call') {
+    // Codex under OpenClaw emits `function_call` with JSON `arguments`;
+    // Codex on its own emits `custom_tool_call` with a JS snippet. Reading
+    // only the second recorded OpenClaw sessions with zero tool calls, which
+    // looks exactly like a session where nothing happened.
+    if (p.type === 'custom_tool_call' || p.type === 'function_call') {
       out.toolCalls += 1
       // The whole snippet, not a parsed command: Codex wraps the command in a
       // `tools.exec_command({...})` call with its own quoting, and the regexes
       // want the text either way.
-      const input = typeof p.input === 'string' ? p.input : ''
+      const input =
+        typeof p.input === 'string' ? p.input : typeof p.arguments === 'string' ? p.arguments : ''
       if (!input) continue
       for (const m of input.matchAll(TASK_REF)) out.refs.add(m[0])
       for (const m of input.matchAll(SHELL_PATH)) out.files.add(m[1])
@@ -455,10 +471,7 @@ const post = (args) =>
     child.on('close', (code) => resolve(code === 0))
   })
 
-const main = async () => {
-  const dryIndex = process.argv.indexOf('--dry-run')
-  const payload = DRY_RUN ? { transcript_path: process.argv[dryIndex + 1] } : await readStdin()
-
+const record = async (payload) => {
   let transcriptPath = payload.transcript_path
   let sessionId = payload.session_id
 
@@ -509,7 +522,12 @@ const main = async () => {
   }
 
   // Nothing happened. A row saying so is noise in every later search.
-  if (t.toolCalls === 0 && t.prompts.length === 0) return
+  //
+  // Tool calls alone are not evidence of work: OpenClaw wakes on a schedule,
+  // finds nothing to do and answers HEARTBEAT_OK, which is several tool calls
+  // and no session anybody will ever want to read. Something a person asked
+  // for, a file touched, or a task worked — one of those has to be true.
+  if (t.prompts.length === 0 && t.files.size === 0 && t.refs.size === 0) return
 
   const cwd = payload.cwd ?? t.cwd
   const files = keepFiles(t.files, cwd)
@@ -545,6 +563,84 @@ const main = async () => {
   }
 
   await post(args)
+}
+
+/**
+ * Sessions a runtime never told us about.
+ *
+ * OpenClaw has no session-end event of any kind -- it IS Codex, pointed at a
+ * CODEX_HOME of its own, so it leaves rollouts behind and says nothing. A
+ * schedule sweeping that directory is the only way to record what it did.
+ *
+ * Two rules make a sweep safe where a hook is not. A rollout touched in the
+ * last few minutes may still be being written, so it is left for the next
+ * pass; and every id recorded is remembered, because the summary costs a model
+ * call and re-reading yesterday's sessions hourly would pay for it again and
+ * again for nothing.
+ */
+const SETTLED_MS = Number(process.env.CAIRN_ROLLOUT_SETTLE_MIN ?? 10) * 60_000
+const SEEN_PATH = join(homedir(), '.cairn', 'recorded-rollouts')
+const SEEN_CAP = 2000
+
+const readSeen = () => {
+  try {
+    return new Set(readFileSync(SEEN_PATH, 'utf8').split('\n').filter(Boolean))
+  } catch {
+    return new Set()
+  }
+}
+
+const rememberSeen = (seen) => {
+  try {
+    mkdirSync(dirname(SEEN_PATH), { recursive: true })
+    writeFileSync(SEEN_PATH, `${[...seen].slice(-SEEN_CAP).join('\n')}\n`)
+  } catch {
+    // Losing the marker costs a repeated summary, not a wrong one.
+  }
+}
+
+const scan = async (root, windowHours) => {
+  const seen = readSeen()
+  const cutoff = Date.now() - windowHours * 3_600_000
+  const found = []
+
+  try {
+    for (const entry of readdirSync(root, { recursive: true })) {
+      const name = String(entry)
+      if (!name.endsWith('.jsonl')) continue
+      const path = join(root, name)
+      const id = idFromRollout(name)
+      if (!id || seen.has(id)) continue
+      let mtime
+      try {
+        mtime = statSync(path).mtimeMs
+      } catch {
+        continue
+      }
+      if (mtime < cutoff) continue
+      if (Date.now() - mtime < SETTLED_MS) continue
+      found.push({ path, id, mtime })
+    }
+  } catch (error) {
+    if (DEBUG) console.error('[cairn-session-end] scan', error)
+    return
+  }
+
+  found.sort((a, b) => a.mtime - b.mtime)
+  for (const rollout of found) {
+    await record({ transcript_path: rollout.path, session_id: rollout.id })
+    seen.add(rollout.id)
+  }
+  rememberSeen(seen)
+  console.log(`recorded ${found.length} session(s) from ${root}`)
+}
+
+const main = async () => {
+  const scanRoot = arg('--scan')
+  if (scanRoot) return scan(scanRoot, Number(arg('--window-hours') ?? 24))
+
+  const dryIndex = process.argv.indexOf('--dry-run')
+  return record(DRY_RUN ? { transcript_path: process.argv[dryIndex + 1] } : await readStdin())
 }
 
 main().catch((error) => {
