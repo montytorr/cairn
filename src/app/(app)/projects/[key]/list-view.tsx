@@ -11,6 +11,7 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPES,
+  isTerminal,
   type TaskPriority,
   type TaskStatus,
   type TaskType,
@@ -18,6 +19,7 @@ import {
 import type { TaskListItem } from '@/lib/data'
 import { NewTaskButton } from '@/components/task-creation'
 import { BulkBar } from './bulk-bar'
+import { ResolutionDialog } from './resolution-dialog'
 import { applySelection } from '@/lib/selection'
 import { QuickSelect, useQuickPatch } from './quick-edit'
 import { LabelEditor } from './label-editor'
@@ -69,6 +71,7 @@ const Row = ({
   const ownKey = task.project_key ?? projectKey
   const ref = `${ownKey}-${task.number}`
   const { patch, overlay, error, clearError } = useQuickPatch(ref, task.updated_at)
+  const [closing, setClosing] = useState<TaskStatus | null>(null)
 
   // The optimistic overlay wins until the refreshed row arrives.
   const status = (overlay?.status as TaskStatus) ?? task.status
@@ -168,7 +171,18 @@ const Row = ({
           options={TASK_STATUSES}
           labels={STATUS_LABEL}
           title={`Status: ${STATUS_LABEL[status]}`}
-          onChange={(next) => void patch({ status: next })}
+          // Done and Cancelled need a resolution, and the API refuses the
+          // PATCH without one. Every other surface that can close a task —
+          // the board, the bulk bar, the task page — asks for it first; this
+          // one fired the doomed request and printed "refused" in 11px,
+          // which is why cancelling from the list looked broken.
+          onChange={(next) => {
+            if (isTerminal(next) && !task.has_resolution) {
+              setClosing(next)
+              return
+            }
+            void patch({ status: next })
+          }}
           className="pointer-events-auto"
         >
           <StatusIcon status={status} />
@@ -270,6 +284,25 @@ const Row = ({
           {shortDate(task.updated_at)}
         </time>
       </div>
+
+      {closing && (
+        <ResolutionDialog
+          taskTitle={task.title}
+          status={closing}
+          suggestion={task.checkpoint_summary}
+          onCancel={() => setClosing(null)}
+          onConfirm={async (resolution, kind, duplicateOf) => {
+            const ok = await patch({
+              status: closing,
+              resolution,
+              resolutionKind: kind,
+              ...(duplicateOf ? { duplicateOf } : {}),
+            })
+            if (ok) setClosing(null)
+            return ok
+          }}
+        />
+      )}
     </div>
   )
 }
