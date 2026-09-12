@@ -44,7 +44,46 @@ export const normalizeDatabaseValue = (value: unknown): unknown => {
   return value
 }
 
-const runtime = globalThis as typeof globalThis & { __cairnPool?: Pool }
+const runtime = globalThis as typeof globalThis & {
+  __cairnPool?: Pool
+  __cairnJsonColumns?: Promise<Set<string>>
+}
+
+/**
+ * Columns that hold JSON, as `table.column`.
+ *
+ * node-postgres turns a JS array into a Postgres array literal -- `{a,b}` --
+ * which a json/jsonb column rejects outright as "invalid input syntax for type
+ * json". An empty array is worse than an error: `{}` parses as a valid empty
+ * JSON *object*, so it is stored, and the column quietly stops meaning what it
+ * used to.
+ *
+ * PostgREST never had this problem; it sent a JSON body and the database did
+ * the casting. Moving to the driver moved that responsibility here, and the
+ * only honest way to know which columns need it is to ask the database once.
+ *
+ * Objects are stringified too. The driver already does that, but relying on
+ * that asymmetry -- objects fine, arrays broken -- is what made this so hard
+ * to see.
+ */
+const jsonColumns = (): Promise<Set<string>> => {
+  runtime.__cairnJsonColumns ??= pool()
+    .query(
+      `select table_name, column_name from information_schema.columns
+       where table_schema = 'public' and data_type in ('json', 'jsonb')`,
+    )
+    .then((result) => new Set(result.rows.map((row) => `${row.table_name}.${row.column_name}`)))
+    .catch(() => new Set<string>())
+  return runtime.__cairnJsonColumns
+}
+
+/** Bind one value, serialising it where the column expects JSON. */
+export const bind = (table: string, column: string, value: unknown, json: Set<string>) => {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'object') return value
+  if (value instanceof Date) return value
+  return json.has(`${table}.${column}`) ? JSON.stringify(value) : value
+}
 
 const connectionString = () => {
   const value = process.env.DATABASE_URL
@@ -390,7 +429,8 @@ class DirectQuery<T = DynamicRow[]> implements PromiseLike<Result<T>> {
       } else if (this.action === 'update') {
         const patch = this.values[0] ?? {}
         const entries = Object.entries(patch)
-        const set = entries.map(([column, value]) => { parameters.push(value); return `${identifier(column)} = $${parameters.length}` })
+        const json = await jsonColumns()
+        const set = entries.map(([column, value]) => { parameters.push(bind(this.table, column, value, json)); return `${identifier(column)} = $${parameters.length}` })
         const shiftedWhere = where.replace(/\$(\d+)/g, (_, value) => `$${Number(value) + parameters.length}`)
         parameters.push(...whereParameters)
         sql = `update ${identifier(this.table)} b set ${set.join(', ')}${shiftedWhere}${returning}`
@@ -398,7 +438,8 @@ class DirectQuery<T = DynamicRow[]> implements PromiseLike<Result<T>> {
         const rows = this.values
         if (!rows.length) return { data: [], error: null, count: null, status: 201 } as Result<T>
         const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))]
-        const tuples = rows.map((row) => `(${columns.map((column) => { parameters.push(row[column] ?? null); return `$${parameters.length}` }).join(', ')})`)
+        const json = await jsonColumns()
+        const tuples = rows.map((row) => `(${columns.map((column) => { parameters.push(bind(this.table, column, row[column], json)); return `$${parameters.length}` }).join(', ')})`)
         sql = `insert into ${identifier(this.table)} (${columns.map(identifier).join(', ')}) values ${tuples.join(', ')}`
         if (this.action === 'upsert') {
           if (!this.conflictColumns.length) throw new Error('upsert requires onConflict')
