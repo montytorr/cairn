@@ -30,7 +30,12 @@ export type Vitals = {
   tasks: { opened: number; closed: number; stalled: number; held: number }
   autoReleased: number
   knowledgeWritten: number
-  agents: { agent: string; recent: number; baseline: number }[]
+  /**
+   * Everyone who wrote, people included — the panel this feeds is called
+   * "Who wrote", and a person writing ninety-seven times a week is a true
+   * answer to that. `actorType` is what lets the checks below tell them apart.
+   */
+  agents: { agent: string; actorType?: 'human' | 'agent'; recent: number; baseline: number }[]
 }
 
 export type Finding = {
@@ -130,6 +135,21 @@ export const assess = (v: Vitals): Finding[] => {
   // Keep this as a qualified warning, not an alarm: silence is a prompt to
   // verify runtime usage, never proof that hooks or keys are broken.
   for (const agent of v.agents) {
+    /**
+     * People are not runtimes.
+     *
+     * `actorLabel` gives a human their display name unqualified, so the owner
+     * of this instance arrived here as `monty.torr@gmail.com` and was told he
+     * had written nothing in 24h against 97 the week before — 97 being a week
+     * of his own clicks — and advised to go and investigate his hooks and
+     * keys. He has neither.
+     *
+     * Undefined is treated as a runtime on purpose: a payload from a server
+     * that predates the column is all runtimes as far as anybody knew, and
+     * silently dropping every check is worse than the false positive this
+     * removes.
+     */
+    if (agent.actorType === 'human') continue
     if (agent.recent === 0 && expected(agent.baseline) >= 3) {
       findings.push({
         code: 'agent-silent',

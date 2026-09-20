@@ -132,4 +132,47 @@ describe('the summariser failing silently', () => {
     ).map((f) => f.code)
     expect(codes).not.toContain('sessions-without-summary')
   })
+
+  it('does not tell a person to go and check their hooks', () => {
+    // This shipped. `monty.torr@gmail.com has written nothing in 24h, against
+    // 97 in the week before ... before investigating hooks or keys` — that is
+    // the owner of the instance, 97 is a week of his own clicks in the web UI,
+    // and he has neither hooks nor keys. `actorLabel` gives a human their
+    // display name unqualified, so people land in this list looking exactly
+    // like a runtime that has gone quiet.
+    const v = healthy({
+      agents: [
+        { agent: 'claude-code · Cal', actorType: 'agent', recent: 40, baseline: 300 },
+        { agent: 'Cal', actorType: 'human', recent: 0, baseline: 97 },
+      ],
+    })
+
+    expect(codes(v)).not.toContain('agent-silent')
+  })
+
+  it('still reports a runtime that has gone quiet beside that person', () => {
+    // The cost of the false positive was never the noise: openclaw wrote 793
+    // times last week and nothing in 24h, and it was sitting in the same list
+    // as a warning about a human. The quiet runtime is the whole point.
+    const v = healthy({
+      agents: [
+        { agent: 'claude-code · Cal', actorType: 'agent', recent: 40, baseline: 300 },
+        { agent: 'openclaw · Cal', actorType: 'agent', recent: 0, baseline: 793 },
+        { agent: 'Cal', actorType: 'human', recent: 0, baseline: 97 },
+      ],
+    })
+
+    const silent = assess(v).filter((f) => f.code === 'agent-silent')
+    expect(silent).toHaveLength(1)
+    expect(silent[0]?.message).toContain('openclaw · Cal')
+    expect(silent[0]?.message).not.toContain('97')
+  })
+
+  it('treats a writer of unknown type as a runtime', () => {
+    // A payload from a server that predates the column is all runtimes as far
+    // as anybody knew. Silently dropping every check on an older server is
+    // worse than the false positive this removes.
+    const v = healthy({ agents: [{ agent: 'openclaw', recent: 0, baseline: 793 }] })
+    expect(codes(v)).toContain('agent-silent')
+  })
 })
