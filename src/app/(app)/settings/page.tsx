@@ -58,33 +58,29 @@ const SettingsPage = async () => {
     // The layout's <main> is overflow-hidden, so every page owns its own
     // scrolling. This one never did: it fitted the viewport until Entities was
     // added, and then simply clipped — no scrollbar, no overflow, the bottom of
-    // the page just gone.
-    <div className="h-full overflow-y-auto">
-    {/* Left-aligned. A document — a task, a knowledge entry — earns a
-          centred measure; a page of forms and lists inside a shell that
-          already has a sidebar just ends up floating with a dead column
-          beside it. */}
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
-      <header className="mb-8 flex items-start gap-2">
-        <span className="-ml-1.5 md:hidden">
-          <MobileNavButton />
-        </span>
-        <div>
-          <h1 className="font-display text-2xl leading-none">Settings</h1>
-          <p className="text-fg-subtle mt-2 text-[0.75rem]">{user.email}</p>
-        </div>
+    // the page just gone. The header bar is the one every other page has.
+    <div className="flex h-dvh flex-col">
+      <header className="border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
+        <MobileNavButton />
+        <span className="text-fg text-[0.8125rem] font-medium">Settings</span>
+        <span className="text-fg-subtle hidden text-[0.8125rem] sm:block">·</span>
+        <span className="text-fg-subtle hidden truncate text-[0.8125rem] sm:block">{user.email}</span>
       </header>
 
-      <div className="flex flex-col gap-10">
-        <PasswordSection />
-        <LabelsSection labels={(labels ?? []) as LabelRow[]} />
-        <EntitiesSection
-          entities={entities}
-          allProjects={allProjects}
-          unassigned={unassigned}
-        />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Centred at a form's measure, like vitals (e7e4f31). */}
+        <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
+          <div className="flex flex-col gap-10">
+            <PasswordSection />
+            <LabelsSection labels={(labels ?? []) as LabelRow[]} />
+            <EntitiesSection
+              entities={entities}
+              allProjects={allProjects}
+              unassigned={unassigned}
+            />
+          </div>
+        </div>
       </div>
-    </div>
     </div>
   )
 }

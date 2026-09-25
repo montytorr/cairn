@@ -1,40 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Columns3, List } from 'lucide-react'
 import { BoardView } from './board-view'
 import { ListView } from './list-view'
 import { cn } from '@/lib/utils'
 import type { TaskListItem } from '@/lib/data'
+import { viewCookieName, type ProjectView } from '@/lib/project-view'
+
+const LEGACY_STORAGE_KEY = (projectKey: string) => `cairn:view:${projectKey}`
+
+// Secure wherever the page itself is served over HTTPS; plain http is only
+// ever local development, where a Secure cookie would never be stored.
+const rememberView = (projectKey: string, view: ProjectView) => {
+  const secure = window.location.protocol === 'https:' ? '; secure' : ''
+  document.cookie = `${viewCookieName(projectKey)}=${view}; path=/; max-age=31536000; samesite=lax${secure}`
+}
 
 /**
- * Board or list, remembered per project in localStorage — the choice is a
- * per-viewer convenience, not shared state, so it belongs in the browser.
+ * Board or list, remembered per project in a cookie — a per-viewer
+ * convenience, not shared state. A cookie rather than localStorage because
+ * the server has to render the same view the client hydrates: reading
+ * localStorage in the state initializer gave the server `list` every time,
+ * so a board user got the list, a hydration mismatch, then the board.
  */
 export const ViewSwitch = ({
   tasks,
   recentlyClosed,
   projectKey,
+  initialView,
 }: {
   tasks: TaskListItem[]
   recentlyClosed: TaskListItem[]
   projectKey: string
+  /** From the view cookie; null when this viewer never picked one here. */
+  initialView: ProjectView | null
 }) => {
-  const [view, setView] = useState<'board' | 'list'>(() => {
-    try {
-      return (localStorage.getItem(`cairn:view:${projectKey}`) as 'board' | 'list') ?? 'list'
-    } catch {
-      return 'list'
-    }
-  })
+  const [view, setView] = useState<ProjectView>(initialView ?? 'list')
 
-  const pick = (next: 'board' | 'list') => {
-    setView(next)
+  // One-time carry-over for a choice saved before the cookie existed.
+  useEffect(() => {
+    if (initialView) return
     try {
-      localStorage.setItem(`cairn:view:${projectKey}`, next)
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY(projectKey))
+      if (legacy !== 'board') return
+      setView('board')
+      rememberView(projectKey, 'board')
+      localStorage.removeItem(LEGACY_STORAGE_KEY(projectKey))
     } catch {
-      // private window or blocked storage; the choice just will not persist
+      // blocked storage; nothing to carry over
     }
+  }, [initialView, projectKey])
+
+  const pick = (next: ProjectView) => {
+    setView(next)
+    rememberView(projectKey, next)
   }
 
   const button = (value: 'board' | 'list', Icon: typeof List, label: string) => (
@@ -63,19 +83,23 @@ export const ViewSwitch = ({
     </span>
   )
 
+  // The board fills the height and scrolls per column; the list is a
+  // document and scrolls as one.
   return view === 'board' ? (
-    <div>
-      <div className="border-border flex items-center gap-1 border-b px-3 py-2">{toggle}</div>
-      <div className="p-3">
+    <div className="flex h-full flex-col">
+      <div className="border-border flex shrink-0 items-center gap-1 border-b px-3 py-2">{toggle}</div>
+      <div className="min-h-0 flex-1">
         <BoardView tasks={tasks} projectKey={projectKey} />
       </div>
     </div>
   ) : (
-    <ListView
-      tasks={tasks}
-      recentlyClosed={recentlyClosed}
-      projectKey={projectKey}
-      toolbarExtra={toggle}
-    />
+    <div className="h-full overflow-y-auto">
+      <ListView
+        tasks={tasks}
+        recentlyClosed={recentlyClosed}
+        projectKey={projectKey}
+        toolbarExtra={toggle}
+      />
+    </div>
   )
 }

@@ -1,14 +1,15 @@
 'use client'
 
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
-  useDroppable, useDraggable, type DragEndEvent, type DragStartEvent,
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors,
+  useDraggable, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MarkdownPreview } from '@/components/markdown'
-import { Avatar, LabelPill, PriorityIcon, ProjectIcon, TypePill } from '@/components/icons'
+import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
+import { COLUMN_PANEL, COLUMN_WIDTH, ColumnCount, DragPreview, DropList } from '@/components/board-columns'
 import { ResolutionDialog } from './resolution-dialog'
 import { useMutate } from '@/lib/api/use-mutate'
 import { cn } from '@/lib/utils'
@@ -109,29 +110,20 @@ const Column = ({
   status: TaskStatus
   tasks: TaskListItem[]
   projectKey: string
-}) => {
-  const { setNodeRef, isOver } = useDroppable({ id: status })
-
-  return (
-    <div className="flex w-64 shrink-0 flex-col">
-      <div className="mb-2 flex items-center gap-2 px-0.5">
-        <span className="text-xs font-medium">{COLUMN_LABEL[status]}</span>
-        <span className="text-fg-subtle tabular text-[0.6875rem]">{tasks.length}</span>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md p-1 transition-colors',
-          isOver && 'bg-accent-subtle',
-        )}
-      >
-        {tasks.map((task) => (
-          <Card key={task.id} task={task} projectKey={projectKey} />
-        ))}
-      </div>
+}) => (
+  <section className={cn(COLUMN_PANEL, 'h-full', COLUMN_WIDTH)}>
+    <div className="flex h-8 items-center gap-2 px-2.5">
+      <StatusIcon status={status} size={13} />
+      <span className="text-xs font-medium">{COLUMN_LABEL[status]}</span>
+      <ColumnCount count={tasks.length} />
     </div>
-  )
-}
+    <DropList dropId={status} count={tasks.length} className="min-h-0 flex-1 overscroll-contain">
+      {tasks.map((task) => (
+        <Card key={task.id} task={task} projectKey={projectKey} />
+      ))}
+    </DropList>
+  </section>
+)
 
 export const BoardView = ({
   tasks: initial,
@@ -158,7 +150,10 @@ export const BoardView = ({
 
   // A small activation distance, so clicking a link inside a card does not
   // start a drag.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor),
+  )
 
   const persist = async (
     task: TaskListItem,
@@ -215,7 +210,10 @@ export const BoardView = ({
 
   return (
     <>
+      {/* A fixed id: dnd-kit otherwise numbers its aria-describedby from a
+          module counter that the server and the client do not share. */}
       <DndContext
+        id={`project-board-${projectKey}`}
         sensors={sensors}
         onDragStart={({ active }: DragStartEvent) =>
           setDragging(tasks.find((t) => t.id === active.id) ?? null)
@@ -223,22 +221,22 @@ export const BoardView = ({
         onDragEnd={onDragEnd}
         onDragCancel={() => setDragging(null)}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {TASK_STATUSES.map((status) => (
-            <Column
-              key={status}
-              status={status}
-              projectKey={projectKey}
-              tasks={tasks.filter((t) => t.status === status)}
-            />
-          ))}
+        <div className="h-full snap-x scroll-px-3 overflow-auto md:snap-none">
+          <div className="flex h-full w-max gap-2.5 p-3">
+            {TASK_STATUSES.map((status) => (
+              <Column
+                key={status}
+                status={status}
+                projectKey={projectKey}
+                tasks={tasks.filter((t) => t.status === status)}
+              />
+            ))}
+          </div>
         </div>
 
         <DragOverlay>
           {dragging ? (
-            <div className="bg-surface border-accent w-64 rounded-md border p-2.5 raised-lg">
-              <p className="text-[0.8125rem] font-medium">{dragging.title}</p>
-            </div>
+            <DragPreview title={dragging.title} />
           ) : null}
         </DragOverlay>
       </DndContext>
