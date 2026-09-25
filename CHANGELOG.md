@@ -19,9 +19,10 @@ out under **Breaking** with what to do about it.
 - **The installer no longer links OpenClaw for an account that runs no gateway** (CAIRN-296).
   A global install puts `openclaw` on every account's PATH; linking from one without an
   OpenClaw config created a config nobody reads and reported success while the real gateway
-  stayed unbriefed. It now links only where `~/.openclaw/openclaw.json` (or
-  `OPENCLAW_CONFIG_PATH`) exists, says why it skipped otherwise — `--dry-run` included — and
-  `--openclaw` overrides for a gateway not configured yet.
+  stayed unbriefed. It now links only where the account's OpenClaw config (`OPENCLAW_CONFIG_PATH`
+  or `~/.openclaw/openclaw.json`) configures a gateway — a client config that only mirrors
+  another gateway's auth does not count — says why it skipped otherwise, `--dry-run` included,
+  and `--openclaw` overrides for a gateway not configured yet.
 
 ### Added
 

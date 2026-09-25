@@ -94,7 +94,7 @@ const setup = async ({ gateway = true }: { gateway?: boolean } = {}) => {
   await fakeOpenclaw(bin)
   if (gateway) {
     await mkdir(join(home, '.openclaw'), { recursive: true })
-    await writeFile(join(home, '.openclaw', 'openclaw.json'), '{}')
+    await writeFile(join(home, '.openclaw', 'openclaw.json'), JSON.stringify({ gateway: { mode: 'local', port: 18789 } }))
   }
   const log = join(home, 'openclaw.log')
   const env = { PATH: `${bin}:${BASE_PATH}`, HOME: home, FAKE_OPENCLAW_LOG: log }
@@ -125,6 +125,33 @@ describe('the installer links the OpenClaw briefing hook', () => {
     expect(await calls()).toEqual([])
   })
 
+  /**
+   * The case that was really there: an account whose config only mirrors the
+   * gateway's auth so its CLI can reach another account's gateway, kept
+   * immutable by a sync job. A file exists; no gateway runs here.
+   */
+  it('skips an account whose config is only a client of another gateway', async () => {
+    const { env, calls, home } = await setup({ gateway: false })
+    await mkdir(join(home, '.openclaw'), { recursive: true })
+    await writeFile(
+      join(home, '.openclaw', 'openclaw.json'),
+      JSON.stringify({ gateway: { auth: { mode: 'token', token: 'client-copy' } } }),
+    )
+    const out = await run([], env)
+    expect(out.code, out.stderr).toBe(0)
+    expect(await calls()).toEqual([])
+    expect(out.stdout).toContain('is a client config (no gateway in it)')
+  })
+
+  it('gives a config it cannot parse (JSON5) the benefit of the doubt', async () => {
+    const { env, calls, home } = await setup({ gateway: false })
+    await mkdir(join(home, '.openclaw'), { recursive: true })
+    await writeFile(join(home, '.openclaw', 'openclaw.json'), '{ gateway: { port: 18789 }, // json5\n}')
+    const out = await run([], env)
+    expect(out.code, out.stderr).toBe(0)
+    expect(await calls()).toHaveLength(1)
+  })
+
   it('links anyway with --openclaw, for a gateway not configured yet', async () => {
     const { env, calls, hookDir } = await setup({ gateway: false })
     const out = await run(['--openclaw'], env)
@@ -136,7 +163,7 @@ describe('the installer links the OpenClaw briefing hook', () => {
     const { env, calls, home } = await setup({ gateway: false })
     const config = join(home, 'elsewhere', 'openclaw.json')
     await mkdir(dirname(config), { recursive: true })
-    await writeFile(config, '{}')
+    await writeFile(config, JSON.stringify({ gateway: { port: 18789 } }))
     const out = await run([], { ...env, OPENCLAW_CONFIG_PATH: config })
     expect(out.code, out.stderr).toBe(0)
     expect(await calls()).toHaveLength(1)

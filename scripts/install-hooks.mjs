@@ -419,6 +419,26 @@ const onPath = (bin) =>
 const openclawConfig = () =>
   process.env.OPENCLAW_CONFIG_PATH?.trim() || join(HOME, '.openclaw', 'openclaw.json')
 
+/**
+ * Whether this account runs a gateway, judged from its config. A file alone is
+ * not enough: an account can hold a client config — only `gateway.auth`, so its
+ * CLI can reach another account's gateway — and a sync job may keep that file
+ * immutable. A gateway's own config says where it listens or what it runs.
+ * A file that exists but will not parse (JSON5) gets the benefit of the doubt.
+ */
+const openclawRunsGateway = () => {
+  const path = openclawConfig()
+  if (!existsSync(path)) return false
+  let config
+  try {
+    config = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return true
+  }
+  const gateway = config?.gateway ?? {}
+  return Boolean(gateway.mode || gateway.port || config?.agents || config?.channels)
+}
+
 const openclawLinked = () => {
   const internal = readJson(openclawConfig())?.hooks?.internal
   return (
@@ -471,11 +491,13 @@ const installOpenclaw = () => {
   }
   // `openclaw` on PATH says it is installed, not that this user runs a gateway:
   // a global npm install puts it on every account's PATH. Linking from an
-  // account with no config would create one for a gateway that never starts
-  // and leave the real one unbriefed, while reporting success (CAIRN-296).
-  // The config file is what the gateway reads, so its absence is the signal.
-  if (!FORCE_OPENCLAW && !existsSync(openclawConfig())) {
-    log(`  openclaw: no config at ${openclawConfig()} — this account runs no gateway; skipped.`)
+  // account that runs none would write a config no gateway reads (or fail on a
+  // locked client config) and leave the real gateway unbriefed (CAIRN-296).
+  if (!FORCE_OPENCLAW && !openclawRunsGateway()) {
+    const why = existsSync(openclawConfig())
+      ? `${openclawConfig()} is a client config (no gateway in it)`
+      : `no config at ${openclawConfig()}`
+    log(`  openclaw: ${why} — this account runs no gateway; skipped.`)
     log('            Run the installer as the gateway\'s user, or pass --openclaw to link here anyway.')
     return
   }
