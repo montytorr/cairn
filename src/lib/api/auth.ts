@@ -36,6 +36,7 @@ export type Actor = {
    * from the key row, which only an administrator can create.
    */
   agentName?: string
+  /**
    * Which machine the caller says it is on, when it says (CAIRN-290).
    *
    * Key names are per runtime, not per machine, so a laptop and a server
