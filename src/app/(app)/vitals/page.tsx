@@ -354,7 +354,7 @@ const VitalsPage = async ({
               {signals ? (
                 <Panel
                   title="Claims nobody is on"
-                  note="no note, checkpoint, status move or heartbeat; an automatic session-end checkpoint does not count"
+                  note="no note, checkpoint, edit or heartbeat, by the rule the reaper uses; a session-end &quot;still held&quot; checkpoint does not count"
                 >
                   <Row
                     label="held, quiet for more than 2h"

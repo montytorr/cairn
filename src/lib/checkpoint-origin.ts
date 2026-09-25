@@ -5,6 +5,11 @@
  * that wrote them, so the text alone classifies every checkpoint already in
  * the database without a backfill. Client-safe on purpose: the resolution
  * dialog needs the same answer the server does.
+ *
+ * Mirrored in SQL by checkpoint_is_automatic / checkpoint_is_untouched
+ * (migration 065), which vitals uses to call a claim quiet by the reaper's
+ * rule. Change the rule here and there together; src/lib/liveness-fixtures.ts
+ * is the set of cases both are tested against.
  */
 export const AUTO_CHECKPOINT_MARKER = '_Recorded automatically when the session ended._'
 

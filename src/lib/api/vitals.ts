@@ -375,9 +375,9 @@ export const assessSignals = (v: Vitals, now = Date.now()): Finding[] => {
   // `held` was a bare count and `stalled` only counts UNclaimed work, so a
   // claim abandoned for a week was invisible unless the reaper released it —
   // and the reaper had released nothing for thirteen days. Liveness is
-  // task_genuine_activity_at (065): never updated_at, never a checkpoint the
-  // session-end hook wrote, because both are refreshed on claims nobody is
-  // working.
+  // task_genuine_activity_at (065), which is the reaper's own lastSignOfLife
+  // in SQL: if the two disagreed, `reaper-idle` would alarm about claims the
+  // reaper rightly keeps. src/lib/liveness-fixtures.ts pins them together.
   const worst = s.claims.quietest
   const oldestQuiet = worst.length
     ? Math.max(...worst.map((c) => c.quietMinutes ?? Number.POSITIVE_INFINITY))

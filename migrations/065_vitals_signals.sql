@@ -33,42 +33,57 @@
 -- ---------------------------------------------------------------------------
 -- What counts as someone actually being on a claim.
 --
--- ONE definition, because the reaper and this monitor must agree about it,
--- and because it is about to change: CAIRN-283 is changing how session-end
--- auto-checkpoints are written. Whatever that lands on, only this function
--- should need to learn it.
+-- THE REAPER'S DEFINITION, IN SQL. `lastSignOfLife` in src/lib/api/reconcile.ts
+-- decides what gets released; this decides what vitals calls quiet. If they
+-- disagreed, vitals would either alarm about claims the reaper rightly keeps
+-- (a false `reaper-idle`) or stay silent about claims it is about to release.
+-- So this reads exactly the reaper's inputs and applies exactly its rule, and
+-- src/lib/liveness-fixtures.ts pins both to the same cases: the unit suite runs
+-- them through lastSignOfLife, tests/integration/vitals-signals.test.ts through
+-- this function. Change one, change the other, and the fixtures.
 --
--- Genuine: the claim itself, an explicit heartbeat, a note, any activity
--- event (a manual checkpoint, a status move, a commit, a test run), and the
--- stored checkpoint when a person or agent wrote it.
+-- Signs of life: the claim itself, an explicit heartbeat, a note, the task
+-- row's updated_at, and the stored checkpoint — except the one written
+-- without anyone looking. "Still held, not progressed" is the session-end hook
+-- recording that a claim was held while the session worked elsewhere, and
+-- counting it let a runtime that records a session every 30 minutes keep a
+-- week-old claim alive forever (CAIRN-283).
 --
--- Not genuine:
---   * `updated_at`. The touch trigger stamps it on every write, including the
---     session-end sweep that refreshes every claim the actor holds — which is
---     exactly why BB-385, claimed 168h earlier and untouched since, carried an
---     updated_at of 09:00 that morning.
---   * a checkpoint the session-end hook wrote. Today it writes the stored
---     checkpoint directly, with no event, and marks its text: either the
---     "Still held, not progressed" preamble for a claim it did not work, or
---     the "_Recorded automatically when the session ended._" footer
---     (src/lib/api/sessions.ts) on both kinds. A summary that is only a
---     "Next:" block is the same writer with an empty `completed`.
---   * any activity event that says it was automatic, so that if CAIRN-283
---     starts recording those checkpoints as events, marking them
---     `data.auto = true` or `data.source = 'session-end'` is enough.
---   * the reaper's own release, which ends the claim anyway.
+-- updated_at is safe to read since 063: auto_checkpoint_task_atomic writes
+-- under a transaction-local flag that touch_updated_at honours, so the
+-- session-end sweep no longer stamps every held claim as just edited.
+--
+-- Activity events are deliberately NOT read, because the reaper does not read
+-- them; that also keeps 063's `auto_checkpointed` event out, which is the
+-- one event that must never count. A commit or test run with no other trace
+-- is therefore not life to either — if that should change, change both.
 -- ---------------------------------------------------------------------------
+
+-- isAutoCheckpoint in src/lib/checkpoint-origin.ts: the text ends with the
+-- marker line, ignoring trailing whitespace. Compared by suffix rather than
+-- LIKE because the marker's underscores are LIKE wildcards.
 create or replace function checkpoint_is_automatic(p_summary text)
 returns boolean
 language sql
 immutable
 as $$
   select coalesce(
-    p_summary like 'Still held, not progressed%'
-    or p_summary like 'Next:%'
-    or strpos(p_summary, '_Recorded automatically when the session ended._') > 0,
+    right(rtrim(p_summary, E' \t\n\r\f' || chr(11)),
+          length('_Recorded automatically when the session ended._'))
+      = '_Recorded automatically when the session ended._',
     false
   )
+$$;
+
+-- isUntouchedAutoCheckpoint in src/lib/checkpoint-origin.ts: automatic AND
+-- beginning "Still held, not progressed". Only this kind is not a sign of life.
+create or replace function checkpoint_is_untouched(p_summary text)
+returns boolean
+language sql
+immutable
+as $$
+  select checkpoint_is_automatic(p_summary)
+     and left(p_summary, length('Still held, not progressed')) = 'Still held, not progressed'
 $$;
 
 create or replace function task_genuine_activity_at(p_task_id uuid)
@@ -78,31 +93,27 @@ stable
 set search_path = public
 as $$
   select greatest(
-    t.claimed_at,
     t.heartbeat_at,
-    case when not checkpoint_is_automatic(t.checkpoint_summary) then t.checkpoint_at end,
-    (select max(n.created_at) from task_notes n where n.task_id = t.id),
-    (select max(e.created_at)
-       from task_activity_events e
-      where e.task_id = t.id
-        and e.event <> 'released'
-        and coalesce(e.data->>'auto', '') <> 'true'
-        and coalesce(e.data->>'source', '') not in ('session-end', 'session_end'))
+    t.claimed_at,
+    case when not checkpoint_is_untouched(t.checkpoint_summary) then t.checkpoint_at end,
+    t.updated_at,
+    (select max(n.created_at) from task_notes n where n.task_id = t.id)
   )
   from tasks t
   where t.id = p_task_id
 $$;
 
 comment on function task_genuine_activity_at(uuid) is
-  'The last time anyone was verifiably on a task: claim, heartbeat, note, '
-  'activity event, or a checkpoint that was not written by the session-end '
-  'hook. Never updated_at. The single definition of claim liveness — see 065.';
+  'The last sign that anyone is on a task, by the rule the reaper applies '
+  '(lastSignOfLife, src/lib/api/reconcile.ts): heartbeat, claim, note, '
+  'updated_at, or a checkpoint other than the session-end "still held" one. '
+  'Pinned to the reaper by src/lib/liveness-fixtures.ts — see 065.';
 
 -- ---------------------------------------------------------------------------
--- Where a session ran, from its working directory. Coarse on purpose: the two
--- machines this workspace runs on are a Mac (/Users/...) and Clawdius
--- (/home/... or /root). What matters is telling "openclaw on the server
--- stopped" from "openclaw stopped".
+-- What kind of machine a session ran on, from its working directory. Coarse
+-- on purpose, and named by operating system rather than by any one install:
+-- /Users/... is macOS, /home/... and /root are Linux. What matters is telling
+-- "openclaw on the Linux box stopped" from "openclaw stopped".
 -- ---------------------------------------------------------------------------
 create or replace function session_host(p_cwd text)
 returns text
@@ -110,8 +121,8 @@ language sql
 immutable
 as $$
   select case
-    when p_cwd like '/Users/%' then 'mac'
-    when p_cwd like '/home/%' or p_cwd = '/root' or p_cwd like '/root/%' then 'clawdius'
+    when p_cwd like '/Users/%' then 'macos'
+    when p_cwd like '/home/%' or p_cwd = '/root' or p_cwd like '/root/%' then 'linux'
     else 'other'
   end
 $$;

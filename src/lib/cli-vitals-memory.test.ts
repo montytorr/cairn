@@ -179,7 +179,7 @@ describe('cairn vitals shows the signals cairn_vitals cannot see', () => {
     windowHours: 24,
     sessions: { recent: 3, recentSummarised: 1, baseline: 1, baselineSummarised: 1, summariserRecent: 2, summariserBaseline: 0 },
     runtimes: [
-      { runtime: 'openclaw', host: 'clawdius', recent: 2, recentSummarised: 0, baseline: 9, baselineSummarised: 7, lastSeenAt: '2026-09-25T09:00:00Z' },
+      { runtime: 'openclaw', host: 'linux', recent: 2, recentSummarised: 0, baseline: 9, baselineSummarised: 7, lastSeenAt: '2026-09-25T09:00:00Z' },
     ],
     claims: {
       held: 22,
@@ -198,7 +198,7 @@ describe('cairn vitals shows the signals cairn_vitals cannot see', () => {
     const { stdout } = await vitals({ ...report(memory()), signals })
     expect(stdout).toContain('claims 17 of 22 quiet >2h, 10 >24h; auto-released 0 in 7d (last never)')
     expect(stdout).toContain('quiet 168h: BB-385')
-    expect(stdout).toContain('openclaw@clawdius: 2 sessions, 0 summarised (week before 9, 7)')
+    expect(stdout).toContain('openclaw@linux: 2 sessions, 0 summarised (week before 9, 7)')
     expect(stdout).toContain('summariser runs not counted as sessions: 2')
     expect(stdout).toContain('knowledge 421 of 424 never verified')
   })

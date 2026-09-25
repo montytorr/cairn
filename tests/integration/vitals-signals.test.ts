@@ -3,14 +3,16 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { isAutoCheckpoint, isUntouchedAutoCheckpoint } from '../../src/lib/checkpoint-origin'
+import { LIVENESS_CASES } from '../../src/lib/liveness-fixtures'
 
 /**
  * What migration 065 counts, proved against the database.
  *
  * Every number CAIRN-282 checked matched its SQL; the failures were in what
  * the SQL could not see. So these cases are the audit's own shapes: a claim
- * kept looking alive by session-end checkpoints and touch-trigger timestamps,
- * a reaper that released nothing, the summariser recording itself as a
+ * kept looking alive by session-end checkpoints (judged by the reaper's own
+ * rule, on the cases src/lib/liveness-fixtures.ts shares with it), a reaper that released nothing, the summariser recording itself as a
  * session, runtimes told apart by host, and knowledge nobody verified.
  */
 
@@ -65,11 +67,6 @@ const MAC_CWD = cwd('/Users', 'dev', 'code')
 const SERVER_CWD = cwd('/home', 'dev', 'work')
 const ROOT_CWD = cwd('/root', 'workspace')
 
-const AUTO_UNTOUCHED =
-  'Still held, not progressed: the session that held this claim worked on CAIRN-277.\n\n' +
-  '_Recorded automatically when the session ended._'
-const AUTO_WORKED = 'Shipped the thing.\n\n_Recorded automatically when the session ended._'
-
 describe('cairn_vitals_signals', () => {
   let client: Client
   let user: string
@@ -81,10 +78,12 @@ describe('cairn_vitals_signals', () => {
     claimedHoursAgo?: number
     heartbeatHoursAgo?: number | null
     checkpoint?: string | null
-    checkpointHoursAgo?: number
+    checkpointHoursAgo?: number | null
+    updatedHoursAgo?: number
   }) => {
     number += 1
     const id = randomUUID()
+    const claimed = fields.claimedHoursAgo ?? 100
     await client.query(
       `insert into tasks (id,project_id,number,title,status,type,actor_id,
                           claimed_by,claimed_at,heartbeat_at,checkpoint_summary,checkpoint_at,updated_at)
@@ -92,21 +91,37 @@ describe('cairn_vitals_signals', () => {
                now() - make_interval(hours => $6::int),
                case when $7::int is null then null else now() - make_interval(hours => $7::int) end,
                $8,
-               case when $8::text is null then null else now() - make_interval(hours => $9::int) end,
-               now())`,
+               case when $9::int is null then null else now() - make_interval(hours => $9::int) end,
+               now() - make_interval(hours => $10::int))`,
       [
         id,
         project,
         number,
         `task ${number}`,
         fields.claimedBy === undefined ? 'openclaw · Dev' : fields.claimedBy,
-        fields.claimedHoursAgo ?? 100,
+        claimed,
         fields.heartbeatHoursAgo ?? null,
         fields.checkpoint ?? null,
-        fields.checkpointHoursAgo ?? 0,
+        fields.checkpoint ? (fields.checkpointHoursAgo ?? 0) : null,
+        fields.updatedHoursAgo ?? claimed,
       ],
     )
     return { id, ref: `SIG-${number}` }
+  }
+
+  /**
+   * A note bumps its task's updated_at (008), as it does in production. The
+   * fixtures state updated_at separately, so put it back afterwards under the
+   * flag 063 gave touch_updated_at for exactly this.
+   */
+  const setUpdated = async (taskId: string, hoursAgo: number) => {
+    await client.query('begin')
+    await client.query(`select set_config('cairn.keep_updated_at', 'on', true)`)
+    await client.query(
+      `update tasks set updated_at = now() - make_interval(hours => $2::int) where id = $1`,
+      [taskId, hoursAgo],
+    )
+    await client.query('commit')
   }
 
   const event = (taskId: string, e: string, hoursAgo: number, data: Record<string, unknown> = {}, actor = 'openclaw · Dev') =>
@@ -176,37 +191,41 @@ describe('cairn_vitals_signals', () => {
     await client?.end()
   })
 
-  describe('genuine activity', () => {
-    it('ignores updated_at and a session-end checkpoint on a claim nobody worked', async () => {
-      // BB-385: claimed 168h ago, stamped by the 09:00 session sweep that day.
-      const t = await task({ claimedHoursAgo: 168, checkpoint: AUTO_UNTOUCHED, checkpointHoursAgo: 0 })
-      expect(await genuine(t.id)).toBe(168)
+  describe('genuine activity agrees with the reaper', () => {
+    // The same cases src/lib/liveness-fixtures.test.ts runs through
+    // lastSignOfLife. Both must give the answer the case states.
+    for (const c of LIVENESS_CASES) {
+      it(c.name, async () => {
+        const t = await task({
+          claimedHoursAgo: c.claimedHoursAgo,
+          heartbeatHoursAgo: c.heartbeatHoursAgo,
+          checkpoint: c.checkpoint,
+          checkpointHoursAgo: c.checkpointHoursAgo,
+        })
+        if (c.noteHoursAgo !== null) await note(t.id, c.noteHoursAgo)
+        await setUpdated(t.id, c.updatedHoursAgo)
+        expect(await genuine(t.id)).toBe(c.expectedHoursAgo)
+      })
+    }
+
+    it('classifies checkpoint text exactly as checkpoint-origin.ts does', async () => {
+      const texts = [...LIVENESS_CASES.map((c) => c.checkpoint), 'Next: wire it up', '', null]
+      for (const text of texts) {
+        const { rows } = await client.query(
+          'select checkpoint_is_automatic($1) as auto, checkpoint_is_untouched($1) as untouched',
+          [text],
+        )
+        expect({ text, ...rows[0] }).toEqual({
+          text,
+          auto: isAutoCheckpoint(text),
+          untouched: isUntouchedAutoCheckpoint(text),
+        })
+      }
     })
 
-    it('ignores a session-end checkpoint on worked claims too, and a bare Next: block', async () => {
-      const worked = await task({ claimedHoursAgo: 50, checkpoint: AUTO_WORKED, checkpointHoursAgo: 1 })
-      const next = await task({ claimedHoursAgo: 50, checkpoint: 'Next: wire it up', checkpointHoursAgo: 1 })
-      expect(await genuine(worked.id)).toBe(50)
-      expect(await genuine(next.id)).toBe(50)
-    })
-
-    it('counts a checkpoint someone wrote, a heartbeat, a note and an activity event', async () => {
-      const manual = await task({ claimedHoursAgo: 50, checkpoint: 'Handler done, tests next', checkpointHoursAgo: 3 })
-      const beat = await task({ claimedHoursAgo: 50, heartbeatHoursAgo: 4 })
-      const noted = await task({ claimedHoursAgo: 50 })
-      await note(noted.id, 5)
-      const moved = await task({ claimedHoursAgo: 50 })
-      await event(moved.id, 'status_changed', 6, { from: 'todo', to: 'doing' })
-      expect(await genuine(manual.id)).toBe(3)
-      expect(await genuine(beat.id)).toBe(4)
-      expect(await genuine(noted.id)).toBe(5)
-      expect(await genuine(moved.id)).toBe(6)
-    })
-
-    it('ignores activity events marked automatic, and releases', async () => {
+    it('does not read activity events, so an auto_checkpointed one keeps nothing alive', async () => {
       const t = await task({ claimedHoursAgo: 50 })
-      await event(t.id, 'checkpointed', 1, { auto: true })
-      await event(t.id, 'checkpointed', 1, { source: 'session-end' })
+      await event(t.id, 'auto_checkpointed', 1)
       await event(t.id, 'released', 1, { reason: 'manual' })
       expect(await genuine(t.id)).toBe(50)
     })
@@ -270,8 +289,8 @@ describe('cairn_vitals_signals', () => {
     })
     const row = (runtime: string, host: string) =>
       v.runtimes.find((r) => r.runtime === runtime && r.host === host)
-    expect(row('claude', 'mac')).toMatchObject({ recent: 2, recentSummarised: 1, baseline: 0 })
-    expect(row('openclaw', 'clawdius')).toMatchObject({ recent: 1, baseline: 1, baselineSummarised: 1 })
+    expect(row('claude', 'macos')).toMatchObject({ recent: 2, recentSummarised: 1, baseline: 0 })
+    expect(row('openclaw', 'linux')).toMatchObject({ recent: 1, baseline: 1, baselineSummarised: 1 })
     expect(row('codex', 'other')).toMatchObject({ recent: 0, baseline: 1 })
   })
 
@@ -281,7 +300,7 @@ describe('cairn_vitals_signals', () => {
     await event(t.id, 'body_edited', 24 * 15, {}, 'codex · Dev')
 
     const v = await signals()
-    expect(v.runtimes.find((r) => r.runtime === 'codex' && r.host === 'clawdius')).toMatchObject({
+    expect(v.runtimes.find((r) => r.runtime === 'codex' && r.host === 'linux')).toMatchObject({
       recent: 0,
       baseline: 0,
     })
@@ -326,6 +345,6 @@ describe('cairn_vitals_signals', () => {
               session_host(null) as unknown`,
       [cwd('/Users', 'dev'), '/root', cwd('/home', 'dev', 'y'), cwd('/opt', 'x')],
     )
-    expect(rows[0]).toEqual({ mac: 'mac', root: 'clawdius', home: 'clawdius', other: 'other', unknown: 'other' })
+    expect(rows[0]).toEqual({ mac: 'macos', root: 'linux', home: 'linux', other: 'other', unknown: 'other' })
   })
 })

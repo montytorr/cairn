@@ -223,8 +223,8 @@ const healthySignals = (over: Partial<VitalsSignals> = {}): VitalsSignals => ({
     summariserBaseline: 0,
   },
   runtimes: [
-    { runtime: 'claude', host: 'mac', recent: 6, recentSummarised: 5, baseline: 35, baselineSummarised: 28, lastSeenAt: hoursAgo(1) },
-    { runtime: 'openclaw', host: 'clawdius', recent: 3, recentSummarised: 3, baseline: 21, baselineSummarised: 18, lastSeenAt: hoursAgo(2) },
+    { runtime: 'claude', host: 'macos', recent: 6, recentSummarised: 5, baseline: 35, baselineSummarised: 28, lastSeenAt: hoursAgo(1) },
+    { runtime: 'openclaw', host: 'linux', recent: 3, recentSummarised: 3, baseline: 21, baselineSummarised: 18, lastSeenAt: hoursAgo(2) },
   ],
   claims: { held: 2, quiet2h: 0, quiet24h: 0, quietest: [] },
   reaper: { releasedInWindow: 0, released7d: 2, lastReleaseAt: hoursAgo(50), maintenanceLastWriteAt: hoursAgo(50) },
@@ -357,7 +357,7 @@ describe('assessSignals', () => {
   describe('the summariser per runtime and host', () => {
     const rt = (over: Partial<RuntimeHost>): RuntimeHost => ({
       runtime: 'openclaw',
-      host: 'clawdius',
+      host: 'linux',
       recent: 8,
       recentSummarised: 8,
       baseline: 40,
@@ -372,17 +372,17 @@ describe('assessSignals', () => {
         healthySignals({
           runtimes: [
             rt({ runtime: 'openclaw', recent: 8, recentSummarised: 0 }),
-            rt({ runtime: 'codex', host: 'mac', recent: 2, recentSummarised: 0, baseline: 10, baselineSummarised: 8 }),
-            rt({ runtime: 'claude', host: 'mac', recent: 6, recentSummarised: 1, baseline: 40, baselineSummarised: 32 }),
+            rt({ runtime: 'codex', host: 'macos', recent: 2, recentSummarised: 0, baseline: 10, baselineSummarised: 8 }),
+            rt({ runtime: 'claude', host: 'macos', recent: 6, recentSummarised: 1, baseline: 40, baselineSummarised: 32 }),
           ],
         }),
         { sessions: { recent: 16, recentWithFiles: 10, recentSummarised: 1, baseline: 90, baselineWithFiles: 70 } },
       )
       expect(codes(v)).not.toContain('sessions-without-summary')
       const f = assessSignals(v, NOW).find((x) => x.code === 'summariser-degraded')
-      expect(f?.message).toContain('openclaw@clawdius 0/8')
-      expect(f?.message).toContain('codex@mac 0/2')
-      expect(f?.message).toContain('claude@mac 1/6')
+      expect(f?.message).toContain('openclaw@linux 0/8')
+      expect(f?.message).toContain('codex@macos 0/2')
+      expect(f?.message).toContain('claude@macos 1/6')
     })
 
     it('warns below 50% with three sessions and no baseline', () => {
@@ -410,7 +410,7 @@ describe('assessSignals', () => {
   describe('session volume per runtime and host', () => {
     const rt = (over: Partial<RuntimeHost>): RuntimeHost => ({
       runtime: 'claude',
-      host: 'mac',
+      host: 'macos',
       recent: 8,
       recentSummarised: 6,
       baseline: 50,
@@ -425,13 +425,13 @@ describe('assessSignals', () => {
         healthySignals({
           runtimes: [
             rt({}),
-            rt({ runtime: 'openclaw', host: 'clawdius', recent: 0, recentSummarised: 0, baseline: 70, lastSeenAt: hoursAgo(30) }),
+            rt({ runtime: 'openclaw', host: 'linux', recent: 0, recentSummarised: 0, baseline: 70, lastSeenAt: hoursAgo(30) }),
           ],
         }),
       )
       const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-quiet')
-      expect(f?.message).toContain('openclaw@clawdius 0 in 24h, about 10 expected')
-      expect(f?.message).not.toContain('claude@mac')
+      expect(f?.message).toContain('openclaw@linux 0 in 24h, about 10 expected')
+      expect(f?.message).not.toContain('claude@macos')
     })
 
     it('flags a runtime well under a third of its usual volume, not only at zero', () => {
@@ -450,13 +450,13 @@ describe('assessSignals', () => {
       const v = withSignals(
         healthySignals({
           runtimes: [
-            rt({ runtime: 'codex', host: 'clawdius', recent: 0, recentSummarised: 0, baseline: 0, baselineSummarised: 0, lastSeenAt: hoursAgo(24 * 12) }),
+            rt({ runtime: 'codex', host: 'linux', recent: 0, recentSummarised: 0, baseline: 0, baselineSummarised: 0, lastSeenAt: hoursAgo(24 * 12) }),
           ],
           absentAgents: [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(24 * 10) }],
         }),
       )
       const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-absent')
-      expect(f?.message).toContain('codex@clawdius sessions (last 288h ago)')
+      expect(f?.message).toContain('codex@linux sessions (last 288h ago)')
       expect(f?.message).toContain('codex · Dev writes (last 240h ago)')
     })
   })
