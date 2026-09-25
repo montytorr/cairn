@@ -226,4 +226,27 @@ describe('the session-end hook', () => {
     await run({ transcript_path: path, session_id: 'slash' }, { FAKE_MODE: 'fail' })
     expect(argValue(lines('cli.jsonl')[0], '--request')).toBe('the login redirect loops')
   })
+
+  /**
+   * CAIRN-297: with several instances and nothing saying which one this
+   * directory is for, the CLI exits 10. A hook cannot ask anyone, and must
+   * neither guess nor drop the session: it parks it for `cairn route add`.
+   */
+  it('parks a session the CLI cannot route, with everything needed to send it later', async () => {
+    fake('cairn', `require('fs').appendFileSync(process.env.OUT + '/cli.jsonl', JSON.stringify(process.argv.slice(2)) + '\\n'); process.exit(10)`)
+    const path = transcript('unrouted', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])
+    await run({ transcript_path: path, session_id: 'unrouted-1', cwd: '/work/demo' }, { CAIRN_AGENT: 'claude-code', CAIRN_PLATFORM: 'claude' })
+
+    const parked = JSON.parse(readFileSync(join(dir, '.cairn', 'unrouted', 'unrouted-1.json'), 'utf8'))
+    expect(parked).toMatchObject({ sessionId: 'unrouted-1', cwd: '/work/demo', platform: 'claude', agent: 'claude-code' })
+    expect(parked.args.slice(0, 4)).toEqual(['session', 'end', '--id', 'unrouted-1'])
+    expect(argValue(parked.args, '--cwd')).toBe('/work/demo')
+  })
+
+  it('parks nothing when the CLI simply fails', async () => {
+    fake('cairn', 'process.exit(1)')
+    const path = transcript('failing', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])
+    await run({ transcript_path: path, session_id: 'failing-1', cwd: '/work/demo' })
+    expect(existsSync(join(dir, '.cairn', 'unrouted'))).toBe(false)
+  })
 })

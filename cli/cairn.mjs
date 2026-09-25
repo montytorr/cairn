@@ -12,7 +12,7 @@
  * row so the model can decline to open something.
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
@@ -22,13 +22,15 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { homedir, hostname } from 'node:os'
 
 const CAIRN_DIR = join(homedir(), '.cairn')
@@ -115,31 +117,311 @@ const readInstances = () => {
         '{"mode": "default", "instance": <one of the instances>}',
     }
   }
-  return { instances, unclassified }
+  if (config.routes !== undefined && !Array.isArray(config.routes)) {
+    return { error: '~/.cairn/instances.json: "routes" must be a list' }
+  }
+  // Compared canonically, so a hand-written /tmp/x matches the /private/tmp/x
+  // a directory resolves to on macOS.
+  const routes = (config.routes ?? []).map((r) => (typeof r?.path === 'string' && isAbsolute(r.path) ? { ...r, path: realDir(r.path) } : r))
+  for (const route of routes) {
+    const problem = routeProblem(route, instances, routes)
+    if (problem) return { error: `~/.cairn/instances.json: ${problem}` }
+  }
+  return { instances, unclassified, routes, raw: config }
 }
 
 /**
- * Read before the parser runs, because the credentials below depend on it, and
- * read the way the parser reads it: the last one wins, and a bare `--instance`
- * is an error rather than "none given" — on a machine with a default, the
- * second reading would send a mistyped command to the default instance.
+ * A flag's value, read before the parser runs because the credentials below
+ * depend on it, and read the way the parser reads it: the last one wins, and
+ * a bare flag is '' rather than "not given".
  */
-const requestedInstance = () => {
+const earlyFlag = (name) => {
   const argv = process.argv.slice(2)
   let found
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i].startsWith('--instance=')) found = { name: argv[i].slice('--instance='.length) }
-    else if (argv[i] === '--instance') {
-      found = argv[i + 1] && !argv[i + 1].startsWith('--') ? { name: argv[++i] } : { name: '' }
-    }
+    if (argv[i].startsWith(`--${name}=`)) found = argv[i].slice(name.length + 3)
+    else if (argv[i] === `--${name}`) found = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : ''
   }
-  if (found) return found.name ? found : { error: '--instance needs the name of an instance' }
+  return found
+}
+
+/**
+ * The words that are not flags or flag values, split the way the parser below
+ * splits them. Routing has to know which word is the command and which is its
+ * ref: `block --reason DONE-1 CAI-42` is about CAI-42, and the reason's text
+ * must not decide where it goes.
+ */
+const earlyPositional = (() => {
+  const argv = process.argv.slice(2)
+  const words = []
+  for (let i = 0; i < argv.length; i += 1) {
+    if (!argv[i].startsWith('--')) words.push(argv[i])
+    else if (!argv[i].includes('=') && argv[i + 1] && !argv[i + 1].startsWith('--')) i += 1
+  }
+  return words
+})()
+
+/**
+ * A bare `--instance` is an error rather than "none given": on a machine with
+ * a default, the second reading would send a mistyped command to the default.
+ */
+const requestedInstance = () => {
+  const flag = earlyFlag('instance')
+  if (flag !== undefined) return flag ? { name: flag } : { error: '--instance needs the name of an instance' }
   const fromEnv = process.env.CAIRN_INSTANCE?.trim()
   return fromEnv ? { name: fromEnv } : {}
 }
 
+// ---------------------------------------------------------------------------
+// routes: which instance a directory, a ref or a session belongs to
+// ---------------------------------------------------------------------------
+const HOME = homedir()
+const SESSION_ROUTES_DIR = join(CAIRN_DIR, 'session-routes')
+const UNROUTED_DIR = join(CAIRN_DIR, 'unrouted')
+const SESSION_ID = /^[A-Za-z0-9._:-]{1,100}$/
+const REF_ARG = /^([A-Z][A-Z0-9]{1,9})-\d+$/
+
+/** For messages: a path under the home directory, without the username in it. */
+const tilde = (path) => (path === HOME ? '~' : path.startsWith(`${HOME}/`) ? `~${path.slice(HOME.length)}` : path)
+
+const realDir = (dir) => {
+  try { return realpathSync(dir) } catch { return dir }
+}
+
+/**
+ * What a directory is routed by: the main checkout of the repository it is in,
+ * or the directory itself outside one.
+ *
+ * The main checkout rather than the worktree, because a worktree is the same
+ * work in another folder and classifying every one of them by hand is how the
+ * question gets asked forty times. GIT_DIR and friends are dropped: an
+ * environment variable must not be able to say which repository this is.
+ */
+const routeKeys = new Map()
+const routeKey = (dir) => {
+  if (!routeKeys.has(dir)) routeKeys.set(dir, computeRouteKey(dir))
+  return routeKeys.get(dir)
+}
+const computeRouteKey = (dir) => {
+  const real = realDir(dir)
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE)$/.test(k)))
+  try {
+    const [top, common] = execFileSync(
+      'git',
+      ['-C', real, 'rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2_000, env },
+    ).trim().split('\n')
+    return { key: realDir(basename(common) === '.git' ? dirname(common) : top), repo: true }
+  } catch {
+    return { key: real, repo: false }
+  }
+}
+
+/**
+ * An exact route names one repository or directory; a folder route covers
+ * everything under it. Exact beats folder, and folders never nest, so there is
+ * never a question of which of two rules won.
+ */
+const routeFor = (key, routes) =>
+  routes.find((r) => r.match === 'exact' && r.path === key) ??
+  routes.find((r) => r.match === 'folder' && (key === r.path || key.startsWith(`${r.path}/`))) ??
+  null
+
+/**
+ * Why a route cannot be saved, or null. A folder route on the home directory
+ * or the root would classify everything at once, which is the mistake this
+ * whole mechanism exists to prevent; the default instance is the catch-all.
+ */
+const routeProblem = (route, instances, routes) => {
+  if (!route || typeof route.path !== 'string' || !isAbsolute(route.path)) return 'a route needs an absolute "path"'
+  if (!['exact', 'folder'].includes(route.match)) return `route ${tilde(route.path)}: "match" must be "exact" or "folder"`
+  if (!instances[route.instance]) return `route ${tilde(route.path)}: no instance named "${route.instance}"`
+  if (route.match === 'folder') {
+    if (route.path === '/' || route.path === HOME) {
+      return `a folder route on ${tilde(route.path)} would classify everything under it; use the default instance instead`
+    }
+    const clash = routes.find((r) => r !== route && r.match === 'folder' &&
+      (r.path === route.path || r.path.startsWith(`${route.path}/`) || route.path.startsWith(`${r.path}/`)))
+    if (clash) return `folder routes ${tilde(clash.path)} and ${tilde(route.path)} overlap; keep one`
+  }
+  if (route.match === 'exact' && routes.some((r) => r !== route && r.match === 'exact' && r.path === route.path)) {
+    return `${tilde(route.path)} is routed twice`
+  }
+  return null
+}
+
+const instanceDir = (name) => join(CAIRN_DIR, 'instances', name)
+
+/**
+ * The project keys each instance was last seen to have, refreshed by that
+ * instance's own requests. Read only here, so a ref names its instance without
+ * a question and without asking a server that may not be the one it is for.
+ */
+const PROJECT_KEYS_FILE = 'project-keys.json'
+const instancesWithKey = (key, instances) =>
+  Object.keys(instances).filter((name) => {
+    try {
+      return JSON.parse(readFileSync(join(instanceDir(name), PROJECT_KEYS_FILE), 'utf8')).keys?.includes(key)
+    } catch {
+      return false
+    }
+  })
+
+/** `session end --id` speaks for a session the hook is not running inside. */
+const routeSession = () => {
+  const argv = process.argv.slice(2)
+  const raw = argv[0] === 'session' ? earlyFlag('id') : undefined
+  const id = (raw || process.env.CAIRN_SESSION_ID || process.env.CLAUDE_CODE_SESSION_ID || process.env.CODEX_THREAD_ID || '').trim()
+  return SESSION_ID.test(id) ? id : null
+}
+
+const sessionRoute = (session, instances) => {
+  if (!session) return null
+  try {
+    const { instance } = JSON.parse(readFileSync(join(SESSION_ROUTES_DIR, `${session}.json`), 'utf8'))
+    return instances[instance] ? instance : null
+  } catch {
+    return null
+  }
+}
+
+/** Sessions parked by the session-end hook because nobody had said where they go. */
+const parkedSessions = () => {
+  try {
+    return readdirSync(UNROUTED_DIR)
+      .filter((f) => f.endsWith('.json'))
+      .flatMap((f) => {
+        try { return [{ file: join(UNROUTED_DIR, f), ...JSON.parse(readFileSync(join(UNROUTED_DIR, f), 'utf8')) }] } catch { return [] }
+      })
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Where a directory's commands go, and why — or why nothing can be said.
+ *
+ * A saved route comes before a ref: it is an answer somebody gave on purpose,
+ * and the ref's side is a cache of project keys that can be hours old. When
+ * the two disagree the route still wins, and the caller is told how to send
+ * the one command elsewhere rather than having it done for them.
+ */
+const resolveRoute = ({ config, dir, session, ref }) => {
+  const { instances, unclassified, routes } = config
+  const owners = ref ? instancesWithKey(ref, instances) : []
+  const { key, repo } = routeKey(dir)
+  const route = routeFor(key, routes)
+  if (route) {
+    const elsewhere = owners.length === 1 && owners[0] !== route.instance
+    return {
+      name: route.instance,
+      why: `${route.match === 'folder' ? 'folder ' : ''}route ${tilde(route.path)}`,
+      ...(elsewhere ? { hint: `cairn: ${ref} is a project on ${owners[0]}, and this directory is routed to ${route.instance}; add --instance ${owners[0]} if it is meant for ${owners[0]}` } : {}),
+    }
+  }
+  if (owners.length === 1) return { name: owners[0], why: `${ref} is a project there` }
+  const bySession = sessionRoute(session, instances)
+  if (bySession) return { name: bySession, why: 'chosen for this session' }
+  if (unclassified.mode === 'default') return { name: unclassified.instance, why: 'default instance' }
+  return { name: null, key, repo }
+}
+
+const undecidedMessage = ({ key, repo }, instances, session) => {
+  const here = repo ? 'this repository' : 'this directory'
+  const waiting = parkedSessions().filter((p) => p.cwd && routeKey(p.cwd).key === key).length
+  return [
+    `cairn: this machine uses several Cairn instances (${Object.keys(instances).join(', ')}) and nothing says ` +
+      `which one ${tilde(key)} is for. Ask the user which one, save the answer, then re-run the command:`,
+    `  cairn route add <instance>             ${here}`,
+    ...(key !== HOME && key !== '/' ? [`  cairn route add <instance> --folder    ${tilde(key)} and everything under it`] : []),
+    ...(session ? ['  cairn route add <instance> --session   this session only'] : []),
+    '  (--instance <name> on a command uses that instance for it alone)',
+    ...(waiting ? [`${waiting} earlier session(s) here are waiting for the answer and are sent when it is saved.`] : []),
+  ].join('\n')
+}
+
+const writeInstancesConfig = (config) => {
+  mkdirSync(CAIRN_DIR, { recursive: true })
+  const temp = `${INSTANCES_PATH}.tmp`
+  writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+  renameSync(temp, INSTANCES_PATH)
+}
+
+/**
+ * Save an answer. Returns the problem as a string instead of dying, because
+ * the terminal prompt below has to be able to say it and ask again.
+ */
+const saveRoute = (config, { instance, key, folder, session, force }) => {
+  if (!config.instances[instance]) return `no instance named "${instance}" (it has: ${Object.keys(config.instances).join(', ')})`
+  if (session) {
+    mkdirSync(SESSION_ROUTES_DIR, { recursive: true, mode: 0o700 })
+    // A week is longer than any session; the files are one line each.
+    for (const f of readdirSync(SESSION_ROUTES_DIR)) {
+      try { if (Date.now() - statSync(join(SESSION_ROUTES_DIR, f)).mtimeMs > 7 * 86_400_000) unlinkSync(join(SESSION_ROUTES_DIR, f)) } catch { /* raced */ }
+    }
+    writeFileSync(join(SESSION_ROUTES_DIR, `${session}.json`), `${JSON.stringify({ instance, t: new Date().toISOString() })}\n`, { mode: 0o600 })
+    return null
+  }
+  const match = folder ? 'folder' : 'exact'
+  const existing = config.routes.find((r) => r.match === match && r.path === key)
+  if (existing && existing.instance !== instance && !force) {
+    return `${tilde(key)} is already routed to ${existing.instance}; re-run with --force to change it on purpose`
+  }
+  const route = { path: key, match, instance }
+  const routes = [...config.routes.filter((r) => r !== existing), route]
+  const problem = routeProblem(route, config.instances, routes)
+  if (problem) return problem
+  writeInstancesConfig({ ...(config.raw ?? {}), ...config, raw: undefined, version: 1, routes })
+  return null
+}
+
+/** Ask a person at a terminal, once, instead of printing instructions meant for an agent. */
+const askInTerminal = async (config, undecided, session) => {
+  const names = Object.keys(config.instances)
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  try {
+    process.stderr.write(`cairn: which Cairn instance is ${tilde(undecided.key)} for?\n`)
+    names.forEach((n, i) => process.stderr.write(`  ${i + 1}. ${n}  ${config.instances[n].url}\n`))
+    const picked = names[Number((await rl.question('instance number: ')).trim()) - 1]
+    if (!picked) return null
+    const scopes = [
+      ['this one command', null],
+      [undecided.repo ? 'this repository' : 'this directory', { key: undecided.key }],
+      ...(undecided.key !== HOME && undecided.key !== '/' ? [[`${tilde(undecided.key)} and everything under it`, { key: undecided.key, folder: true }]] : []),
+      ...(session ? [['this session only', { session }]] : []),
+    ]
+    scopes.forEach(([label], i) => process.stderr.write(`  ${i + 1}. ${label}\n`))
+    const scope = scopes[Number((await rl.question(`remember it for [2]: `)).trim() || '2') - 1]
+    if (!scope) return null
+    if (scope[1]) {
+      const problem = saveRoute(config, { instance: picked, ...scope[1] })
+      if (problem) {
+        process.stderr.write(`cairn: ${problem}\n`)
+        return null
+      }
+    }
+    return picked
+  } finally {
+    rl.close()
+  }
+}
+
 const INSTANCES = readInstances()
-const INSTANCE = (() => {
+/**
+ * The directory a command is about: `--cwd` when a hook speaks for a session
+ * that ran somewhere else, this process's own directory otherwise.
+ */
+const ROUTE_DIR = earlyFlag('cwd') || process.cwd()
+const ROUTE_SESSION = routeSession()
+// Commands that only look at local configuration never need an instance, and
+// must not stop to ask for one.
+const LOCAL_ONLY = new Set(['route', 'instance', 'help'])
+const EARLY_COMMAND = earlyPositional[0]
+const JUST_HELP = (!EARLY_COMMAND && !process.argv.includes('--version')) || EARLY_COMMAND === 'help' || process.argv.includes('--help')
+const INTERACTIVE = Boolean(process.stdin.isTTY && process.stderr.isTTY) && !LOCAL_ONLY.has(EARLY_COMMAND) &&
+  !JUST_HELP && !process.argv.includes('--version') && EARLY_COMMAND !== 'version'
+
+const selectInstance = async () => {
   const { name: requested, error } = requestedInstance()
   if (error) return { error }
   if (!INSTANCES) {
@@ -148,21 +430,27 @@ const INSTANCE = (() => {
       : { name: null, dir: CAIRN_DIR }
   }
   if (INSTANCES.error) return { error: INSTANCES.error }
-  const { instances, unclassified } = INSTANCES
-  const named = Object.keys(instances).join(', ')
-  if (requested && !instances[requested]) {
-    return { error: `no instance named "${requested}" in ~/.cairn/instances.json (it has: ${named})` }
+  const { instances } = INSTANCES
+  const at = (name, why) => ({ name, why, dir: instanceDir(name), url: instances[name].url.replace(/\/+$/, '') })
+  if (requested) {
+    return instances[requested]
+      ? at(requested, 'asked for')
+      : { error: `no instance named "${requested}" in ~/.cairn/instances.json (it has: ${Object.keys(instances).join(', ')})` }
   }
-  const name = requested ?? (unclassified.mode === 'default' ? unclassified.instance : null)
-  if (!name) {
-    return {
-      undecided:
-        `cairn: this machine uses several Cairn instances (${named}) and nothing says which one ` +
-        `this command is for. Ask the user which one, then re-run it with --instance <name>.`,
-    }
+  // Help reads nothing and sends nothing; it should not wait on git to say so.
+  if (JUST_HELP) return { undecided: 'cairn: no instance chosen' }
+  const ref = REF_ARG.exec(earlyPositional[1] ?? '')?.[1]
+  const route = resolveRoute({ config: INSTANCES, dir: ROUTE_DIR, session: ROUTE_SESSION, ref })
+  if (route.hint) process.stderr.write(`${route.hint}\n`)
+  if (route.name) return at(route.name, route.why)
+  if (INTERACTIVE) {
+    const picked = await askInTerminal(INSTANCES, route, ROUTE_SESSION)
+    if (picked) return at(picked, 'chosen at the terminal')
   }
-  return { name, dir: join(CAIRN_DIR, 'instances', name), url: instances[name].url.replace(/\/+$/, '') }
-})()
+  return { undecided: undecidedMessage(route, instances, ROUTE_SESSION), route }
+}
+
+const INSTANCE = await selectInstance()
 
 /** Where this instance's files live, for messages: never a path with a username in it. */
 const STATE_LABEL = INSTANCE.name ? `~/.cairn/instances/${INSTANCE.name}` : '~/.cairn'
@@ -529,13 +817,13 @@ const KNOWN_FLAGS = new Set([
   'adopt', 'agent', 'all', 'allow-dangling', 'also-project', 'archived', 'body',
   'branch', 'completed',
   'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'dir', 'dry-run',
-  'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files',
+  'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files', 'folder',
   'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id', 'instance',
   'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'max-parents',
   'message', 'mine', 'next', 'no-checkpoint', 'no-parent', 'no-start', 'notify', 'older',
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
   'reason', 'remote', 'repo', 'request', 'resolution', 'scheduled', 'scope',
-  'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
+  'session', 'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
   'superseded', 'superseded-by', 'sweep', 'task', 'tasks', 'title', 'tool-calls',
   'type', 'unused', 'url', 'verified', 'version',
 ])
@@ -563,8 +851,10 @@ for (let i = 0; i < argv.length; i += 1) {
 }
 
 const FORMAT = flags.json ? 'json' : flags.pretty ? 'pretty' : 'tsv'
-// Already acted on, before parsing: it chose the credentials above.
+// Already acted on, before parsing: they chose the instance above. --cwd is
+// how any command says which directory it is about, not only context's.
 void flags.instance
+if (INSTANCES) void flags.cwd
 
 /**
  * What this file actually is, as a 16-hex sha256 — the same digest
@@ -1131,6 +1421,40 @@ const flushOutbox = async () => {
  */
 let mutated = false
 
+/**
+ * Keep this instance's list of project keys fresh enough to route a ref by
+ * (resolveRoute). Only this instance's own server is asked, with its own key,
+ * after it has already answered; at most every six hours, or at once after a
+ * project was created or rekeyed. A failure keeps the old list.
+ */
+const PROJECT_KEYS_TTL_MS = 6 * 60 * 60 * 1000
+let refreshingKeys = false
+const refreshProjectKeys = async (force) => {
+  if (!INSTANCE.name || refreshingKeys) return
+  const path = join(STATE_DIR, PROJECT_KEYS_FILE)
+  try {
+    if (!force && Date.now() - statSync(path).mtimeMs < PROJECT_KEYS_TTL_MS) return
+  } catch { /* never fetched */ }
+  refreshingKeys = true
+  try {
+    const res = await fetch(`${BASE}/api/v1/projects?archived=1`, {
+      headers: authHeaders(),
+      // A hint, so never allowed to hold up the answer longer than the answer itself could.
+      signal: AbortSignal.timeout(Math.min(DEADLINE_MS, 3_000)),
+    })
+    const payload = await res.json()
+    if (!payload?.success || !Array.isArray(payload.data)) return
+    const keys = [...new Set(payload.data.flatMap((p) => [p.key, ...(p.former_keys ?? []).map((f) => f.key)]).filter(Boolean))]
+    mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 })
+    writeFileSync(`${path}.tmp`, `${JSON.stringify({ at: new Date().toISOString(), keys })}\n`, { mode: 0o600 })
+    renameSync(`${path}.tmp`, path)
+  } catch {
+    // A routing hint, never worth failing the command that earned it.
+  } finally {
+    refreshingKeys = false
+  }
+}
+
 const request = async (method, path, body, { soft = false } = {}) => {
   requireKey()
   if (method !== 'GET') mutated = true
@@ -1240,6 +1564,8 @@ const request = async (method, path, body, { soft = false } = {}) => {
   if (told && typeof told === 'object' && !Array.isArray(told) && told.renamed_from) {
     tellRename(told.requested_ref, told.renamed_from, refOfTask(told))
   }
+
+  await refreshProjectKeys(method !== 'GET' && path.startsWith('/api/v1/projects'))
 
   // Recorded here rather than at each call site: one place that already knows
   // the method, the path and that the server said yes.
@@ -1799,6 +2125,11 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                                  configure one more; --adopt moves this machine's
                                                  existing env, map, ownership and queue into it
     cairn <command> --instance <name>            use that instance (or CAIRN_INSTANCE=<name>)
+    cairn route                                  which instance this directory uses, and why
+    cairn route add <instance> [--folder|--session] [--dir D] [--force]
+                                                 save the answer: this repository (or directory),
+                                                 everything under it, or this session only
+    cairn route list | pending | remove [--folder] [--dir D]
     cairn --version                              this CLI, the server, and whether they match
     cairn projects [--archived]                  --archived includes retired ones;
                                                  \`was\` lists keys a project used to have
@@ -3222,6 +3553,93 @@ const commands = {
   },
 
   /**
+   * Which instance a directory belongs to, and saving the answer. Local only,
+   * like `instance`: the point is to be usable exactly when nothing is routed.
+   *
+   * Saving an answer also sends the sessions the session-end hook parked while
+   * nobody had said where they go — the reason parking loses nothing.
+   */
+  async route() {
+    const sub = positional[0] ?? 'show'
+    if (!INSTANCES) die('this machine has one instance (no ~/.cairn/instances.json); there is nothing to route', 2)
+    if (INSTANCES.error) die(`cairn: ${INSTANCES.error}`, 2)
+    const dir = flags.dir ? realDir(String(flags.dir)) : ROUTE_DIR
+    const { key, repo } = routeKey(dir)
+
+    if (sub === 'show') {
+      return emit(INSTANCE.name
+        ? { path: tilde(key), instance: INSTANCE.name, why: INSTANCE.why }
+        : { path: tilde(key), instance: null, why: INSTANCE.error ?? 'nothing routes it', waiting: parkedSessions().filter((p) => p.cwd && routeKey(p.cwd).key === key).length })
+    }
+    if (sub === 'list') {
+      return emit(INSTANCES.routes.map((r) => ({ path: tilde(r.path), match: r.match, instance: r.instance })))
+    }
+    if (sub === 'pending') {
+      return emit(parkedSessions().map((p) => ({
+        session: p.sessionId, t: p.t, cwd: p.cwd ? tilde(p.cwd) : undefined, agent: p.agent ?? undefined,
+        routes_to: p.cwd ? resolveRoute({ config: INSTANCES, dir: p.cwd, session: p.sessionId }).name ?? undefined : undefined,
+      })))
+    }
+    if (sub === 'remove') {
+      const match = flags.folder ? 'folder' : 'exact'
+      const routes = INSTANCES.routes.filter((r) => !(r.match === match && r.path === key))
+      if (routes.length === INSTANCES.routes.length) die(`no ${match} route for ${tilde(key)}`)
+      writeInstancesConfig({ ...INSTANCES.raw, version: 1, routes })
+      return emit({ removed: tilde(key), match })
+    }
+    if (sub !== 'add') die('usage: cairn route [show|list|pending|add <instance> [--folder|--session] [--dir D] [--force]|remove [--folder] [--dir D]]')
+
+    const instance = need(positional[1], 'usage: cairn route add <instance> [--folder | --session] [--dir <path>] [--force]')
+    if (flags.folder && flags.session) die('--folder and --session are different answers; give one')
+    if (flags.session && !ROUTE_SESSION) die('--session needs a session id (CAIRN_SESSION_ID), and this shell has none')
+    const config = { ...INSTANCES.raw, version: 1, instances: INSTANCES.instances, unclassified: INSTANCES.unclassified, routes: INSTANCES.routes, raw: INSTANCES.raw }
+    const problem = saveRoute(config, {
+      instance,
+      key,
+      folder: Boolean(flags.folder),
+      session: flags.session ? ROUTE_SESSION : null,
+      force: Boolean(flags.force),
+    })
+    if (problem) die(`cairn: ${problem}`, 2)
+
+    // Replayed through this same CLI, one process per session, so each goes
+    // through the routing just saved exactly as a live command would. Never
+    // checkpointing: a parked session may be days old, and its held tasks
+    // have moved on since.
+    const after = readInstances()
+    const sent = []
+    const failed = []
+    for (const parked of parkedSessions()) {
+      const target = parked.cwd && resolveRoute({ config: after, dir: parked.cwd, session: parked.sessionId }).name
+      if (!target || !Array.isArray(parked.args)) continue
+      const args = parked.args.includes('--no-checkpoint') ? parked.args : [...parked.args, '--no-checkpoint']
+      // The instance decides the server and the key; a CAIRN_API_KEY left in
+      // this shell would only get every replay refused.
+      const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !['CAIRN_API_KEY', 'CAIRN_BASE_URL', 'CAIRN_INSTANCE'].includes(k)))
+      const result = spawnSync(process.execPath, [process.argv[1], ...args, '--instance', target], {
+        env: { ...env, CAIRN_AGENT: parked.agent ?? '', CAIRN_PLATFORM: parked.platform ?? '' },
+        stdio: ['ignore', 'ignore', 'pipe'],
+        encoding: 'utf8',
+        timeout: 30_000,
+      })
+      if (result.status === 0) {
+        rmSync(parked.file, { force: true })
+        sent.push(parked.sessionId)
+      } else failed.push({ session: parked.sessionId, why: (result.stderr || result.error?.message || `exit ${result.status}`).trim().split('\n')[0] })
+    }
+    const scope = flags.session ? 'this session' : flags.folder ? `${tilde(key)} and everything under it` : `${repo ? 'repository' : 'directory'} ${tilde(key)}`
+    return emit({ instance, scope, sent: sent.length, failed }, {
+      lines: (d) => [
+        `${d.scope} -> ${d.instance}`,
+        ...(d.sent ? [`  sent ${d.sent} session(s) that were waiting for this`] : []),
+        ...(d.failed.length
+          ? [`  ${d.failed.length} waiting session(s) could not be sent yet (\`cairn route pending\` lists them); first: ${d.failed[0].why}`]
+          : []),
+      ],
+    })
+  },
+
+  /**
    * Which instance this command would use, every instance configured, or one
    * more. Local only: none of these reads a key or contacts a server, so they
    * work on a machine whose configuration is exactly what needs looking at.
@@ -3231,7 +3649,7 @@ const commands = {
     if (sub === 'show') {
       if (INSTANCES?.error) die(`cairn: ${INSTANCES.error}`, 2)
       const shown = INSTANCE.name
-        ? { instance: INSTANCE.name, url: BASE, state: STATE_LABEL }
+        ? { instance: INSTANCE.name, why: INSTANCE.why, url: BASE, state: STATE_LABEL }
         : INSTANCES
           ? { instance: null, reason: INSTANCE.error ?? 'none chosen for this command' }
           : { instance: null, reason: 'this machine has one instance (no ~/.cairn/instances.json)', url: BASE, state: STATE_LABEL }
