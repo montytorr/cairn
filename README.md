@@ -664,20 +664,31 @@ omitted, so a row never loses prose it already had. The stamps live in
 time.
 
 The hook keeps the row when the summariser cannot be reached, because losing the record of
-a session over a missing summary would be the worse trade. The cost of that choice is that
-the failure is silent: rows keep appearing, with their files and task refs and no prose,
-and nothing says why. It is worth checking once that a session you know about has prose —
-`cairn session list` — rather than assuming. `cairn vitals` reports it daily.
+a session over a missing summary would be the worse trade. It no longer does so silently:
+every failure is appended to `~/.cairn/summariser.log` with what the summariser said (its
+stderr, the exit code, a timeout), and the session is queued in `~/.cairn/unsummarised.json`.
+The next run of the hook that reaches a working summariser re-summarises up to two queued
+sessions and posts the prose onto the existing row — at most four retries per session, 15
+minutes apart, for 48 hours (`CAIRN_SUMMARY_RETRY_BATCH`, `CAIRN_SUMMARY_RETRY_SPACING_MS`).
+When there is no summary, the request falls back to the first thing a person actually typed
+— never a skill expansion, a runtime wrapper or a bare "hello". `cairn vitals` still reports
+sessions without prose daily.
 
 Two cases where the summariser needs help:
 
 - **The transcripts are root's and the login is not.** A swept runtime whose sessions live
   under a `0700` home has to be swept as root, and `claude -p` as root is not logged in.
   Point `CAIRN_SUMMARY_CLI` at a wrapper that drops to the account that is:
-  `sudo -n -u <user> -H env HOME=/home/<user> claude "$@"`.
+  `sudo -n -u <user> -H env HOME=/home/<user> CAIRN_SUMMARISER=1 claude "$@"`.
 - **The summariser is itself a Claude Code session.** It would trigger the hook again, so
-  the hook sets `CAIRN_SUMMARISER=1` in the child and exits immediately when it sees it.
-  Anything wrapping the summariser must pass that through.
+  the hook sets `CAIRN_SUMMARISER=1`, `QUARRY_SUMMARISER=1` and `AGENT_MEMORY_SUMMARISER=1`
+  in the child and exits immediately when it sees any of them — so Quarry's summariser is
+  skipped too, and Quarry skips ours. The child also runs with `--no-session-persistence`
+  from a scratch directory, so `claude --continue` in a project can never resume it. And a
+  transcript whose first turn is a summariser prompt is not recorded whatever the
+  environment said, because a `sudo` wrapper resets the environment. A wrapper should
+  still pass the flags through: `sudo -n -u <user> -H env HOME=/home/<user>
+  CAIRN_SUMMARISER=1 QUARRY_SUMMARISER=1 claude "$@"`.
 
 **When a runtime has no session-end event**, nothing hands the transcript over, so sweep
 instead of waiting:
