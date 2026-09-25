@@ -82,7 +82,12 @@ export const recordSearch = async (
  * Best-effort for the same reason as recordSearch: a read that cannot be
  * logged must still be a read that worked.
  */
-export const recordKnowledgeRead = async (actor: Actor, slug: string, hit: boolean) => {
+export const recordKnowledgeRead = async (
+  actor: Actor,
+  slug: string,
+  hit: boolean,
+  { sweep = false }: { sweep?: boolean } = {},
+) => {
   try {
     await admin().from('knowledge_reads').insert({
       owner_user_id: actor.userId,
@@ -92,6 +97,8 @@ export const recordKnowledgeRead = async (actor: Actor, slug: string, hit: boole
       // table. A miss is only useful if it joins.
       slug: normalizeSlugRef(slug).slice(0, 200),
       hit,
+      // Kept, not dropped: a sweep is still a read, it is just not a recall.
+      ...(sweep ? { sweep: true } : {}),
     })
   } catch {
     // Nothing to do about it, and nothing worth failing the read over.

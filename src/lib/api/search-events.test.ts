@@ -110,6 +110,15 @@ describe('recordKnowledgeRead', () => {
     })
   })
 
+  it('marks a declared sweep, and only then', async () => {
+    await recordKnowledgeRead(actor, 'some-fact', true, { sweep: true })
+    expect(inserted()).toMatchObject({ slug: 'some-fact', hit: true, sweep: true })
+
+    await recordKnowledgeRead(actor, 'some-fact', true)
+    // Absent rather than false, so the database default and the rate rule decide.
+    expect(mocks.insert.mock.calls[1]?.[0]).not.toHaveProperty('sweep')
+  })
+
   /**
    * The valuable half. A miss on a guessed slug is a dangling reference being
    * followed live, so it has to be a row that says "asked for, not held" —

@@ -93,3 +93,34 @@ export const unusedKnowledge = async (days: number, limit: number): Promise<Unus
     lastRecalled: r.last_recalled_at ? new Date(r.last_recalled_at as string).toISOString() : null,
   }))
 }
+
+export type UnusedWindow = {
+  /** Days since the oldest current entry was written. Null for an empty store. */
+  storeAgeDays: number | null
+  /** Set when no current entry is old enough to qualify: a zero that means "not yet", not "none". */
+  note?: string
+}
+
+/**
+ * Whether `--unused <days>` can say anything at all yet.
+ *
+ * An entry younger than the window is left out, which is right one at a time
+ * and wrong for the whole store: 30 days after an import every entry is still
+ * inside the window, the answer is an empty list, and an empty list reads as
+ * "everything is being used" (CAIRN-289 — a 10-day window showed 46).
+ */
+export const unusedWindow = async (days: number): Promise<UnusedWindow> => {
+  const { rows } = await pool().query(
+    'select min(created_at) as oldest from knowledge where superseded_by is null',
+  )
+  const oldest = rows[0]?.oldest ? Date.parse(new Date(rows[0].oldest as string).toISOString()) : null
+  if (oldest === null || Number.isNaN(oldest)) return { storeAgeDays: null }
+  const storeAgeDays = Math.floor((Date.now() - oldest) / 86_400_000)
+  if (storeAgeDays >= days) return { storeAgeDays }
+  return {
+    storeAgeDays,
+    note:
+      `the oldest current entry is ${storeAgeDays} day${storeAgeDays === 1 ? '' : 's'} old, younger than ` +
+      `the ${days}-day window, so nothing can qualify yet — try --unused ${Math.max(1, storeAgeDays - 1)}`,
+  }
+}

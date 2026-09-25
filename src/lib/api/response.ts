@@ -39,6 +39,7 @@ export type ApiError =
   | 'conflict'
   | 'already_claimed'
   | 'resolution_required'
+  | 'secret_detected'
   | 'rate_limited'
   | 'internal_error'
 
@@ -50,6 +51,7 @@ const STATUS: Record<ApiError, number> = {
   conflict: 409,
   already_claimed: 409,
   resolution_required: 400,
+  secret_detected: 400,
   rate_limited: 429,
   internal_error: 500,
 }

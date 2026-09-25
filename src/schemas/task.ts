@@ -82,15 +82,50 @@ const taskFields = z.object({
   dueDate: z.string().date(),
 })
 
-export const createTaskSchema = taskFields.partial().extend({
-  title: z.string().min(1).max(300),
-  type: taskType.default('feature'),
-  status: taskStatus.default('backlog'),
-  priority: taskPriority.default('medium'),
-  labels: z.array(z.string().min(1).max(50)).max(20).default([]),
-  /** File it under an existing task. A ref (`CAI-42`) or uuid. */
-  parentRef: z.string().min(2).max(60).optional(),
-})
+/**
+ * Types whose value is the body. A chore is often fully described by its
+ * title; a bug or a spike with no body is not yet a report.
+ */
+export const NEEDS_BODY: readonly TaskType[] = ['bug', 'spike']
+
+/** Below this a "body" is a restated title, which is what the rule exists to stop. */
+export const MIN_BODY_CHARS = 40
+
+export const createTaskSchema = taskFields
+  .partial()
+  .extend({
+    title: z.string().min(1).max(300),
+    type: taskType.default('feature'),
+    status: taskStatus.default('backlog'),
+    priority: taskPriority.default('medium'),
+    labels: z.array(z.string().min(1).max(50)).max(20).default([]),
+    /** File it under an existing task. A ref (`CAI-42`) or uuid. */
+    parentRef: z.string().min(2).max(60).optional(),
+    /**
+     * File a bug or spike with no body on purpose — `cairn add --force-empty`.
+     * The escape hatch has to be something the caller says, never a default.
+     */
+    forceEmpty: z.boolean().optional(),
+  })
+  /**
+   * The bug/spike body rule, where every caller meets it (CAIRN-291).
+   *
+   * It lived only in the CLI, and there it worked: none filed empty since it
+   * shipped, against 71 before. The API accepted an empty description, so the
+   * UI, the MCP facade and any direct caller walked straight past it.
+   */
+  .superRefine((value, ctx) => {
+    if (!NEEDS_BODY.includes(value.type) || value.forceEmpty) return
+    if ((value.description ?? '').trim().length >= MIN_BODY_CHARS) return
+    ctx.addIssue({
+      code: 'custom',
+      path: ['description'],
+      message:
+        `A ${value.type} needs a description of at least ${MIN_BODY_CHARS} characters: what happens, ` +
+        'what you expected, and how to see it. If the title really is the whole story, send forceEmpty: true ' +
+        '(cairn add --force-empty).',
+    })
+  })
 
 /** Partial update. No defaults, so absent fields stay absent. */
 export const updateTaskSchema = taskFields.partial().extend({

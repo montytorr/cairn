@@ -28,6 +28,7 @@ export const GET = route<{ ref: string }>({
 /** Conversation aimed at the human. Findings and dead ends belong in notes. */
 export const POST = route<{ ref: string }, z.infer<typeof createComment>>({
   schema: createComment,
+  secretFields: ['content'],
   handler: async ({ actor, params, body, req }) => {
     const task = await findTask(actor, params.ref, TASK_LIST_FIELDS)
     if (!task) return fail('not_found', `No task ${params.ref}.`)
