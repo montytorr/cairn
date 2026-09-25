@@ -22,6 +22,12 @@ export const sessionUpsert = z.object({
   ),
   cwd: z.string().max(500).optional(),
   project: z.string().max(10).optional(),
+  /**
+   * The checkout's `origin`, raw. Lets the server attribute the session when
+   * the caller's map has no entry for this directory, exactly as it does for
+   * `cairn context`.
+   */
+  repo: z.string().max(500).optional(),
   startedAt: z.string().datetime().optional(),
   endedAt: z.string().datetime().optional(),
   /** A live checkpoint, not a session end. Omitted remains the legacy end path. */

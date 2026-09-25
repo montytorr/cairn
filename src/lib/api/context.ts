@@ -3,7 +3,7 @@ import type { Actor } from './auth'
 import { listKnowledge } from './knowledge'
 import { stalenessFor } from './staleness'
 import { contextForFile, type FileContext } from './files'
-import { normaliseRemote, projectKeyFromEmbed, projectKeyFromRepoRows, type RepoRow } from './repos'
+import { projectForCwd, projectForRepo } from './project-resolution'
 import { formerKeysByProject, formerRefsOf, liveProjectKey, resolveProject, type FormerKey, type KeyRename } from './project-keys'
 
 /**
@@ -130,47 +130,6 @@ const humanDuration = (fromIso: string | null): string => {
   if (minutes < 90) return `${minutes}m`
   const hours = Math.round(minutes / 60)
   return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`
-}
-
-/**
- * Which project a working directory belongs to.
- *
- * The caller knows its filesystem and should say; this is the fallback for
- * when it does not. Sessions already recorded against this cwd are the best
- * available evidence, and they are self-correcting — file work under a new
- * directory once and every later session there resolves.
- */
-const projectForCwd = async (_userId: string, cwd: string): Promise<string | null> => {
-  const { data, error } = await admin()
-    .from('sessions')
-    .select('project:projects(key)')
-    .eq('cwd', cwd)
-    .not('project_id', 'is', null)
-    .order('ended_at', { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  return projectKeyFromEmbed((data as RepoRow | null)?.project ?? null)
-}
-
-/**
- * Which project a repository belongs to.
- *
- * Preferred over the cwd heuristic below because it is evidence rather than
- * inference: the remote is the same string in every clone and every worktree,
- * where a path is true of one machine only.
- */
-const projectForRepo = async (_userId: string, remote: string): Promise<string | null> => {
-  const { data, error } = await admin()
-    .from('project_repos')
-    .select('project:projects(key)')
-    .eq('remote', normaliseRemote(remote))
-    // Two is enough to know it is ambiguous, and cheaper than counting.
-    .limit(2)
-
-  if (error) throw new Error(error.message)
-  return projectKeyFromRepoRows((data ?? []) as unknown as RepoRow[])
 }
 
 export const buildContext = async (
