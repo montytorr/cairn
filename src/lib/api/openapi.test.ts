@@ -73,6 +73,17 @@ describe('openapi spec', () => {
     expect(err.properties).toHaveProperty('suggestedResolution')
   })
 
+  it('documents the optional project scope on the context endpoint', () => {
+    const context = spec.paths['/context'].get as {
+      parameters: { name: string; schema: { enum?: string[] } }[]
+      responses: Record<string, unknown>
+    }
+    expect(context.parameters.find((parameter) => parameter.name === 'scope')?.schema.enum)
+      .toEqual(['all', 'project'])
+    expect(context.responses).toHaveProperty('400')
+    expect(context.responses).toHaveProperty('404')
+  })
+
   const routesOnDisk = (): string[] => {
     const root = join(process.cwd(), 'src/app/api/v1')
 

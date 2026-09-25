@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { buildContext } from '@/lib/api/context'
+import { buildContext, ContextProjectNotFoundError, ContextScopeError } from '@/lib/api/context'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +12,7 @@ const contextQuery = z.object({
   // The origin remote, unnormalised: the rule for reducing spellings to one
   // repository lives on the server, so every caller reaches the same row.
   repo: z.string().max(500).optional(),
+  scope: z.enum(['all', 'project']).optional(),
 })
 
 /**
@@ -27,7 +28,12 @@ export const GET = route({
     const parsed = contextQuery.safeParse(Object.fromEntries(url.searchParams))
     if (!parsed.success) return fail('validation_failed', 'Bad query.', { issues: parsed.error.issues })
 
-    const payload = await buildContext(actor, parsed.data)
-    return ok(payload)
+    try {
+      return ok(await buildContext(actor, parsed.data))
+    } catch (error) {
+      if (error instanceof ContextProjectNotFoundError) return fail('not_found', error.message)
+      if (error instanceof ContextScopeError) return fail('validation_failed', error.message)
+      throw error
+    }
   },
 })

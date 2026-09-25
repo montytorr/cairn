@@ -1088,6 +1088,8 @@ export const openapiSpec = () => ({
           { name: 'cwd', in: 'query', schema: { type: 'string' } },
           { name: 'project', in: 'query', schema: { type: 'string' } },
           { name: 'file', in: 'query', schema: { type: 'string' } },
+          { name: 'scope', in: 'query', schema: { type: 'string', enum: ['all', 'project'] },
+            description: 'Defaults to all. Project scope limits held work, stale claims, and the last session; requires a resolved project.' },
           { name: 'repo', in: 'query', schema: { type: 'string' },
             description:
               'Origin remote. Resolves the project where a path cannot: a second clone, ' +
@@ -1115,6 +1117,8 @@ export const openapiSpec = () => ({
               },
             },
           }),
+          '400': errorResponse,
+          '404': errorResponse,
         },
       },
     },

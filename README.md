@@ -376,7 +376,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | | |
 |---|---|
 | `cairn check "<subject>"` | **Start here.** Prior work across all four stores, with a `~tokens` cost per row |
-| `cairn context` | The briefing: what you hold, what is in flight, where the last session here stopped |
+| `cairn context [--scope project\|all] [--project K]` | The briefing: what you hold, what is in flight, where the last session here stopped. `--scope project` limits held work, stale claims, and the last session to the resolved project; the default `all` keeps cross-project awareness. An unresolved project is an error in project scope; an unknown explicit key returns 404. |
 | `cairn next` | **What to pick up, and why.** Finishing beats starting, so work you hold ranks above work dropped with a checkpoint, which ranks above anything not begun. Blocked, waiting, or actively held by another agent is never offered |
 | `cairn show <ref>` · `cairn list --project K` · `cairn projects` | Read one, many, or the project index |
 | `cairn add "<title>" --project K` | File work. Warns if something similar already exists |

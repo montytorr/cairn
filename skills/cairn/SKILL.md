@@ -513,6 +513,8 @@ it if you are unsure what you left open.
 
 ```bash
 cairn context          # what you hold, what is in flight, where the last session stopped
+cairn context --scope project          # only this project's tasks and last session
+cairn context --scope project --project CAIRN  # select a project explicitly
 ```
 
 Usually you will not run this: a hook runs it when a session starts and puts the result in
@@ -526,6 +528,14 @@ Leaving them is how a tracker fills with work that looks live and is not.
 `cairn map CAIRN` tells Cairn that this directory is that project, which is what makes the
 briefing project-aware. Do it once per repository — it claims the repo, so a second clone
 and a `git worktree` resolve without being mapped again.
+
+By default, held work and stale claims can still span projects: the briefing helps you see
+everything you are responsible for. Use `--scope project` to restrict those sections and
+the last session to the resolved project. If no project resolves, it fails rather than
+returning a cross-project briefing that looks filtered. An unknown `--project` key returns
+404. Tasks linked to the project only through `--also-project` are excluded: the filter
+uses their home project, as "In flight here" already does. Shared/global knowledge remains
+available; this is a relevance filter, not an authorization boundary.
 
 A project's key can change (`cairn project rekey AC HOL`). Old refs and `--project AC`
 keep working, and every answer reached that way says so: `AC-113 is now HOL-113 — project

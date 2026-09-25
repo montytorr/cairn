@@ -268,7 +268,7 @@ const KNOWN_FLAGS = new Set([
   'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'max-parents',
   'message', 'mine', 'next', 'no-checkpoint', 'no-parent', 'notify', 'older',
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
-  'reason', 'remote', 'repo', 'request', 'resolution', 'scheduled',
+  'reason', 'remote', 'repo', 'request', 'resolution', 'scheduled', 'scope',
   'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
   'superseded', 'superseded-by', 'task', 'tasks', 'title', 'tool-calls',
   'type', 'unused', 'url', 'verified', 'version',
@@ -1368,8 +1368,10 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn task delete <ref> --confirm <ref>       junk only; refuses a task with history
 
   memory
-    cairn context                  the briefing: what you hold, what is in flight,
-                                   where the last session here stopped, what is known
+    cairn context [--scope project|all] [--project K]
+                                   what you hold, what is in flight,
+                                   where the last session here stopped, what is known;
+                                   project scope filters tasks and sessions (default: all)
     cairn learn "<title>" --body - record what we now know
                                    --allow-dangling  keep a [[ref]] the store cannot resolve
                                    --files a,b  files it is about, beyond those its body names
@@ -2613,6 +2615,10 @@ const commands = {
     params.set('cwd', cwd)
     const project = flags.project ?? projectForDir(cwd)
     if (project) params.set('project', project)
+    if (flags.scope !== undefined) {
+      if (flags.scope !== 'project' && flags.scope !== 'all') die('--scope must be project or all')
+      params.set('scope', flags.scope)
+    }
     // Costs one local git call and answers where the map cannot: a second
     // clone, a moved directory, a worktree.
     const repo = gitRemote(cwd)

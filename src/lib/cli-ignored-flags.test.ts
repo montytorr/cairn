@@ -25,13 +25,14 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((d) => rm(d, { recursive: true, force: true })))
 })
 
-const serve = (seen: { body?: Record<string, unknown>; method?: string }) =>
+const serve = (seen: { body?: Record<string, unknown>; method?: string; url?: string }) =>
   new Promise<string>((resolve) => {
     const server = createServer((req, res) => {
       let raw = ''
       req.on('data', (c) => { raw += c })
       req.on('end', () => {
         seen.method = req.method
+        seen.url = req.url
         if (raw) try { seen.body = JSON.parse(raw) } catch { /* not json */ }
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ success: true, data: { count: 0, results: [], slug: 'a-fact' } }))
@@ -195,4 +196,33 @@ describe('documented invocations stay silent', () => {
       expect(stderr).not.toContain('does not take')
     },
   )
+})
+
+describe('context scope option', () => {
+  it('passes the project scope to the context endpoint', async () => {
+    const seen: { url?: string } = {}
+    const base = await serve(seen)
+    const { code, stderr } = await run(['context', '--scope', 'project', '--project', 'MES', '--json'], base)
+    expect(code).toBe(0)
+    expect(stderr).not.toContain('does not take')
+    expect(new URL(seen.url!, base).searchParams.get('scope')).toBe('project')
+    expect(new URL(seen.url!, base).searchParams.get('project')).toBe('MES')
+  })
+
+  it('does not change the default context request', async () => {
+    const seen: { url?: string } = {}
+    const base = await serve(seen)
+    const { code } = await run(['context', '--project', 'MES', '--json'], base)
+    expect(code).toBe(0)
+    expect(new URL(seen.url!, base).searchParams.has('scope')).toBe(false)
+  })
+
+  it('rejects an unsupported scope before contacting the server', async () => {
+    const seen: { url?: string } = {}
+    const base = await serve(seen)
+    const { code, stderr } = await run(['context', '--scope', 'workspace'], base)
+    expect(code).not.toBe(0)
+    expect(stderr).toContain('--scope must be project or all')
+    expect(seen.url).toBeUndefined()
+  })
 })
