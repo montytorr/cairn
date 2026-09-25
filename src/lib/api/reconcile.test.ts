@@ -142,10 +142,13 @@ describe('who reconcile covers', () => {
 })
 
 describe('what counts as a sign of life', () => {
+  // One timestamp, not three: separate hoursAgo() calls can land a millisecond
+  // apart, and the test then compares against whichever was latest.
+  const weekAgo = hoursAgo(168)
   const quiet = {
-    heartbeat_at: hoursAgo(168),
-    claimed_at: hoursAgo(168),
-    updated_at: hoursAgo(168),
+    heartbeat_at: weekAgo,
+    claimed_at: weekAgo,
+    updated_at: weekAgo,
     checkpoint_at: hoursAgo(0.1),
   }
 

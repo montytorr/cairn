@@ -630,10 +630,12 @@ cairn instance list
 cairn note ACME-42 "…" --instance work                                # or CAIRN_INSTANCE=work
 ```
 
-- `~/.cairn/instances.json` names the instances and what happens when a command names none:
-  `"unclassified": {"mode": "default", "instance": "personal"}` uses that one, and
+- `~/.cairn/instances.json` names the instances and what happens in a directory with no
+  route: `"unclassified": {"mode": "default", "instance": "personal"}` uses that one, and
   `{"mode": "ask"}` (the default) stops before any request with **exit 10**, so an agent asks
-  the user instead of guessing. `--default` on `instance add` sets the first form.
+  the user instead of guessing. Adding the second instance at a terminal asks which you want;
+  `--default` on `instance add`, or `cairn instance policy ask | default <name>` at any time,
+  answers it directly.
 - Each instance keeps its own state in `~/.cairn/instances/<name>/`: `env` (the same per-runtime
   keys as above), the outbox, ownership and `projects.json`. `--adopt` moves the files at the
   top of `~/.cairn` into the instance, and refuses if they were used with a different server

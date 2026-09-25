@@ -341,6 +341,7 @@ const undecidedMessage = ({ key, repo }, instances, session) => {
 }
 
 const writeInstancesConfig = (config) => {
+  wroteLocally = true
   mkdirSync(CAIRN_DIR, { recursive: true })
   const temp = `${INSTANCES_PATH}.tmp`
   writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
@@ -371,8 +372,49 @@ const saveRoute = (config, { instance, key, folder, session, force }) => {
   const routes = [...config.routes.filter((r) => r !== existing), route]
   const problem = routeProblem(route, config.instances, routes)
   if (problem) return problem
-  writeInstancesConfig({ ...(config.raw ?? {}), ...config, raw: undefined, version: 1, routes })
+  // Written from the file as it was, with only the routes changed.
+  writeInstancesConfig({ ...(config.raw ?? { instances: config.instances }), version: 1, routes })
   return null
+}
+
+/**
+ * A local write happened, for the ignored-flag report at the bottom: it must
+ * warn rather than exit 2 once something is already on disk. `mutated` is
+ * declared too late in the file to be touched from here.
+ */
+let wroteLocally = false
+
+/**
+ * One numbered choice. null on Ctrl-D: readline's question() never settles
+ * when its input ends, and Node would then exit 0 with the command half done.
+ * A number out of range is asked again rather than read as some default.
+ */
+const choose = async (rl, prompt, count, fallback) => {
+  const closed = new Promise((resolve) => rl.once('close', () => resolve(null)))
+  for (;;) {
+    const answer = await Promise.race([rl.question(prompt), closed])
+    if (answer === null) return null
+    const n = answer.trim() === '' && fallback ? fallback : Number(answer.trim())
+    if (Number.isInteger(n) && n >= 1 && n <= count) return n
+    process.stderr.write(`  a number from 1 to ${count}, please\n`)
+  }
+}
+
+/** Setup's question: a default instance for unclassified directories, or ask every time. */
+const askPolicy = async (instances) => {
+  const names = Object.keys(instances)
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  try {
+    process.stderr.write('cairn: when a directory has no route, which instance should commands use?\n')
+    names.forEach((n, i) => process.stderr.write(`  ${i + 1}. always ${n}\n`))
+    process.stderr.write(`  ${names.length + 1}. none — ask me whenever it is unclear\n`)
+    const n = await choose(rl, `choice [${names.length + 1}]: `, names.length + 1, names.length + 1)
+    // Unanswered stays unanswered: nothing is written, and the next add asks again.
+    if (n === null) return undefined
+    return n <= names.length ? { mode: 'default', instance: names[n - 1] } : { mode: 'ask' }
+  } finally {
+    rl.close()
+  }
 }
 
 /** Ask a person at a terminal, once, instead of printing instructions meant for an agent. */
@@ -382,8 +424,9 @@ const askInTerminal = async (config, undecided, session) => {
   try {
     process.stderr.write(`cairn: which Cairn instance is ${tilde(undecided.key)} for?\n`)
     names.forEach((n, i) => process.stderr.write(`  ${i + 1}. ${n}  ${config.instances[n].url}\n`))
-    const picked = names[Number((await rl.question('instance number: ')).trim()) - 1]
-    if (!picked) return null
+    const n = await choose(rl, 'instance number: ', names.length)
+    if (n === null) return null
+    const picked = names[n - 1]
     const scopes = [
       ['this one command', null],
       [undecided.repo ? 'this repository' : 'this directory', { key: undecided.key }],
@@ -391,8 +434,9 @@ const askInTerminal = async (config, undecided, session) => {
       ...(session ? [['this session only', { session }]] : []),
     ]
     scopes.forEach(([label], i) => process.stderr.write(`  ${i + 1}. ${label}\n`))
-    const scope = scopes[Number((await rl.question(`remember it for [2]: `)).trim() || '2') - 1]
-    if (!scope) return null
+    const pickedScope = await choose(rl, 'remember it for [2]: ', scopes.length, 2)
+    if (pickedScope === null) return null
+    const scope = scopes[pickedScope - 1]
     if (scope[1]) {
       const problem = saveRoute(config, { instance: picked, ...scope[1] })
       if (problem) {
@@ -2122,6 +2166,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
   projects
     cairn map [<KEY>|none]                       which project this directory is
     cairn instance [list]                        which Cairn instance a command uses, and all of them
+    cairn instance policy ask | default <name>   in a directory with no route: ask, or use that one
     cairn instance add <name> --url <url> [--default] [--adopt]
                                                  configure one more; --adopt moves this machine's
                                                  existing env, map, ownership and queue into it
@@ -3595,7 +3640,7 @@ const commands = {
     const instance = need(positional[1], 'usage: cairn route add <instance> [--folder | --session] [--dir <path>] [--force]')
     if (flags.folder && flags.session) die('--folder and --session are different answers; give one')
     if (flags.session && !ROUTE_SESSION) die('--session needs a session id (CAIRN_SESSION_ID), and this shell has none')
-    const config = { ...INSTANCES.raw, version: 1, instances: INSTANCES.instances, unclassified: INSTANCES.unclassified, routes: INSTANCES.routes, raw: INSTANCES.raw }
+    const config = { ...INSTANCES.raw, version: 1, instances: INSTANCES.instances, routes: INSTANCES.routes, raw: INSTANCES.raw }
     const problem = saveRoute(config, {
       instance,
       key,
@@ -3670,7 +3715,24 @@ const commands = {
           : 0,
       })))
     }
-    if (sub !== 'add') die('usage: cairn instance [show|list|add <name> --url <url> [--default] [--adopt]]')
+    if (sub === 'policy') {
+      if (!INSTANCES) die('this machine has one instance (no ~/.cairn/instances.json); there is nothing to choose between', 2)
+      if (INSTANCES.error) die(`cairn: ${INSTANCES.error}`, 2)
+      const mode = positional[1]
+      const instance = positional[2]
+      if (mode === 'default' && !INSTANCES.instances[instance]) {
+        die(`usage: cairn instance policy default <${Object.keys(INSTANCES.instances).join('|')}>`)
+      }
+      if (mode !== 'ask' && mode !== 'default') die('usage: cairn instance policy ask | default <name>')
+      const unclassified = mode === 'ask' ? { mode: 'ask' } : { mode: 'default', instance }
+      writeInstancesConfig({ ...INSTANCES.raw, version: 1, unclassified })
+      return emit({ unclassified }, {
+        lines: () => [mode === 'ask'
+          ? 'a directory with no route: commands stop and ask which instance'
+          : `a directory with no route: commands use ${instance}`],
+      })
+    }
+    if (sub !== 'add') die('usage: cairn instance [show|list|policy ask|default <name>|add <name> --url <url> [--default] [--adopt]]')
 
     const name = need(positional[1], 'usage: cairn instance add <name> --url <url> [--default] [--adopt]')
     if (!INSTANCE_NAME.test(name)) die(`"${name}" is not an instance name: lowercase letters, digits and dashes, up to 32`)
@@ -3681,15 +3743,27 @@ const commands = {
       die(`--url ${url} is not an http(s) URL`)
     }
     if (INSTANCES?.error) die(`cairn: ${INSTANCES.error} — fix it before adding to it`, 2)
+    // Everything already in the file is kept — its routes above all, which a
+    // rebuilt object silently dropped.
     const config = INSTANCES
-      ? { version: 1, instances: { ...INSTANCES.instances }, unclassified: INSTANCES.unclassified }
-      : { version: 1, instances: {}, unclassified: { mode: 'ask' } }
+      ? { ...INSTANCES.raw, version: 1, instances: { ...INSTANCES.instances } }
+      : { version: 1, instances: {} }
     const existing = config.instances[name]
     if (existing && trimUrl(existing.url) !== url) {
       die(`instance "${name}" already points at ${existing.url}; edit ~/.cairn/instances.json to change it on purpose`)
     }
     config.instances[name] = { url }
     if (flags.default) config.unclassified = { mode: 'default', instance: name }
+
+    // The one question setup has to put to a person: with a second instance,
+    // what happens in a directory nobody has classified. Asked once, at a
+    // terminal, only when --default did not already answer it, and before
+    // anything is moved, so an abandoned prompt leaves nothing half done.
+    const decided = flags.default || INSTANCES?.raw?.unclassified != null
+    if (!decided && Object.keys(config.instances).length > 1 && process.stdin.isTTY && process.stderr.isTTY) {
+      const policy = await askPolicy(config.instances)
+      if (policy) config.unclassified = policy
+    }
 
     const dir = join(CAIRN_DIR, 'instances', name)
     const legacy = ['env', 'projects.json', 'ownership'].filter((f) => existsSync(join(CAIRN_DIR, f)))
@@ -3737,9 +3811,7 @@ const commands = {
         }
       })
     }
-    const temp = `${INSTANCES_PATH}.tmp`
-    writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
-    renameSync(temp, INSTANCES_PATH)
+    writeInstancesConfig(config)
 
     const notes = []
     if (moved.length) notes.push(`moved ${moved.join(', ')} into ~/.cairn/instances/${name}/`)
@@ -3750,7 +3822,10 @@ const commands = {
     if (!existsSync(join(dir, 'env'))) {
       notes.push(`put this instance's keys in ~/.cairn/instances/${name}/env (CAIRN_API_KEY_<RUNTIME>=..., mode 600)`)
     }
-    if (config.unclassified.mode === 'ask') notes.push('commands with no instance chosen stop and ask (exit 10)')
+    if ((config.unclassified?.mode ?? 'ask') === 'ask') {
+      notes.push('in a directory with no route, commands stop and ask (exit 10); ' +
+        '`cairn instance policy default <name>` uses one instead')
+    }
     return emit({ instance: name, url, default: flags.default ? 'yes' : undefined, notes }, {
       lines: (d) => [`instance ${d.instance} -> ${d.url}${d.default ? ' (default)' : ''}`, ...d.notes.map((n) => `  ${n}`)],
     })
@@ -4183,9 +4258,9 @@ if (ignored.length > 0) {
   process.stderr.write(
     `cairn: \`${command}\` does not take ${list} — ` +
       `it was accepted by the parser and then read by nothing.\n` +
-      (mutated
+      (mutated || wroteLocally
         ? `The write went through WITHOUT it; re-run with the right flag if that was not what you meant.\n`
         : `Refused rather than answered: a filter that is dropped returns an answer that looks filtered and is not.\n`),
   )
-  if (!mutated) process.exit(2)
+  if (!mutated && !wroteLocally) process.exit(2)
 }

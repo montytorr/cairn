@@ -330,6 +330,52 @@ describe('several instances on one machine', () => {
     expect(result.stderr).toContain(message)
   })
 
+  it('keeps saved routes when another instance is added', async () => {
+    await configure()
+    const cfgPath = join(home, '.cairn', 'instances.json')
+    const cfg = JSON.parse(await readFile(cfgPath, 'utf8'))
+    await writeFile(cfgPath, JSON.stringify({ ...cfg, routes: [{ path: '/srv/client', match: 'exact', instance: 'work' }] }))
+
+    expect((await run(['instance', 'add', 'lab', '--url', 'https://lab.example'])).code).toBe(0)
+    const after = JSON.parse(await readFile(cfgPath, 'utf8'))
+    expect(after.routes).toEqual([{ path: '/srv/client', match: 'exact', instance: 'work' }])
+    expect(Object.keys(after.instances)).toEqual(['personal', 'work', 'lab'])
+  })
+
+  it('sets what an unrouted directory does with instance policy', async () => {
+    await configure()
+    const cfgPath = join(home, '.cairn', 'instances.json')
+
+    expect((await run(['instance', 'policy', 'default', 'work'])).code).toBe(0)
+    expect(JSON.parse(await readFile(cfgPath, 'utf8')).unclassified).toEqual({ mode: 'default', instance: 'work' })
+    expect((await run(['note', 'ACME-1', 'x'])).code).toBe(0)
+    expect(seenB).toHaveLength(1)
+
+    expect((await run(['instance', 'policy', 'ask'])).code).toBe(0)
+    expect((await run(['note', 'ACME-1', 'x'])).code).toBe(10)
+
+    const bad = await run(['instance', 'policy', 'default', 'client'])
+    expect(bad.code).not.toBe(0)
+    expect(bad.stderr).toContain('personal|work')
+  })
+
+  it('leaves the choice open, and says how to make it, when a second instance is added outside a terminal', async () => {
+    expect((await run(['instance', 'add', 'personal', '--url', a])).code).toBe(0)
+    const second = await run(['instance', 'add', 'work', '--url', b])
+    expect(second.code).toBe(0)
+    expect(second.stdout).toContain('cairn instance policy default <name>')
+    expect(JSON.parse(await readFile(join(home, '.cairn', 'instances.json'), 'utf8')).unclassified).toBeUndefined()
+  })
+
+  /** The policy was written; exiting 2 would tell a caller it was not. */
+  it('warns rather than failing when a local write ignored a flag', async () => {
+    await configure()
+    const result = await run(['instance', 'policy', 'ask', '--priority', 'high'])
+    expect(result.code).toBe(0)
+    expect(result.stderr).toContain('does not take --priority')
+    expect(result.stderr).toContain('went through WITHOUT it')
+  })
+
   it('changes nothing on a machine with no instances.json', async () => {
     await writeFile(join(home, '.cairn', 'env'), `CAIRN_BASE_URL=${a}\nCAIRN_API_KEY=crn_legacy\n`)
     expect((await run(['note', 'ACME-1', 'x'])).code).toBe(0)
