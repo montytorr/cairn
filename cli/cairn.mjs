@@ -377,7 +377,7 @@ const KNOWN_FLAGS = new Set([
   'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files',
   'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id',
   'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'max-parents',
-  'message', 'mine', 'next', 'no-checkpoint', 'no-parent', 'notify', 'older',
+  'message', 'mine', 'next', 'no-checkpoint', 'no-parent', 'no-start', 'notify', 'older',
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
   'reason', 'remote', 'repo', 'request', 'resolution', 'scheduled', 'scope',
   'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
@@ -1478,9 +1478,21 @@ const renderContext = (d, { fileOnly = false } = {}) => {
   }
 
   if (out.length === 1) return ''
-  out.push('', 'Start with: cairn check "<subject>"')
+  out.push('', ...BRIEFING_RULES)
   return `${out.join('\n')}\n`
 }
+
+/**
+ * The one text every Claude Code and Codex session is shown unasked, and for
+ * months it carried a single rule. The habits the scorecard found missing
+ * (CAIRN-294) are each one line here; kept under 300 bytes so the briefing
+ * stays a briefing.
+ */
+const BRIEFING_RULES = [
+  'Start with: cairn check "<subject>". Claim what you work (agents\' add claims it); one task per sweep.',
+  'Dead end: note --kind attempt. Before yielding: checkpoint. Not landed: update --status in-review.',
+  'Close: done --kind fixed|verified|answered.',
+]
 
 const truncate = (s, n) => (!s ? '' : s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
@@ -1504,6 +1516,9 @@ const HELP = `cairn — agent-first task tracker and shared memory
   write
     cairn add "<title>" --project K [--type bug] [--priority high] [--body -]
     cairn add ... --start          file it and claim it, when you are starting now
+                                   (the default for an agent runtime, unless it
+                                   already holds work here or similar open work
+                                   exists; --no-start to only file it)
     cairn update <ref> [--title T] [--status S] [--type T] [--priority P]
     cairn update <ref> --also-project HM,AT      work that spans several projects
     cairn update <ref> --project OTHER      moves it; the ref changes
@@ -1515,7 +1530,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    none of them runs anything. Recording the
                                    same commit twice is one line, not two.
     cairn comment <ref> "<text>"
-    cairn done <ref> --resolution "<what was actually done>" [--kind fixed]
+    cairn done <ref> --resolution "<what was actually done>" [--kind fixed|verified|answered|…]
     cairn cancel <ref> --resolution "<why it is being dropped>" [--kind wont-fix]
     cairn done <ref> --duplicate-of CAI-31 --resolution "…"   points at the original
     cairn attach <ref> <file>      |   cairn files <ref>
@@ -1605,6 +1620,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
 
 const need = (v, msg) => (v === undefined || v === true ? die(msg) : v)
 
+const DEAD_END = /\b(tried|no change|didn['’]?t work|did not work|no effect|made no difference|ruled out|dead[- ]end)\b/i
+
 /** Shared by `done` and `cancel`: both close, and both must say how. */
 const closeTask = async (status, defaultKind) => {
   const verb = status === 'done' ? 'done' : 'cancel'
@@ -1618,7 +1635,37 @@ const closeTask = async (status, defaultKind) => {
     body.duplicateOf = flags['duplicate-of']
     body.resolutionKind = 'duplicate'
   }
-  emit(await request('PATCH', `/api/v1/tasks/${ref}`, body))
+  const closed = await request('PATCH', `/api/v1/tasks/${ref}`, body)
+  emit(closed)
+  if (FORMAT !== 'tsv' || status !== 'done') return
+
+  // `fixed` is a claim of authorship, and it was being recorded for audits
+  // and answers alike because it is what an omitted --kind means (CAIRN-148).
+  if (!flags.kind && !body.duplicateOf) {
+    process.stderr.write(
+      `recorded as fixed — use --kind verified|answered|not-reproducible|superseded if that is not what happened\n`,
+    )
+  }
+
+  // Said once, at the close, and only when nothing at all showed the work
+  // being done: the same predicate as the vitals finding (migration 054), so
+  // a sweep item with a commit against it, or one moved to in-review, is not
+  // nagged. A person is documented as never claiming, so only a runtime is.
+  if (!AGENT) return
+  const events = await request('GET', `/api/v1/tasks/${ref}/activity?limit=500`, undefined, { soft: true })
+  if (!Array.isArray(events)) return
+  const TRACE = new Set(['claimed', 'checkpointed', 'git_commit', 'git_push', 'run_result'])
+  const seen = events.some(
+    (e) =>
+      TRACE.has(e.event) ||
+      (e.event === 'status_changed' && !['done', 'cancelled'].includes(e.data?.to ?? '')),
+  )
+  if (!seen) {
+    process.stderr.write(
+      `${refOfTask(closed) ?? ref} was closed without ever being claimed — nobody could see it being worked. ` +
+        `Next time claim first (\`cairn add\` now claims for agents).\n`,
+    )
+  }
 }
 
 /** `from -> to`, or the raw keys, kept to one short cell. */
@@ -1792,19 +1839,53 @@ const commands = {
       .filter((w) => w.length > 3)
       .slice(0, 6)
     const probe = terms.length ? terms.join(' OR ') : title
+
+    /**
+     * An agent that files a task is, most of the time, about to do it.
+     *
+     * `--start` existed and was used on 37% of Claude Code's adds against 86%
+     * for Codex, and 35% of Claude Code's closes had never been claimed
+     * (CAIRN-294). A flag the caller has to remember is the discipline that
+     * already failed, so for a runtime the default flips; a person filing
+     * from a terminal is unchanged, as claim.ts already treats them.
+     *
+     * Not when this session already holds work in the project: that is a
+     * follow-up filed mid-task, and claiming it too puts a second task in
+     * `doing` that nobody is doing. Not when --status says where the task
+     * goes. Not when similar open work exists — below.
+     */
+    const optedOut = Boolean(flags['no-start'])
+    const autoStart = !flags.start && !optedOut && !flags.status && Boolean(AGENT)
     // Tasks only. "Has this already been filed" is a question about tasks, and
     // answering it with a session from three weeks ago is noise in front of the
     // one thing the agent is about to decide.
-    const dupes = await request(
-      'GET',
-      `/api/v1/search?${new URLSearchParams({ q: probe, kinds: 'task' })}`,
-    )
+    const [dupes, mine] = await Promise.all([
+      request('GET', `/api/v1/search?${new URLSearchParams({ q: probe, kinds: 'task' })}`),
+      autoStart
+        ? request('GET', `/api/v1/projects/${project}/tasks?mine=true&limit=5`, undefined, { soft: true })
+        : null,
+    ])
     if (dupes.results.length > 0) {
       process.stderr.write('similar existing work:\n')
       for (const r of dupes.results.slice(0, 3)) {
         process.stderr.write(`  ${r.ref} [${r.status}] ${r.title}\n`)
       }
     }
+    // The probe ORs the title's words, so nearly every add finds *something*.
+    // Holding the claim back on any hit would hold it back on every add; only
+    // an open task sharing most of the title's distinctive words counts.
+    const OPEN = new Set(['backlog', 'todo', 'doing', 'in-review'])
+    const wordsOf = (s) => new Set(String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3))
+    const mineWords = wordsOf(title)
+    const sameWork = (other) => {
+      const theirs = wordsOf(other)
+      const shared = [...mineWords].filter((w) => theirs.has(w)).length
+      return shared >= Math.max(2, Math.ceil(Math.min(mineWords.size, theirs.size) / 2))
+    }
+    const similarOpen = dupes.results
+      .slice(0, 3)
+      .find((r) => OPEN.has(r.status) && sameWork(r.title))
+    const holding = (mine?.tasks ?? []).find((t) => t.claimed_by && OPEN.has(t.status))
 
     const body = { title }
     if (described !== undefined) body.description = described
@@ -1820,6 +1901,30 @@ const commands = {
     if (flags.start) {
       const held = await request('POST', `/api/v1/tasks/${created.ref}/claim`, {})
       return emit({ ...created, status: held.status, claimed_by: held.claimed_by })
+    }
+    if (autoStart) {
+      // Filed either way. Claiming on top of a possible duplicate would put two
+      // tasks for one piece of work in `doing`, which is worse than neither.
+      if (similarOpen) {
+        process.stderr.write(
+          `NOT CLAIMED: ${similarOpen.ref} [${similarOpen.status}] looks like the same work. ` +
+            `Work that one, or \`cairn claim ${created.ref}\` if this really is new.\n`,
+        )
+      } else if (holding) {
+        process.stderr.write(
+          `not claimed: you already hold ${holding.project?.key ?? project}-${holding.number} here — ` +
+            `\`cairn claim ${created.ref}\` if you are switching to this now\n`,
+        )
+      } else {
+        // Soft: the task exists now, and a refused claim must not read as a
+        // failed add that the caller then retries into a duplicate.
+        const held = await request('POST', `/api/v1/tasks/${created.ref}/claim`, {}, { soft: true })
+        if (held) {
+          process.stderr.write(`claimed ${created.ref} (agents' adds start the work; --no-start to only file it)\n`)
+          return emit({ ...created, status: held.status, claimed_by: held.claimed_by })
+        }
+        process.stderr.write(`filed ${created.ref} but could not claim it — \`cairn claim ${created.ref}\`\n`)
+      }
     }
     emit(created)
   },
@@ -1907,6 +2012,15 @@ const commands = {
       kind: flags.kind ?? 'note',
     })
     emit(result)
+
+    // A hint, not a reclassification: the words are a guess, and only the
+    // writer knows. 19 of 1,469 Claude Code notes were `attempt` (CAIRN-294),
+    // while "tried X, no change" is exactly what the next agent needs flagged.
+    if (!flags.kind && FORMAT === 'tsv' && DEAD_END.test(note)) {
+      process.stderr.write(
+        `reads like a dead end — \`cairn note ${ref} "…" --kind attempt\` marks it so the next agent does not retry it\n`,
+      )
+    }
 
     // Said, not inferred. Writing a note used to claim the task, which put
     // work in `doing` that nobody was doing — annotating is most of what
