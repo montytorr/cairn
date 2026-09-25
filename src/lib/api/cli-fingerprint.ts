@@ -61,5 +61,27 @@ export const CLI_FINGERPRINT: string | null = (() => {
 
 export const CLI_HEADER = 'x-cairn-cli'
 
+/**
+ * When this image was built, so a CLI that disagrees with the fingerprint can
+ * tell which side is newer (CAIRN-290).
+ *
+ * A hash says two files differ and nothing about their order, and a copied
+ * CLI has no commit to compare. It does have an mtime — the moment the sync
+ * wrote it — so an image built after that is the newer side, and a CLI
+ * written after the image was built is almost always a merge that has not
+ * deployed yet. Written by the Dockerfile; absent outside an image, and an
+ * absent header leaves the client phrasing the drift neutrally.
+ */
+export const BUILT_AT: string | null = (() => {
+  try {
+    const recorded = readFileSync('public/build-time.txt', 'utf8').trim()
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(recorded) ? recorded : null
+  } catch {
+    return null
+  }
+})()
+
+export const BUILT_AT_HEADER = 'x-cairn-built-at'
+
 /** Exported for the Dockerfile's generator and for the test that pins them together. */
 export const fingerprintOf = (contents: Buffer | string) => digest(contents)

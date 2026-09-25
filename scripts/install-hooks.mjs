@@ -2,10 +2,18 @@
 /**
  * Wires Cairn's memory hooks into the agent runtimes on this machine.
  *
- * Three mechanisms, the same three everywhere:
+ * Two mechanisms, the same two everywhere:
  *   session start  -> inject the briefing
- *   read a file    -> inject what is known about it
  *   session end    -> record what happened, checkpoint what is still held
+ *
+ * There used to be a third, PreToolUse(Read) -> what is known about that file.
+ * It was taken out by hand on every machine (CCS-40): it had no cache and no
+ * debounce, so every Read in every session cost a node spawn and a fresh
+ * HTTPS request, and on Codex, which has no Read tool, it never matched at
+ * all. This installer went on writing it back, so it now removes it instead —
+ * only its own entry; anyone else's PreToolUse hooks are left where they are.
+ * The hook script still answers a PreToolUse event for anyone who wires it by
+ * hand.
  *
  * Idempotent: run it again after an upgrade and it replaces its own entries
  * without touching anyone else's. Every entry it owns is tagged, and tagging
@@ -119,6 +127,40 @@ const isMine = (hook) =>
   Boolean(hook?.[TAG]) ||
   (typeof hook?.command === 'string' && SCRIPT_NAMES.some((n) => hook.command.includes(n)))
 
+/**
+ * Take this installer's entries out of one event, and nothing else.
+ *
+ * `replace` below drops a whole group when any hook in it is ours, which is
+ * right when the group is about to be rewritten and wrong for a removal: a
+ * group can hold someone else's hook beside ours. So strip hook by hook, drop
+ * only the groups this leaves empty, and the event key only when nothing is
+ * left under it. Idempotent: an event with nothing of ours is untouched.
+ */
+const strip = (hooks, event) => {
+  if (!Array.isArray(hooks[event])) return false
+  let removed = false
+  const groups = hooks[event]
+    .map((g) => {
+      const kept = (g.hooks ?? []).filter((h) => !isMine(h))
+      if (kept.length === (g.hooks ?? []).length) return g
+      removed = true
+      return kept.length > 0 ? { ...g, hooks: kept } : null
+    })
+    .filter(Boolean)
+  if (!removed) return false
+  if (groups.length > 0) hooks[event] = groups
+  else delete hooks[event]
+  return true
+}
+
+/** Every hook in a file that is not this installer's, as `event: command`. */
+const foreignHooks = (hooks) =>
+  Object.entries(hooks ?? {}).flatMap(([event, groups]) =>
+    (Array.isArray(groups) ? groups : []).flatMap((g) =>
+      (g.hooks ?? []).filter((h) => !isMine(h)).map((h) => ({ event, command: String(h.command ?? '?') })),
+    ),
+  )
+
 const isSafeHookCli = (value) => /^[A-Za-z0-9_./:+-]+$/.test(value)
 
 const canonicalHermesHooks = (hooks) =>
@@ -178,14 +220,15 @@ const installClaude = () => {
   }
 
   replace('SessionStart', 'startup|resume|clear|compact', mine(`node ${CONTEXT}`, { timeout: 10 }))
-  replace('PreToolUse', 'Read', mine(`node ${CONTEXT}`, { timeout: 10, async: true }))
+  const unwired = strip(settings.hooks, 'PreToolUse')
   replace('SessionEnd', null, mine(`node ${SESSION_END}`, { timeout: 120, async: true }))
   // No matcher: both `manual` and `auto` compactions are the same event to us,
   // and naming them would only add a spelling to get wrong.
   replace('PreCompact', null, mine(`node ${SESSION_END}`, { timeout: 120, async: true }))
 
   if (writeJson(path, settings, before)) {
-    log('  claude: SessionStart, PreToolUse(Read), SessionEnd, PreCompact')
+    log('  claude: SessionStart, SessionEnd, PreCompact')
+    if (unwired) log('  claude: removed the per-Read PreToolUse hook (CCS-40)')
   }
 }
 
@@ -220,17 +263,32 @@ const installCodex = () => {
   const env = 'CAIRN_AGENT=codex CAIRN_PLATFORM=codex'
 
   replace('SessionStart', 'startup|resume|clear', mine(`${env} node ${CONTEXT}`, { timeout: 10 }))
-  replace('PreToolUse', 'Read', mine(`${env} node ${CONTEXT}`, { timeout: 10, async: true }))
+  const unwired = strip(config.hooks, 'PreToolUse')
   replace('Stop', null, mine(`${env} node ${SESSION_END}`, { timeout: 120, async: true }))
 
   // The trust warning is printed only when the file actually moved. Printed
   // every run it is wallpaper, and the one run where it matters reads the same
   // as the twenty where it did not.
   if (writeJson(path, config, before)) {
-    log('  codex: SessionStart, PreToolUse(Read), Stop')
+    log('  codex: SessionStart, Stop')
+    if (unwired) log('  codex: removed the per-Read PreToolUse hook (CCS-40)')
     log('  codex: entries must be trusted on next launch — [hooks.state] in config.toml')
     log('  codex: needs CAIRN_API_KEY_CODEX in ~/.cairn/env, or it writes as whoever')
     log('         owns the plain CAIRN_API_KEY there')
+  }
+
+  // Said, never done. These are somebody else's hooks, and this installer has
+  // no business removing them — but Codex has no SessionEnd, so anything on
+  // Stop runs after EVERY turn, and a session-end script written for Claude
+  // Code that makes a model call becomes one billed call per turn. That is
+  // what Quarry's hook did here after CCS-40 took it out of Claude Code only
+  // (CAIRN-290), and nothing said so.
+  const foreign = foreignHooks(config.hooks)
+  if (foreign.length > 0) {
+    log(`  codex: ${foreign.length} hook(s) in ${path} are not Cairn's — left untouched:`)
+    for (const { event, command } of foreign) {
+      log(`         ${event}${event === 'Stop' ? ' (runs every turn)' : ''}: ${command}`)
+    }
   }
 }
 

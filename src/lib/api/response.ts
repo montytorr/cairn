@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { version as RELEASE } from '../../../package.json'
-import { CLI_FINGERPRINT, CLI_HEADER } from './cli-fingerprint'
+import { BUILT_AT, BUILT_AT_HEADER, CLI_FINGERPRINT, CLI_HEADER } from './cli-fingerprint'
 
 /**
  * Every response says which version served it, so a stale CLI can notice
@@ -27,6 +27,7 @@ const withVersion = (init?: ResponseInit): ResponseInit => {
   // Absent rather than empty when the deployment cannot work out its own CLI:
   // a client comparing against nothing must stay quiet, not guess.
   if (CLI_FINGERPRINT) headers.set(CLI_HEADER, CLI_FINGERPRINT)
+  if (BUILT_AT) headers.set(BUILT_AT_HEADER, BUILT_AT)
   return { ...init, headers }
 }
 

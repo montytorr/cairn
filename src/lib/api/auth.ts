@@ -28,6 +28,17 @@ export type Actor = {
    * because Codex and OpenClaw may not have one to give.
    */
   sessionId: string | null
+  /**
+   * Which machine the caller says it is on, when it says (CAIRN-290).
+   *
+   * Key names are per runtime, not per machine, so a laptop and a server
+   * write the same `actorId` and a misattributed write cannot be traced to
+   * the box that made it. `actorId` is left alone — it is the join key for
+   * the whole history — and the host is recorded beside it wherever a row
+   * already has a jsonb column for it. Self-reported, so it is a diagnostic,
+   * never an authorization input.
+   */
+  host?: string | null
 }
 
 /**
@@ -42,6 +53,13 @@ const sessionOf = (req: Request): string | null => {
   const raw = req.headers.get('x-cairn-session')?.trim()
   if (!raw || raw.length > 100) return null
   return /^[A-Za-z0-9._:-]+$/.test(raw) ? raw : null
+}
+
+/** Same filter as the session id, for the same reason: it is stored and shown. */
+export const hostOf = (req: Request): string | null => {
+  const raw = req.headers.get('x-cairn-host')?.trim()
+  if (!raw || raw.length > 100) return null
+  return /^[A-Za-z0-9._-]+$/.test(raw) ? raw : null
 }
 
 const bearerToken = (req: Request): string | null => {
@@ -110,6 +128,7 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
       role: data.role,
       rateKey: `key:${data.id}`,
       sessionId: sessionOf(req),
+      host: hostOf(req),
     }
   }
 

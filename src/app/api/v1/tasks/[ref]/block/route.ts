@@ -41,7 +41,7 @@ export const POST = route<{ ref: string }, z.infer<typeof blockBody>>({
       actor_type: actor.actorType,
       actor_id: actor.actorId,
       event: blocking ? 'blocked' : 'unblocked',
-      data: { reason: body.reason ?? null },
+      data: { reason: body.reason ?? null, ...(actor.host ? { host: actor.host } : {}) },
     })
 
     return ok(data)

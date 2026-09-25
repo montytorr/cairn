@@ -21,7 +21,7 @@ const detect = (env: Record<string, string | undefined>) => {
   if (/openclaw/i.test(codexHome)) return 'openclaw'
   if (Object.keys(env).some((name) => name.startsWith('OPENCLAW_'))) return 'openclaw'
   if (codexHome || env.CODEX_SANDBOX) return 'codex'
-  if (env.CODEX_MANAGED_BY_NPM || env.CODEX_MANAGED_PACKAGE_ROOT) return 'codex'
+  if (env.CODEX_THREAD_ID || env.CODEX_MANAGED_BY_NPM || env.CODEX_MANAGED_PACKAGE_ROOT) return 'codex'
   return ''
 }
 

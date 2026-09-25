@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { version as RELEASE } from '../../../../../package.json'
 import { ok } from '@/lib/api/response'
+import { BUILT_AT } from '@/lib/api/cli-fingerprint'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,5 +41,6 @@ export const GET = () =>
     // whether their fix is live.
     version: RELEASE,
     build,
+    builtAt: BUILT_AT,
     time: new Date().toISOString(),
   })
