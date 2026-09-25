@@ -129,6 +129,24 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **Recorded sessions get a project** (CAIRN-286). 389 of 389 live sessions had none: the
+  server only used a key the caller sent, and neither the hook nor `cairn session end` sent
+  one. `session end` now resolves it like `cairn context` — the `~/.cairn/projects.json` map —
+  and sends the checkout's `origin`; the server falls back to the remote via `project_repos`,
+  then to sessions already attributed in the same cwd, then to a checkout directory named like
+  exactly one project's repository, so older CLIs and the OpenClaw sweep are covered. Existing
+  rows need a one-off backfill (see the PR).
+- **The summariser is never recorded as a session, and its failures are logged and retried**
+  (CAIRN-287). 46% of Mac Claude rows were summariser child runs. The hook now exits under
+  `QUARRY_SUMMARISER` and `AGENT_MEMORY_SUMMARISER` as well as `CAIRN_SUMMARISER`, sets all
+  three in its own child, runs it with `--no-session-persistence` from a scratch directory
+  (retrying without the flag on a CLI that predates it), and skips any transcript that opens
+  with a summariser prompt unless a person spoke after it. Failures go to
+  `~/.cairn/summariser.log` with the summariser's own error, the session is queued in
+  `~/.cairn/unsummarised.json`, and the next hook run with a working summariser re-summarises
+  up to two queued sessions (four tries, 48 hours) without re-checkpointing held tasks. With no
+  summary, `request` is the first real thing a person typed — not a skill expansion, `hello`,
+  or OpenClaw's `[OpenClaw conversation info: …]` wrapper, which is now stripped.
 - **Both boards stop at the viewport and scroll per column** (CAIRN-277, CAIRN-278). `/board`
   and a project's Board view grew with their tallest column, so the page scrolled as a whole
   and the toolbar and column headings scrolled away with it. Each column is now a panel as

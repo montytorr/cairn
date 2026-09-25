@@ -1,5 +1,6 @@
 import { admin } from '@/lib/db/client'
 import { resolveProject } from './project-keys'
+import { projectForCheckoutName, projectForCwd, projectForRepo } from './project-resolution'
 import type { Actor } from './auth'
 import { actorLabel } from './actor'
 import type { SessionUpsert } from '@/schemas/session'
@@ -51,9 +52,38 @@ export type SessionRow = {
  * Live or retired: a session recorded from a checkout still mapped to AC
  * belongs to the project AC became, not to no project at all (CAIRN-264).
  */
-const projectIdForKey = async (_userId: string, key?: string): Promise<string | null> => {
+const projectIdForKey = async (_userId: string, key?: string | null): Promise<string | null> => {
   if (!key) return null
   return (await resolveProject(key))?.project.id ?? null
+}
+
+/**
+ * The same order `cairn context` uses: the caller's key, then the remote, then
+ * the directory.
+ *
+ * This used to be the key alone, and nothing sent one — the hook never passed
+ * `--project` and `cairn session end` never looked it up — so 389 of 389 live
+ * sessions landed with no project, `session list --project` was empty and the
+ * briefing's "last session here" never answered (CAIRN-286). Current CLIs
+ * resolve it themselves; this covers the ones already installed, and a sweep
+ * whose checkout has no map entry.
+ */
+const projectIdForSession = async (
+  userId: string,
+  input: Pick<SessionUpsert, 'project' | 'repo' | 'cwd'>,
+): Promise<string | null> => {
+  const explicit = await projectIdForKey(userId, input.project)
+  if (explicit) return explicit
+  // Inference, so a failed lookup costs the attribution and never the row.
+  try {
+    const key =
+      (input.repo ? await projectForRepo(userId, input.repo) : null) ??
+      (input.cwd ? await projectForCwd(userId, input.cwd) : null) ??
+      (input.cwd ? await projectForCheckoutName(userId, input.cwd) : null)
+    return await projectIdForKey(userId, key)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -224,7 +254,7 @@ const keepRealRefs = async (_userId: string, refs: string[]): Promise<string[]> 
 }
 
 export const upsertSession = async (actor: Actor, input: SessionUpsert) => {
-  const projectId = await projectIdForKey(actor.userId, input.project)
+  const projectId = await projectIdForSession(actor.userId, input)
   const taskRefs = await keepRealRefs(actor.userId, input.taskRefs)
 
   const row = {
