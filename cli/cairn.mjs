@@ -661,6 +661,7 @@ const TEST_CRASH_AFTER_SEND = process.env.CAIRN_TEST_CRASH_AFTER_SEND === '1'
 const TEST_FAIL_PERSIST_AFTER_SEND = process.env.CAIRN_TEST_FAIL_PERSIST_AFTER_SEND === '1'
 const TEST_CRASH_AFTER_RENAME_BEFORE_STATE = process.env.CAIRN_TEST_CRASH_AFTER_RENAME_BEFORE_STATE === '1'
 const TEST_FAIL_REJECT_PERSIST = process.env.CAIRN_TEST_FAIL_REJECT_PERSIST === '1'
+const TEST_ENQUEUE_DURING_REPLAY = process.env.CAIRN_TEST_ENQUEUE_DURING_REPLAY ?? ''
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -740,6 +741,8 @@ const replayContext = (item) => {
   if (!item.id) return 'no id'
   if (item.base !== BASE || item.agent !== AGENT) {
     const age = Date.now() - Date.parse(item.t)
+    // No readable queued-at time would otherwise keep it forever.
+    if (!Number.isFinite(age)) return 'no queued-at time'
     return age > FOREIGN_OUTBOX_TTL_MS
       ? 'no process for its runtime and instance replayed it in 30 days'
       : 'foreign'
@@ -759,11 +762,31 @@ const processingOwnerIsDead = (name) => {
   }
 }
 
+/**
+ * Whether a queue file holds anything this process would act on. Another
+ * runtime's writes can wait here for days; draining them just to put them back
+ * would turn every write and every checkpoint into a full replay cycle.
+ */
+const holdsReplayable = (path) => {
+  try {
+    return readFileSync(path, 'utf8').split('\n').filter(Boolean).some((line) => {
+      try {
+        return replayContext(JSON.parse(line)) !== 'foreign'
+      } catch {
+        return true // quarantined by replay
+      }
+    })
+  } catch {
+    return false
+  }
+}
+
 const hasReplayableOutbox = () => {
   try {
-    return readdirSync(dirname(OUTBOX_PATH)).some((name) =>
-      name === basename(OUTBOX_PATH) ||
-      name.startsWith(`${OUTBOX_PREFIX}pending-`) ||
+    const dir = dirname(OUTBOX_PATH)
+    return readdirSync(dir).some((name) =>
+      ((name === basename(OUTBOX_PATH) || name.startsWith(`${OUTBOX_PREFIX}pending-`)) &&
+        holdsReplayable(join(dir, name))) ||
       (name.startsWith(`${OUTBOX_PREFIX}processing-`) && !name.endsWith('.tmp') && !name.endsWith('.ack')) ||
       name.startsWith(`${OUTBOX_PREFIX}ack-`),
     )
@@ -931,7 +954,16 @@ const flushOutbox = async () => {
     const left = [...kept, ...lines.slice(index)]
     if (left.length > 0) {
       try {
-        await withOutboxLock(() => appendFileSync(OUTBOX_PATH, `${left.join('\n')}\n`, { mode: 0o600 }))
+        // In front of whatever was queued while this replay ran: those are
+        // newer, and a checkpoint sent ahead of an older one breaks its sequence.
+        await withOutboxLock(() => {
+          if (TEST_ENQUEUE_DURING_REPLAY) appendFileSync(OUTBOX_PATH, `${TEST_ENQUEUE_DURING_REPLAY}\n`, { mode: 0o600 })
+          let newer = ''
+          try { newer = readFileSync(OUTBOX_PATH, 'utf8') } catch { /* nothing queued meanwhile */ }
+          const temp = `${OUTBOX_PATH}.requeue.tmp`
+          writeFileSync(temp, `${left.join('\n')}\n${newer}`, { mode: 0o600 })
+          renameSync(temp, OUTBOX_PATH)
+        })
       } catch {
         continue
       }
@@ -1223,6 +1255,8 @@ const pendingCheckpointCount = (path, ownershipVersion) => {
         try {
           const item = JSON.parse(line)
           if (
+            item.base === BASE &&
+            item.agent === AGENT &&
             item.path?.split('?')[0] === endpoint &&
             item.body?.ownershipVersion === ownershipVersion
           ) count += 1
