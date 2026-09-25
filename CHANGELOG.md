@@ -11,6 +11,15 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **One runtime's queued writes no longer quarantine another's** (CAIRN-298). Every runtime
+  on a machine shares `~/.cairn/outbox.jsonl`, and replay moved any item it had not queued
+  itself to `outbox.jsonl.rejected`, so a Codex drain threw away notes Claude Code had queued
+  during an outage and the reverse. Such an item now waits for its own runtime (or instance),
+  and is quarantined only after 30 days nobody replayed it. A write queued under a key its
+  runtime no longer holds is still refused, as before. `cairn replay` says how many are waiting.
+  Two things this exposed are fixed with it: writes put back after a replay now go in front
+  of anything queued meanwhile, so a checkpoint is never sent ahead of an older one; and a
+  queue holding only other runtimes' writes no longer sets off a replay on every command.
 - **`relearn` can move a fact from a project to an entity** (CAIRN-295). A scope flag only
   touches its own side, so `--entity X` added an entity and kept the project, and nothing
   could clear one side alone: `--project ""` was read as "not given" and dropped without a

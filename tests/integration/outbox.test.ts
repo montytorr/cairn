@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -127,6 +127,137 @@ describe('durable CLI outbox', () => {
     expect(received).toHaveLength(0)
     const rejected = await readFile(join(home, '.cairn', 'outbox.jsonl.rejected'), 'utf8')
     expect(rejected).toContain('replay context mismatch')
+    expect(rejected).toContain('a key this runtime no longer uses')
+  })
+
+  /**
+   * One outbox serves every runtime on the machine. Claude Code and Codex on
+   * the same Mac used to quarantine each other's queued writes: whichever
+   * drained first rejected the other's as a "mismatch", and the note never
+   * arrived. It is somebody else's write, not a bad one.
+   */
+  it("leaves another runtime's queued write for that runtime to send", async () => {
+    await run(home, base, ['comment', 'CAIRN-163', 'queued by claude'], 'crn_claude', { CAIRN_AGENT: 'claude-code' })
+    mode = 'success'
+
+    const codex = await run(home, base, ['replay'], 'crn_codex', { CAIRN_AGENT: 'codex' })
+    expect(codex.stdout).toContain('sent 0, rejected 0, still queued 1 (1 for another runtime or instance)')
+    expect(received).toHaveLength(0)
+
+    const claude = await run(home, base, ['replay'], 'crn_claude', { CAIRN_AGENT: 'claude-code' })
+    expect(claude.stdout).toContain('sent 1, rejected 0, still queued 0')
+    expect(received).toHaveLength(1)
+    expect(received[0]?.body).toContain('queued by claude')
+  })
+
+  it('leaves a write queued for another instance in place while draining its own', async () => {
+    await run(home, base, ['comment', 'CAIRN-163', 'mine'])
+    const outbox = join(home, '.cairn', 'outbox.jsonl')
+    const own = (await readFile(outbox, 'utf8')).trim()
+    const other = { ...JSON.parse(own), id: 'other-instance-item', base: 'http://127.0.0.1:9', body: { body: 'theirs' } }
+    await writeFile(outbox, `${own}\n${JSON.stringify(other)}\n`)
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'])
+    expect(replay.stdout).toContain('sent 1, rejected 0, still queued 1')
+    expect(received.map((r) => r.body).join()).not.toContain('theirs')
+    expect(await readFile(outbox, 'utf8')).toContain('other-instance-item')
+  })
+
+  const foreignItem = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    t: new Date().toISOString(),
+    method: 'POST',
+    path: '/api/v1/tasks/CAIRN-163/comments',
+    body: { body: id },
+    agent: 'claude-code',
+    base,
+    keyId: 'x',
+    ...extra,
+  })
+
+  /**
+   * Kept writes used to be appended back, landing behind anything queued while
+   * the replay ran: a checkpoint could then be sent ahead of an older one.
+   */
+  it('puts kept writes back in front of anything queued while the replay ran', async () => {
+    const outbox = join(home, '.cairn', 'outbox.jsonl')
+    await mkdir(join(home, '.cairn'), { recursive: true })
+    await writeFile(outbox, `${JSON.stringify(foreignItem('older'))}\n`)
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'], undefined, {
+      CAIRN_TEST_ENQUEUE_DURING_REPLAY: JSON.stringify(foreignItem('newer')),
+    })
+    expect(replay.code).toBe(0)
+    const ids = (await readFile(outbox, 'utf8')).trim().split('\n').map((line) => JSON.parse(line).id)
+    expect(ids).toEqual(['older', 'newer'])
+  })
+
+  it('does not drain a queue that holds only other runtimes\' writes', async () => {
+    const outbox = join(home, '.cairn', 'outbox.jsonl')
+    await mkdir(join(home, '.cairn'), { recursive: true })
+    await writeFile(outbox, `${JSON.stringify(foreignItem('theirs'))}\n`)
+    const before = await stat(outbox)
+    mode = 'success'
+
+    const write = await run(home, base, ['comment', 'CAIRN-163', 'mine'])
+    expect(write.code).toBe(0)
+    const after = await stat(outbox)
+    expect(after.ino).toBe(before.ino)
+    expect(after.mtimeMs).toBe(before.mtimeMs)
+    expect(received.map((r) => r.body).join()).not.toContain('theirs')
+  })
+
+  it('does not let another runtime\'s queued checkpoint shift this one\'s sequence', async () => {
+    const ownershipDir = join(home, '.cairn', 'ownership')
+    await mkdir(ownershipDir, { recursive: true })
+    await writeFile(
+      join(ownershipDir, 'CAIRN-163.json'),
+      JSON.stringify({ ownershipVersion: 7, checkpointVersion: 3, agent: 'integration-agent' }),
+    )
+    const theirs = foreignItem('their-checkpoint', {
+      path: '/api/v1/tasks/CAIRN-163/checkpoint',
+      body: { summary: 'theirs', ownershipVersion: 7, checkpointVersion: 3 },
+    })
+    await writeFile(join(home, '.cairn', 'outbox.jsonl'), `${JSON.stringify(theirs)}\n`)
+
+    await run(home, base, ['checkpoint', 'CAIRN-163', '--summary', 'mine'])
+    const lines = (await readFile(join(home, '.cairn', 'outbox.jsonl'), 'utf8')).trim().split('\n')
+    const mine = lines.map((line) => JSON.parse(line)).find((item) => item.body.summary === 'mine')
+    expect(mine?.body.checkpointVersion).toBe(3)
+  })
+
+  it('quarantines a foreign write with no readable queued-at time instead of keeping it forever', async () => {
+    await mkdir(join(home, '.cairn'), { recursive: true })
+    await writeFile(join(home, '.cairn', 'outbox.jsonl'), `${JSON.stringify(foreignItem('timeless', { t: undefined }))}\n`)
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'])
+    expect(replay.stdout).toContain('sent 0, rejected 1, still queued 0')
+    const rejected = await readFile(join(home, '.cairn', 'outbox.jsonl.rejected'), 'utf8')
+    expect(rejected).toContain('no queued-at time')
+  })
+
+  it('quarantines a foreign write nobody has replayed in 30 days, so the queue cannot grow forever', async () => {
+    await mkdir(join(home, '.cairn'), { recursive: true })
+    const stale = {
+      id: 'stale-item',
+      t: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString(),
+      method: 'POST',
+      path: '/api/v1/tasks/CAIRN-163/comments',
+      body: { body: 'abandoned' },
+      agent: 'retired-runtime',
+      base,
+      keyId: 'x',
+    }
+    await writeFile(join(home, '.cairn', 'outbox.jsonl'), `${JSON.stringify(stale)}\n`)
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'])
+    expect(replay.stdout).toContain('sent 0, rejected 1, still queued 0')
+    const rejected = await readFile(join(home, '.cairn', 'outbox.jsonl.rejected'), 'utf8')
+    expect(rejected).toContain('in 30 days')
   })
 
   it('serializes concurrent replay workers without duplicating side effects', async () => {
