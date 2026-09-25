@@ -724,6 +724,29 @@ const enqueue = async (method, path, body, why) => {
   return { queued: true, path }
 }
 
+const FOREIGN_OUTBOX_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * Whose queued write this is, decided before anything is sent.
+ *
+ * One outbox serves every runtime on the machine, so a write Claude Code
+ * queued is routinely found by a Codex process draining after its own
+ * success. That is not a mismatch to punish: it is somebody else's write, and
+ * it waits for its own runtime. Only a write this runtime queued under a key
+ * it no longer holds is refused — replaying it under the new key would sign
+ * it with an identity that did not make it.
+ */
+const replayContext = (item) => {
+  if (!item.id) return 'no id'
+  if (item.base !== BASE || item.agent !== AGENT) {
+    const age = Date.now() - Date.parse(item.t)
+    return age > FOREIGN_OUTBOX_TTL_MS
+      ? 'no process for its runtime and instance replayed it in 30 days'
+      : 'foreign'
+  }
+  return item.keyId === KEY_ID ? 'own' : 'queued under a key this runtime no longer uses'
+}
+
 /** A crashed replay worker must not strand its claimed file for a minute. */
 const processingOwnerIsDead = (name) => {
   const pid = Number(new RegExp(`^${OUTBOX_PREFIX.replaceAll('.', '\\.') }processing-(\\d+)-`).exec(name)?.[1])
@@ -761,6 +784,7 @@ const flushOutbox = async () => {
   requireKey()
   let sent = 0
   let rejected = 0
+  let waiting = 0
   const claimId = `${process.pid}-${randomUUID()}`
   let claimed = []
   try {
@@ -805,7 +829,7 @@ const flushOutbox = async () => {
       return paths
     })
   } catch {
-    return { sent: 0, rejected: 0, left: existsSync(OUTBOX_PATH) ? 1 : 0 }
+    return { sent: 0, rejected: 0, left: existsSync(OUTBOX_PATH) ? 1 : 0, waiting: 0 }
   }
 
   const reject = (entry) => {
@@ -821,6 +845,7 @@ const flushOutbox = async () => {
     } catch {
       continue
     }
+    const kept = []
     let index = 0
     for (; index < lines.length; index += 1) {
     let item
@@ -834,9 +859,15 @@ const flushOutbox = async () => {
       }
       continue
     }
-    if (!item.id || item.base !== BASE || item.agent !== AGENT || item.keyId !== KEY_ID) {
+    const context = replayContext(item)
+    if (context === 'foreign') {
+      kept.push(lines[index])
+      waiting += 1
+      continue
+    }
+    if (context !== 'own') {
       try {
-        reject({ rejectedAt: new Date().toISOString(), reason: 'replay context mismatch', item })
+        reject({ rejectedAt: new Date().toISOString(), reason: `replay context mismatch: ${context}`, item })
       } catch {
         break
       }
@@ -878,7 +909,7 @@ const flushOutbox = async () => {
         break
       }
     }
-    const remaining = lines.slice(index + 1)
+    const remaining = [...kept, ...lines.slice(index + 1)]
     const temp = `${processingPath}.tmp`
     if (TEST_FAIL_PERSIST_AFTER_SEND) throw new Error('test failpoint: replay persistence failed')
     const isCheckpoint = item.path.split('?')[0].endsWith('/checkpoint')
@@ -897,7 +928,7 @@ const flushOutbox = async () => {
     }
   }
 
-    const left = lines.slice(index)
+    const left = [...kept, ...lines.slice(index)]
     if (left.length > 0) {
       try {
         await withOutboxLock(() => appendFileSync(OUTBOX_PATH, `${left.join('\n')}\n`, { mode: 0o600 }))
@@ -913,7 +944,7 @@ const flushOutbox = async () => {
   for (const path of claimed) if (existsSync(path)) {
     try { left += readFileSync(path, 'utf8').split('\n').filter(Boolean).length } catch { /* retry later */ }
   }
-  return { sent, rejected, left }
+  return { sent, rejected, left, waiting }
 }
 
 /**
@@ -2797,7 +2828,10 @@ const commands = {
       lines: (d) =>
         d.sent + d.rejected + d.left === 0
           ? ['nothing queued']
-          : [`sent ${d.sent}, rejected ${d.rejected}, still queued ${d.left}`],
+          : [
+              `sent ${d.sent}, rejected ${d.rejected}, still queued ${d.left}` +
+                (d.waiting ? ` (${d.waiting} for another runtime or instance)` : ''),
+            ],
     })
   },
 
