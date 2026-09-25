@@ -241,6 +241,6 @@ TSV by default (`#count`, a header, rows); `--json` to parse, `--pretty` for a h
 `cairn --help` is the reference. `replay` sends writes queued offline. `task delete <ref>
 --confirm <ref>` is for junk only; `cancel` keeps the record and the reason.
 
-Requires `cairn` on PATH with `CAIRN_BASE_URL` / `CAIRN_API_KEY` (or `~/.cairn/env`). A
-machine running several runtimes has a key each (`CAIRN_API_KEY_CLAUDE_CODE`,
-`CAIRN_API_KEY_CODEX`, …), because the key is who wrote a thing.
+Requires `cairn` on PATH and a key per runtime (`~/.cairn/env`): the key is who wrote a thing.
+**Exit 10: several Cairn instances, none known here.** Ask the user which, run the `cairn
+route add …` it prints, retry. Never pick one yourself.

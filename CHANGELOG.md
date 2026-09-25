@@ -11,6 +11,8 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **`cairn instance add` no longer deletes saved routes** (CAIRN-302). It rebuilt `instances.json`
+  from the instances alone, so adding one deleted the routes.
 - **One runtime's queued writes no longer quarantine another's** (CAIRN-298). Every runtime
   on a machine shares `~/.cairn/outbox.jsonl`, and replay moved any item it had not queued
   itself to `outbox.jsonl.rejected`, so a Codex drain threw away notes Claude Code had queued
@@ -35,6 +37,10 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Setup asks whether to use a default instance or ask** (CAIRN-302). Adding a second
+  instance at a terminal asks what a directory with no route should do; `cairn instance
+  policy ask | default <name>` changes it later. The skill tells agents what exit 10 means:
+  ask the user, save the answer with the `route add` the CLI prints, retry.
 - **Maintenance runs once per instance** (CAIRN-301). `reconcile` and `vitals` take
   `--all-instances`, which install-cron now passes: one run per instance under its own
   maintenance key, and exactly the old single run on a one-instance machine; `--json` gives one
