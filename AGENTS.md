@@ -82,7 +82,7 @@ cairn release ACME-42      # or: cairn done ACME-42 --resolution "..."
 - **A resolution is refused unless the status is closing.**
 - A claim is execution state: a task can be `doing` and unclaimed (a human is on it).
 - `claim` failing means someone holds it: pick different work. A lease goes stale after
-  15 minutes of silence and can be taken over; two hours returns the task to `todo`.
+  15 silent minutes and can be taken over; two hours releases it (doing → todo).
 - Leave a `checkpoint` before you stop. Notes and checkpoints survive a release, and the
   checkpoint is the only part that tells whoever picks it up where you got to.
 

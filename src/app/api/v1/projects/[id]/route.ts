@@ -93,7 +93,7 @@ const recordProjectChanges = async (
       events.push({ ...base, event: 'project_restored', data: { key, to: body.status } })
     }
   }
-  await recordActivity(events, actor.userId)
+  await recordActivity(events, actor.userId, actor.host)
 }
 
 export const PATCH = route<{ id: string }, z.infer<typeof updateProject>>({
@@ -209,7 +209,7 @@ export const DELETE = route<{ id: string }>({
         event: 'project_deleted',
         data: { key: project.key, title: project.title, tasks: count ?? 0 },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     const { error } = await admin().from('projects').delete().eq('id', project.id)
     if (error) return failFromDb(error)

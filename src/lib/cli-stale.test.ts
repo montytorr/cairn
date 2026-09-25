@@ -66,12 +66,12 @@ describe('a stale CLI on the ordinary path', () => {
       await import('node:fs').then((fs) => fs.readFileSync('package.json', 'utf8')),
     )
     const { stderr } = await runCli(await serve(version))
-    expect(stderr).not.toContain('run scripts/sync-agent-files.mjs')
+    expect(stderr).not.toMatch(/than the server|CLI and server differ/)
   })
 
   it('stays quiet when the server sends no version at all', async () => {
     const { stderr } = await runCli(await serve(null))
-    expect(stderr).not.toContain('run scripts/sync-agent-files.mjs')
+    expect(stderr).not.toMatch(/than the server|CLI and server differ/)
   })
 })
 
@@ -91,18 +91,18 @@ describe('a CLI that is the right release and the wrong file', () => {
   it('says so when the release agrees and the fingerprint does not', async () => {
     const { stdout, stderr } = await runCli(await serve(release(), '0123456789abcdef'))
     expect(stderr).toContain('0123456789abcdef')
-    expect(stderr).toContain('run scripts/sync-agent-files.mjs')
+    expect(stderr).toContain('CLI and server differ')
     expect(stdout).not.toContain('0123456789abcdef')
   })
 
   it('stays quiet when the fingerprint is the file it is running', async () => {
     const { stderr } = await runCli(await serve(release(), ownFingerprint()))
-    expect(stderr).not.toContain('run scripts/sync-agent-files.mjs')
+    expect(stderr).not.toMatch(/than the server|CLI and server differ/)
   })
 
   it('stays quiet when the server offers no fingerprint', async () => {
     const { stderr } = await runCli(await serve(release(), null))
-    expect(stderr).not.toContain('run scripts/sync-agent-files.mjs')
+    expect(stderr).not.toMatch(/than the server|CLI and server differ/)
   })
 
   /**
@@ -114,7 +114,7 @@ describe('a CLI that is the right release and the wrong file', () => {
     const { stderr } = await runCli(await serve('9.9.9', '0123456789abcdef'))
     expect(stderr).toContain('9.9.9')
     expect(stderr).not.toContain('0123456789abcdef')
-    expect(stderr.match(/run scripts\/sync-agent-files\.mjs/g)).toHaveLength(1)
+    expect(stderr.match(/older than the server/g)).toHaveLength(1)
   })
 
   /**

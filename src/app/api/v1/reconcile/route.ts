@@ -11,8 +11,9 @@ const reconcileBody = z.object({
 })
 
 /**
- * Releases this agent's own abandoned claims. Never anyone else's, and never
- * closes anything — an unresolved task that looks answered is worse than one
+ * Releases abandoned claims: the caller's own, or — for the maintenance key
+ * the scheduled sweep runs as — every quiet claim in the workspace. Never
+ * closes anything; an unresolved task that looks answered is worse than one
  * that is plainly still open.
  */
 export const POST = route({

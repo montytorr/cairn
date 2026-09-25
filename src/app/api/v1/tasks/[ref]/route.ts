@@ -284,7 +284,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       })
     }
 
-    await recordActivity(diffTaskEvents(actor, task.id, task, patch), actor.userId)
+    await recordActivity(diffTaskEvents(actor, task.id, task, patch), actor.userId, actor.host)
 
     // The withdrawn answer, kept where history can still show it.
     if (reopening && task.resolution) {
@@ -299,7 +299,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
             resolution: String(task.resolution).slice(0, 2000),
           },
         },
-      ], actor.userId)
+      ], actor.userId, actor.host)
     }
 
     return ok(alsoProjects ? { ...data, alsoProjects } : data)
@@ -419,7 +419,7 @@ export const DELETE = route<{ ref: string }>({
         event: 'task_deleted',
         data: { ref, title: String(task.title ?? '').slice(0, 200) },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     /**
      * Every event this task leaves behind gets its ref, while the ref is still

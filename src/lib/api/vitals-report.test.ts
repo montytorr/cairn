@@ -22,7 +22,7 @@ vi.mock('@/lib/db/client', () => ({
   admin: () => ({ rpc: mocks.rpc }),
 }))
 
-import { readVitals } from './vitals'
+import { assess, readVitals } from './vitals'
 import type { Actor } from './auth'
 
 const actor = { userId: 'user-1' } as Actor
@@ -47,12 +47,32 @@ const memoryPayload = {
   recentMisses: ['vitals closure predicate'],
 }
 
+const signalsPayload = {
+  windowHours: 24,
+  // The summariser's own two runs, taken out of the totals cairn_vitals counted.
+  sessions: {
+    recent: 4,
+    recentSummarised: 4,
+    baseline: 38,
+    baselineSummarised: 30,
+    summariserRecent: 2,
+    summariserBaseline: 2,
+  },
+  runtimes: [],
+  claims: { held: 2, quiet2h: 0, quiet24h: 0, quietest: [] },
+  reaper: { releasedInWindow: 0, released7d: 1, lastReleaseAt: null, maintenanceLastWriteAt: null },
+  absentAgents: [],
+  knowledge: { current: 3, neverVerified: 3, unverified30d: 3, verifiedInWindow: 0, lastVerifiedAt: null },
+}
+
+const payloads: Record<string, unknown> = {
+  cairn_memory_use: memoryPayload,
+  cairn_vitals: vitalsPayload,
+  cairn_vitals_signals: signalsPayload,
+}
+
 const answerBoth = () => {
-  mocks.rpc.mockImplementation(async (fn: string) =>
-    fn === 'cairn_memory_use'
-      ? { data: memoryPayload, error: null }
-      : { data: vitalsPayload, error: null },
-  )
+  mocks.rpc.mockImplementation(async (fn: string) => ({ data: payloads[fn], error: null }))
 }
 
 describe('the vitals an agent is given', () => {
@@ -68,6 +88,7 @@ describe('the vitals an agent is given', () => {
     expect(mocks.rpc.mock.calls.map((c) => c[0]).sort()).toEqual([
       'cairn_memory_use',
       'cairn_vitals',
+      'cairn_vitals_signals',
     ])
     expect(report.memory).toEqual(memoryPayload)
     // and the counts it already carried are untouched
@@ -75,13 +96,13 @@ describe('the vitals an agent is given', () => {
     expect(report.tasks.closed).toBe(5)
   })
 
-  it('asks both questions about the same window', async () => {
+  it('asks every question about the same window', async () => {
     // A memory block from a different window beside these counts would be a
     // worse answer than none: it invites a comparison that is not valid.
     answerBoth()
     await readVitals(actor, 72)
 
-    expect(mocks.rpc).toHaveBeenCalledTimes(2)
+    expect(mocks.rpc).toHaveBeenCalledTimes(3)
     for (const [, params] of mocks.rpc.mock.calls) {
       expect(params).toMatchObject({ p_owner: 'user-1', p_hours: 72 })
     }
@@ -94,12 +115,37 @@ describe('the vitals an agent is given', () => {
     mocks.rpc.mockImplementation(async (fn: string) =>
       fn === 'cairn_memory_use'
         ? { data: null, error: { message: 'function cairn_memory_use does not exist' } }
-        : { data: vitalsPayload, error: null },
+        : { data: payloads[fn], error: null },
     )
 
     const report = await readVitals(actor, 24)
     expect(report.memory).toBeNull()
+    expect(report.sessions.recent).toBe(4)
+  })
+
+  it('counts sessions without the summariser recording itself', async () => {
+    // Its `claude -p` runs are captured by the Claude SessionEnd hook like any
+    // other session, which inflated the volume and diluted the summary share.
+    answerBoth()
+    const report = await readVitals(actor, 24)
+    expect(report.sessions).toMatchObject({ recent: 4, recentSummarised: 4, baseline: 38 })
+    // Files come from cairn_vitals untouched: the summariser names none.
+    expect(report.sessions.recentWithFiles).toBe(5)
+    expect(report.signals).toEqual(signalsPayload)
+  })
+
+  it('reports the signals as unavailable, not as healthy, when they cannot be read', async () => {
+    mocks.rpc.mockImplementation(async (fn: string) =>
+      fn === 'cairn_vitals_signals'
+        ? { data: null, error: { message: 'function cairn_vitals_signals does not exist' } }
+        : { data: payloads[fn], error: null },
+    )
+    const report = await readVitals(actor, 24)
+    expect(report.signals).toBeNull()
+    expect(report.signalsError).toContain('does not exist')
+    // cairn_vitals' own counts stand when there is nothing to replace them with.
     expect(report.sessions.recent).toBe(6)
+    expect(assess(report).map((f) => f.code)).toContain('signals-unavailable')
   })
 
   it('fails loudly when the vital signs themselves cannot be read', async () => {
@@ -108,7 +154,7 @@ describe('the vitals an agent is given', () => {
     mocks.rpc.mockImplementation(async (fn: string) =>
       fn === 'cairn_vitals'
         ? { data: null, error: { message: 'boom' } }
-        : { data: memoryPayload, error: null },
+        : { data: payloads[fn], error: null },
     )
 
     await expect(readVitals(actor, 24)).rejects.toThrow('boom')

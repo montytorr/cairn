@@ -1051,8 +1051,11 @@ export const openapiSpec = () => ({
           'Omit `ongoing` for the existing session-end behavior. Idempotent on ' +
           '(platformSource, externalId), which is a correctness requirement rather than a ' +
           'nicety: Codex has no session-end event so its writer runs on Stop, which fires ' +
-          'every turn. `checkpointHeld` also checkpoints any task the agent still holds, ' +
-          'so a claim it walked away from stops looking like live work.',
+          'every turn. `checkpointHeld` also checkpoints what this session holds: tasks it ' +
+          'worked get the summary, tasks it only held get a "still held" line where they ' +
+          'have no checkpoint at all. It never replaces a written checkpoint on a claim it ' +
+          'cannot prove is its own, never touches another session\'s claim, and does not ' +
+          'count as activity for `/reconcile`.',
         requestBody: body(json(sessionUpsert)),
         responses: { '200': okResponse('Recorded.'), '409': errorResponse },
       },
@@ -1124,13 +1127,16 @@ export const openapiSpec = () => ({
     },
     '/reconcile': {
       post: {
-        summary: 'Release your own abandoned claims',
+        summary: 'Release abandoned claims',
         description:
-          'The backstop for runtimes with no session-end event. Releases claims held by ' +
-          'the calling agent that have shown no sign of life — heartbeat, note, checkpoint ' +
-          'or edit — for `olderThanMinutes` (default 120, deliberately far longer than the ' +
+          'The backstop for claims that outlive their session. Releases claims held by ' +
+          'the calling agent — or, for the `maintenance` key, by anyone in the workspace — ' +
+          'that have shown no sign of life — heartbeat, note, checkpoint, edit, or the holder\'s own commit, push, run or status change; the ' +
+          'automatic "still held" checkpoint does not count — for `olderThanMinutes` ' +
+          '(default 120, deliberately far longer than the ' +
           '15-minute claim lease, because agents barely heartbeat and a release is not as ' +
-          'recoverable as a takeover). Never closes anything: a task with a resolution ' +
+          'recoverable as a takeover). A `doing` task returns to `todo`; `in-review` keeps ' +
+          'its status. Never closes anything: a task with a resolution ' +
           'nobody meant is worse than one plainly still open.',
         requestBody: body({
           type: 'object',
