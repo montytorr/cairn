@@ -11,6 +11,20 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **OpenClaw gets its briefing from the repo** (CAIRN-292). `hooks/openclaw/cairn-briefing` is
+  an `agent:bootstrap` hook that injects a short lifecycle rule plus live `cairn context --cwd
+  <workspace>` (5 s deadline, fails open to the rule alone). `install-hooks.mjs` copies it to
+  `~/.cairn/hooks/openclaw/cairn-briefing` and links it with `openclaw hooks install --link …
+  --force` (retrying without `--force` on older OpenClaw; `--dry-run` prints the command),
+  replacing advice that pointed at a directory OpenClaw never discovers. `sync-agent-files`
+  keeps the copy current. `docs/openclaw.md` has the recommended `AGENTS.md` block, why an
+  unscoped `learn` is refused from an OpenClaw workspace, and the discovery gotchas
+  (`hooks.path` is the webhook path; workspace hooks follow the workspace).
+- **The skill is short enough to be read** (CAIRN-293). `skills/cairn/SKILL.md` went from 34 KB
+  to under 15 KB, with the whole lifecycle — check, own (agents' `add` claims), record
+  (`attempt` for dead ends), checkpoint, in-review, done with `--kind verified` when the fix was
+  already there — the sweep rule and "when not to file" in its first 60 lines. The release and
+  session-end checkpoint rules now say what the code does. AGENTS.md and the README agree.
 - **Secret-shaped strings are refused on every write that is read back** (CAIRN-285). One
   detector (`src/lib/secrets.ts`) runs on knowledge create/relearn, task titles, descriptions
   and resolutions, notes, comments, checkpoints and block reasons: provider token formats

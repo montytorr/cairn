@@ -325,7 +325,7 @@ describe('the installer and the per-Read hook CCS-40 removed', () => {
       JSON.stringify({ hooks: { PreToolUse: [READ_HOOK('CAIRN_AGENT=codex ')], Stop: [{ hooks: [quarry] }] } }),
     )
 
-    const env = { PATH: BASE_PATH, HOME: home }
+    const env = { PATH: BASE_PATH, HOME: home, CAIRN_OPENCLAW_BIN: 'openclaw-not-installed' }
     const first = await run('node', ['scripts/install-hooks.mjs'], env)
     expect(first.code, first.stderr).toBe(0)
 

@@ -63,6 +63,8 @@ process.exit(64)
       FAKE_HOOKS: hooks,
       FAKE_HERMES_LOG: commandLog,
       CAIRN_HOOK_CLI: '/trusted/cairn-router',
+      // A real OpenClaw on the developer's PATH must not be driven by this suite.
+      CAIRN_OPENCLAW_BIN: 'openclaw-not-installed',
     }
 
     const first = await run('node', ['scripts/install-hooks.mjs'], environment)

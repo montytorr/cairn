@@ -375,20 +375,123 @@ const hermesHookInstalled = () => {
 // --- OpenClaw ---------------------------------------------------------------
 
 /**
- * OpenClaw has no injectable session-start event; what it has is
- * `agent:bootstrap` with a mutable bootstrapFiles list. So the instruction is
- * to extend whatever bootstrap hook that installation already has rather than
- * add another, and there is no path here that would be right for two machines.
+ * OpenClaw has no session-start event that returns text; what it has is
+ * `agent:bootstrap`, with a mutable bootstrapFiles list. hooks/openclaw/
+ * cairn-briefing is a hook for exactly that, shipped here so every OpenClaw
+ * install gets the same one.
+ *
+ * Where it lives decides whether it runs, and the obvious places are wrong.
+ * OpenClaw discovers directory hooks only in `<workspace>/hooks`, the managed
+ * `~/.openclaw/hooks`, `hooks.internal.load.extraDirs`, plugins and its own
+ * bundle. A hook kept in some other tree is enabled in config and never loaded
+ * — silently: one found this way had reached 0 of 406 sessions after the
+ * workspace moved, and `hooks.path`, which looks like the setting, is the
+ * webhook URL path. So the copy goes to a stable path under ~/.cairn (where
+ * sync-agent-files keeps it current, like the other two hooks), and OpenClaw
+ * is told about it with its own documented command, `hooks install --link`,
+ * which adds that one directory to extraDirs and enables the hook.
+ *
+ * Session recording is not here: OpenClaw has no session-end event either,
+ * and its transcripts are swept by the `openclaw-sessions` job in
+ * scripts/install-cron.mjs.
  */
-const openclawNotes = () => {
-  log('  openclaw: manual — extend the handler behind `agent:bootstrap`')
-  log('            in your own clawd tree; there is no path to install to')
-  log('            push `cairn context --project <KEY>` output as a bootstrap file')
-  log('            and schedule `cairn reconcile` via `openclaw automations`')
-  log('            it has no session-end event either, so sweep its transcripts:')
-  log('            `cairn-session-end.mjs --scan <its sessions dir>` on a timer')
-  log('            export CAIRN_AGENT=openclaw where it is launched, so a box')
-  log('            it shares with Codex still attributes writes correctly')
+const OPENCLAW_HOOK = join(HOME, '.cairn', 'hooks', 'openclaw', 'cairn-briefing')
+const OPENCLAW_HOOK_FILES = ['HOOK.md', 'handler.ts']
+const OPENCLAW_HOOK_NAME = 'cairn-briefing'
+const openclawArgs = (force = true) => ['hooks', 'install', '--link', OPENCLAW_HOOK, ...(force ? ['--force'] : [])]
+const openclawCommand = `openclaw ${openclawArgs().join(' ')}`
+/** `CAIRN_OPENCLAW_BIN` for an OpenClaw that is not on PATH as `openclaw`. */
+const OPENCLAW_BIN = process.env.CAIRN_OPENCLAW_BIN?.trim() || 'openclaw'
+
+const onPath = (bin) =>
+  bin.includes('/')
+    ? existsSync(bin)
+    : (process.env.PATH ?? '').split(':').some((dir) => dir && existsSync(join(dir, bin)))
+
+/**
+ * Whether OpenClaw's config already links and enables this hook, so a re-run
+ * does not rewrite it and ask for a gateway restart that changes nothing. Any
+ * doubt — no file, JSON5 it cannot parse — answers no, and the install runs,
+ * which is itself idempotent.
+ */
+const openclawLinked = () => {
+  const path = process.env.OPENCLAW_CONFIG_PATH?.trim() || join(HOME, '.openclaw', 'openclaw.json')
+  const internal = readJson(path)?.hooks?.internal
+  return (
+    internal?.enabled !== false &&
+    (internal?.load?.extraDirs ?? []).includes(OPENCLAW_HOOK) &&
+    internal?.entries?.[OPENCLAW_HOOK_NAME]?.enabled === true
+  )
+}
+
+/** Copy the hook to its stable path; true when any file changed. */
+const copyOpenclawHook = () => {
+  mkdirSync(OPENCLAW_HOOK, { recursive: true })
+  let changed = false
+  for (const file of OPENCLAW_HOOK_FILES) {
+    const source = readFileSync(join(REPO, 'hooks', 'openclaw', 'cairn-briefing', file))
+    const target = join(OPENCLAW_HOOK, file)
+    if (existsSync(target) && readFileSync(target).equals(source)) continue
+    writeFileSync(target, source)
+    changed = true
+  }
+  return changed
+}
+
+const openclawTail = () => {
+  log('  openclaw: record sessions with the `openclaw-sessions` job (scripts/install-cron.mjs),')
+  log('            set CAIRN_AGENT=openclaw where the gateway starts, and see docs/openclaw.md')
+  log('            for the AGENTS.md block — `learn` needs an explicit scope outside a mapped checkout')
+}
+
+/**
+ * `--force` is how current OpenClaw re-links over an existing install record.
+ * An older one rejects the flag outright, and for a link it was never needed:
+ * the directory is merged into extraDirs as a set. So an "unknown option"
+ * refusal is retried without it, and anything else is a real failure.
+ */
+const runOpenclawInstall = () => {
+  try {
+    execFileSync(OPENCLAW_BIN, openclawArgs(), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  } catch (error) {
+    if (!/unknown option/i.test(`${error.stderr ?? ''}${error.stdout ?? ''}`)) throw error
+    execFileSync(OPENCLAW_BIN, openclawArgs(false), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  }
+}
+
+const installOpenclaw = () => {
+  if (!onPath(OPENCLAW_BIN)) {
+    log('  openclaw: not on PATH — skipped. Where it runs, as the gateway user:')
+    log(`            node scripts/install-hooks.mjs   (or: ${openclawCommand})`)
+    return
+  }
+  if (DRY) {
+    log(`  openclaw: would copy the cairn-briefing hook to ${OPENCLAW_HOOK}`)
+    log(`  openclaw: would run: ${openclawCommand}`)
+    log('  openclaw: then the gateway needs a restart to load it')
+    return openclawTail()
+  }
+
+  const changed = copyOpenclawHook()
+  if (openclawLinked()) {
+    log(`  openclaw: cairn-briefing already linked from ${OPENCLAW_HOOK}${changed ? ' — handler updated' : ' — unchanged'}`)
+    if (changed) log('  openclaw: restart the gateway to load the new handler')
+    return openclawTail()
+  }
+
+  try {
+    runOpenclawInstall()
+  } catch (error) {
+    console.error(`  openclaw: \`${openclawCommand}\` failed (exit ${error.status ?? error.code ?? '?'})`)
+    const said = String(error.stderr ?? '').trim()
+    if (said) console.error(`            ${said.split('\n').join('\n            ')}`)
+    console.error(`            the hook is copied to ${OPENCLAW_HOOK}; run the command above by hand`)
+    process.exitCode = 1
+    return
+  }
+  log(`  openclaw: agent:bootstrap -> cairn-briefing, linked from ${OPENCLAW_HOOK}`)
+  log('  openclaw: restart the gateway to load it (OpenClaw loads hooks only at start)')
+  openclawTail()
 }
 
 const version = () => {
@@ -407,4 +510,4 @@ installScripts()
 installClaude()
 installCodex()
 installHermes()
-openclawNotes()
+installOpenclaw()

@@ -331,7 +331,8 @@ problem.
 
 - A claim / heartbeat / checkpoint protocol so several agents can work one backlog without
   colliding. A lease whose holder has gone quiet for 15 minutes becomes stealable — one
-  conditional UPDATE, no reaper, no cron, no lease table.
+  conditional UPDATE, no lease table. Releasing a claim nobody is on is a separate, slower
+  job (two hours; `reconcile`, below).
 - **Durable writes and integrity boundaries.** Notes, comments, heartbeats and checkpoints
   can queue locally during an outage and replay without silently losing rejected or malformed
   records. Checkpoints carry the ownership generation and a monotonic sequence, so stale,
@@ -384,7 +385,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn context [--scope project\|all] [--project K]` | The briefing: what you hold, what is in flight, where the last session here stopped. `--scope project` limits held work, stale claims, and the last session to the resolved project; the default `all` keeps cross-project awareness. An unresolved project is an error in project scope; an unknown explicit key returns 404. |
 | `cairn next` | **What to pick up, and why.** Finishing beats starting, so work you hold ranks above work dropped with a checkpoint, which ranks above anything not begun. Blocked, waiting, or actively held by another agent is never offered |
 | `cairn show <ref>` · `cairn list --project K` · `cairn projects` | Read one, many, or the project index |
-| `cairn add "<title>" --project K` | File work. Warns if something similar already exists |
+| `cairn add "<title>" --project K` | File work. Warns if something similar already exists. From an agent runtime it also claims the task, unless similar open work exists or you already hold a task in that project (it says which); `--no-start` only files it |
 | `cairn update <ref> --status S --priority P` | Change fields; `--project` moves it, `--also-project` widens it |
 | `cairn done <ref> --resolution "…"` | Close. The resolution is required. `--kind verified` when you closed it because somebody else's fix was already there — `fixed` would claim their work |
 | `cairn update <ref> --status in-review` | Written but not landed: merged and undeployed, or done and unmerged |
@@ -403,7 +404,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn checkpoint <ref> --summary "…"` | Where work stopped, for whoever resumes |
 | `cairn block <ref> --reason "…"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
 | `cairn learn "<title>" --body -` | Record what we now know. Scoped to this directory's project unless `--project`, `--entity` or `--global`, and refused where there is no project to infer — global is a claim about every project you have, so it is chosen rather than arrived at |
-| `cairn add ... --start` | File it and claim it, for work you are starting now |
+| `cairn add ... --start` | File it and claim it, always — for a person, or to override the agent default's hold-backs |
 | `cairn verify <slug>` | This fact is still true. Clears the stale mark without rewriting it |
 | `cairn task delete <ref> --confirm <ref>` | For junk that should never have existed. Refused if the task has children, notes, comments or dependencies — cancel keeps the record |
 | `cairn know [<slug>\|<query>]` | Read it back, or list what applies here |
@@ -413,7 +414,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `--allow-dangling` (on `learn` and `relearn`) | Keep a `[[reference]]` the store cannot resolve. A write is otherwise refused when a reference names nothing and a near-named entry exists; the refusal names that slug, so retrying with it is the usual answer, and this flag is for when it gets that wrong |
 | `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
 | `cairn session list` · `cairn session end --id <id>` | The episodic record |
-| `cairn reconcile` | Release your own claims that went quiet |
+| `cairn reconcile` | Release claims that went quiet for two hours: your own, or the whole workspace under the `maintenance` key (the scheduled job) |
 | `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss. It also shows claims with no genuine activity for more than 2h and 24h (by the reaper's own rule: a session-end "still held" checkpoint does not count), whether the reaper has released anything in 7 days, sessions and summarised share per runtime and host (`macos` for `/Users/…`, `linux` for `/home/…` or `/root`), and how much current knowledge has never been verified. The summariser's own runs are not counted as sessions |
 | `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
@@ -641,12 +642,20 @@ its own and touches nobody else's. Coverage differs by runtime:
 | Claude Code | `SessionStart` | `SessionEnd` **and** `PreCompact` |
 | Codex | `SessionStart` | `Stop` — there is no `SessionEnd` |
 | Hermes Agent by Nous Research | `pre_llm_call` on the first turn only | — session recording is deliberately not installed |
-| OpenClaw | manual — push `cairn context` output into the existing `agent:bootstrap` hook | swept from disk on a schedule — it has no session event of any kind |
+| OpenClaw | `agent:bootstrap`, via the `cairn-briefing` hook package the installer links with `openclaw hooks install --link` (restart the gateway after) | swept from disk on a schedule — it has no session event of any kind |
 
 On Codex the installer also lists every hook in `hooks.json` that is not Cairn's, and marks
 the ones on `Stop`: Codex has no `SessionEnd`, so a session-end script written for Claude
 Code runs after **every turn** there, and one that makes a model call bills once per turn.
 It only says so. Removing another tool's hook is that tool's decision.
+
+On OpenClaw the installer copies `hooks/openclaw/cairn-briefing` to
+`~/.cairn/hooks/openclaw/cairn-briefing` and runs `openclaw hooks install --link <that dir>
+--force` (`--dry-run` prints the command instead); the gateway needs a restart to load it.
+OpenClaw discovers hooks only in the current workspace's `hooks/`, `~/.openclaw/hooks`,
+`hooks.internal.load.extraDirs`, plugins and its bundle — `hooks.path` is the webhook URL
+path, not a hook directory. [`docs/openclaw.md`](./docs/openclaw.md) has the recommended
+`AGENTS.md` block and the rest of the setup.
 
 Hermes Agent by Nous Research **v0.21.3 or newer** requires hook consent on first use. The installer
 uses `hermes config get hooks --json` and `hermes config set --force hooks <json>` to preserve existing
