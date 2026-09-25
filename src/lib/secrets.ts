@@ -51,8 +51,11 @@ const TOKEN_RULES: TokenRule[] = [
  * The key may carry a prefix (`client_secret`, `DB_PASSWORD`) but must end on
  * the word: `tokens: 500` and `secrets: inherit` are not assignments of one.
  */
+// A colon must touch its key (`password: x`, `"token": "x"`): with a space
+// before it, it is a ternary or a type annotation (`isOld ? Jwttoken : x`,
+// `token : string`), not a setting. `=` may be spaced either way.
 const ASSIGNMENT =
-  /([A-Za-z0-9_-]*?(?:password|passwd|pwd|secret|token|api[_-]?key))[*_`"']*[ \t]*[:=][*_`"']*[ \t]*([^\s]+)(?=([^\n]*))/gi
+  /([A-Za-z0-9_-]*?(?:password|passwd|pwd|secret|token|api[_-]?key))[*_`"']*(?:[ \t]*=|:)[*_`"']*[ \t]*([^\s]+)(?=([^\n]*))/gi
 
 /** `scheme://user:pass@host` — a connection string with the password in it. */
 const URL_CREDENTIAL = /\b[a-z][a-z0-9+.-]*:\/\/([^\s:@/]+):([^\s@/]+)@[^\s/]/gi
@@ -112,7 +115,21 @@ export const detectSecret = (text: string): SecretHit | null => {
 
   for (const match of text.matchAll(ASSIGNMENT)) {
     const key = (match[1] ?? '').toLowerCase()
-    const value = match[2] ?? ''
+    // `?api_key=YOUR_KEY&url=…` — the value ends where the next parameter starts.
+    const value = (match[2] ?? '').split('&')[0] ?? ''
+    // An object or list is structure (`signInPassword:{source: …}` in a
+    // documented response), never the credential itself.
+    if (/^[[{(]/.test(value)) continue
+    // A task or issue ref (`signed token=DIS-1234`) names work, not a value.
+    if (/^[A-Z][A-Z0-9]{1,9}-\d+[^A-Za-z0-9]*$/.test(value)) continue
+    // Code, not a value: `queueItAcceptedToken: acceptedToken,` or
+    // `token = rows[0].token;` — an expression ending in a separator that reads
+    // as a camelCase name or a member access. A bare `hunter2x,` still counts.
+    if (
+      /^[A-Za-z_$][\w$.[\]]*[,;]$/.test(value) &&
+      (/[a-z][A-Z]/.test(value) || /[.[]/.test(value))
+    )
+      continue
     // `token: stored in the vault` is a sentence about a token, not one.
     const prose = /^[A-Za-z]+$/.test(strip(value)) && /\S/.test(match[3] ?? '')
     if (!prose && !looksLikePlaceholder(value)) {
