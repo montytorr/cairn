@@ -19,9 +19,35 @@ describe('createTaskSchema', () => {
   })
 
   it('keeps explicit values', () => {
-    const parsed = createTaskSchema.parse({ title: 'x', type: 'bug', priority: 'high' })
-    expect(parsed.type).toBe('bug')
+    const parsed = createTaskSchema.parse({ title: 'x', type: 'chore', priority: 'high' })
+    expect(parsed.type).toBe('chore')
     expect(parsed.priority).toBe('high')
+  })
+})
+
+describe('createTaskSchema: bug and spike bodies (CAIRN-291)', () => {
+  const report = 'Clicking save drops the draft; expected it to persist. Repro: edit, save, reload.'
+
+  it.each(['bug', 'spike'])('refuses a %s with no body, on the description field', (type) => {
+    const parsed = createTaskSchema.safeParse({ title: 'x', type })
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0]?.path).toEqual(['description'])
+    expect(parsed.error?.issues[0]?.message).toContain('forceEmpty')
+  })
+
+  it('refuses a body that only restates the title', () => {
+    expect(createTaskSchema.safeParse({ title: 'x', type: 'bug', description: '   see title   ' }).success).toBe(false)
+  })
+
+  it('accepts a real body, and the explicit escape hatch', () => {
+    expect(createTaskSchema.safeParse({ title: 'x', type: 'bug', description: report }).success).toBe(true)
+    expect(createTaskSchema.safeParse({ title: 'x', type: 'spike', forceEmpty: true }).success).toBe(true)
+  })
+
+  it('leaves the other types alone', () => {
+    for (const type of ['feature', 'chore', 'improvement', 'docs']) {
+      expect(createTaskSchema.safeParse({ title: 'x', type }).success).toBe(true)
+    }
   })
 })
 

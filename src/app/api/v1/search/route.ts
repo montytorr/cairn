@@ -104,7 +104,7 @@ const markStaleKnowledge = async (
 
   const { data } = await admin()
     .from('knowledge')
-    .select('id, slug, body, verified_at, created_at, source_task_id, source_session_id')
+    .select('id, slug, body, verified_at, created_at, source_task_id, source_session_id, source_session_ref')
     .in('slug', slugs)
 
   const entries = (data ?? []) as {
@@ -115,6 +115,7 @@ const markStaleKnowledge = async (
     created_at: string | null
     source_task_id: string | null
     source_session_id: string | null
+    source_session_ref: string | null
   }[]
   if (entries.length === 0) return
 
@@ -123,6 +124,8 @@ const markStaleKnowledge = async (
   for (const row of results) {
     if (row.kind !== 'knowledge') continue
     row.stale = Boolean(bySlug.get(row.ref)?.stale)
+    // Apart from `stale`: no files, so no evidence of change, only of age.
+    row.unverified_days = bySlug.get(row.ref)?.unverifiedDays ?? null
   }
 }
 
@@ -171,6 +174,7 @@ const unifiedResult = (row: SearchAllRow) => ({
    * confidence signal is worse than none, so it is the reader who decides.
    */
   stale: false,
+  unverified_days: null as number | null,
   // The exact-ref row only, when the ref went through a retired key.
   ...(row.renamed_from ? { requestedRef: row.requested_ref, renamedFrom: row.renamed_from } : {}),
 })

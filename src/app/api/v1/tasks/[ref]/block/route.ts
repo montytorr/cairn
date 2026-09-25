@@ -18,6 +18,7 @@ const blockBody = z.object({
  */
 export const POST = route<{ ref: string }, z.infer<typeof blockBody>>({
   schema: blockBody,
+  secretFields: ['reason'],
   handler: async ({ actor, params, body }) => {
     const task = await findTask(actor, params.ref, TASK_LIST_FIELDS)
     if (!task) return fail('not_found', `No task ${params.ref}.`)

@@ -86,6 +86,19 @@ const SESSION = (() => {
 })()
 
 /**
+ * A read that is part of a sweep, not a recall (CAIRN-289).
+ *
+ * 1,169 of 1,243 knowledge reads were audit loops fetching 10-141 slugs a
+ * minute, and every one marked its entry as recalled — so `know --unused`
+ * could not find the facts nobody uses. The server also tags bursts by rate;
+ * this is the explicit form, for a script that knows it is sweeping:
+ * `CAIRN_SWEEP=1 cairn know <slug>` or `--sweep`.
+ */
+// Read through `flags` when a request is made, so the flag counts as used by
+// whichever verb it was passed to rather than being reported as ignored.
+const sweeping = () => process.env.CAIRN_SWEEP === '1' || Boolean(flags.sweep)
+
+/**
  * Which machine is speaking.
  *
  * A key names a runtime and a human, and the same key names go onto every
@@ -109,6 +122,7 @@ const HOST = (() => {
 const authHeaders = (extra = {}) => ({
   Authorization: `Bearer ${KEY}`,
   ...(SESSION ? { 'X-Cairn-Session': SESSION } : {}),
+  ...(sweeping() ? { 'X-Cairn-Read': 'sweep' } : {}),
   ...(HOST ? { 'X-Cairn-Host': HOST } : {}),
   ...extra,
 })
@@ -381,7 +395,7 @@ const KNOWN_FLAGS = new Set([
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
   'reason', 'remote', 'repo', 'request', 'resolution', 'scheduled', 'scope',
   'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
-  'superseded', 'superseded-by', 'task', 'tasks', 'title', 'tool-calls',
+  'superseded', 'superseded-by', 'sweep', 'task', 'tasks', 'title', 'tool-calls',
   'type', 'unused', 'url', 'verified', 'version',
 ])
 
@@ -1004,8 +1018,14 @@ const request = async (method, path, body, { soft = false } = {}) => {
             .map((i) => `  ${(i.path ?? []).join('.') || '(body)'}: ${i.message}`)
             .join('\n')}`
         : ''
+    // The server names the rule and the line, never the value (CAIRN-285).
+    // What to do instead is the part worth adding.
+    const hint = payload.code === 'secret_detected'
+      ? '\n  write where it lives instead: `$ENV_VAR`, `process.env.X`, a vault path, or `<password>`.' +
+        '\n  if it was a real credential, rotate it: it has already been in this transcript.'
+      : ''
     // 409 gets its own exit code so a caller can branch on "someone else has it".
-    die(`${payload.error}${extra}`, payload.code === 'already_claimed' ? 9 : 1)
+    die(`${payload.error}${extra}${hint}`, payload.code === 'already_claimed' ? 9 : 1)
   }
 
   // Any response reached through a retired key says so here, once, rather than
@@ -1459,7 +1479,7 @@ const renderContext = (d, { fileOnly = false } = {}) => {
   if (d.knowledge?.length) {
     out.push('', 'Known here (cairn know <slug>):')
     for (const k of d.knowledge) {
-      out.push(`  ${k.slug}${k.stale ? '  [stale]' : ''}  -- ${truncate(k.title, 58)}`)
+      out.push(`  ${k.slug}${factMark(k) ? `  [${factMark(k)}]` : ''}  -- ${truncate(k.title, 58)}`)
     }
   }
 
@@ -1495,6 +1515,14 @@ const BRIEFING_RULES = [
 ]
 
 const truncate = (s, n) => (!s ? '' : s.length > n ? `${s.slice(0, n - 1)}…` : s)
+
+/**
+ * How far to trust a fact, in one word. `stale` is evidence: sessions reworked
+ * the files it names. `unverified Nd` is only age, for a fact that names no
+ * file (CAIRN-289), and is worded apart so it never reads as the first.
+ */
+const factMark = (k) =>
+  k.stale ? 'stale' : k.unverified_days ? `unverified ${k.unverified_days}d` : ''
 
 // ---------------------------------------------------------------------------
 // commands
@@ -1590,6 +1618,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn know --dangling          references pointing at entries nobody wrote
     cairn know <slug> --history    every version, who changed it and why  [--full]
     cairn know --unused [--days 30]  facts no search or read has returned lately
+    cairn know <slug> --sweep      a scripted read, kept out of recall counts (or CAIRN_SWEEP=1)
     cairn verify <slug>            it is still true — clears the stale mark
     cairn replay                   send writes put aside while the server was down
     cairn relearn <slug> --body -  correct it  [--reason "why"] [--allow-dangling]
@@ -1703,7 +1732,7 @@ const commands = {
           // A stale fact is still current knowledge; what it is not is
           // confirmed. Said in the column already read for exactly that,
           // rather than as a column everyone learns to ignore.
-          status: r.stale ? 'stale' : (r.status ?? ''),
+          status: r.status === 'superseded' && !r.stale ? 'superseded' : factMark(r) || (r.status ?? ''),
           type: r.type ?? '',
           answered: r.resolved ? 'yes' : '',
           tokens: `~${r.tokens}`,
@@ -1889,6 +1918,9 @@ const commands = {
 
     const body = { title }
     if (described !== undefined) body.description = described
+    // The server holds the same rule now (CAIRN-291), so the escape hatch has
+    // to travel with the request. An older server strips the unknown key.
+    if (flags['force-empty']) body.forceEmpty = true
 
     for (const k of ['type', 'status', 'priority']) if (flags[k]) body[k] = flags[k]
     if (flags.label) body.labels = String(flags.label).split(',')
@@ -2318,7 +2350,7 @@ const commands = {
     for (const d of decisions) {
       lines.push(`  ${d.ref} ${d.kind} (${d.why.join(', ')}): ${truncate(d.text, 140)}`)
     }
-    if (facts.length) lines.push(`  knowledge: ${facts.map((k) => k.slug + (k.stale ? ' [stale]' : '')).join(', ')}`)
+    if (facts.length) lines.push(`  knowledge: ${facts.map((k) => k.slug + (factMark(k) ? ` [${factMark(k)}]` : '')).join(', ')}`)
     process.stderr.write(`${lines.join('\n')}\n`)
   },
   async beat() {
@@ -2353,6 +2385,13 @@ const commands = {
   async learn() {
     const title = need(positional[0], 'usage: cairn learn "<title>" --body -')
     const body = await resolveValue(flags.body ?? '')
+    // A bare title reads in every list exactly like a fact with an
+    // explanation behind it. The server refuses it too (CAIRN-289); saying so
+    // here saves the round trip and names the flag.
+    if (!String(body).trim()) {
+      die('a fact needs a body: what it means and how it was found.\n' +
+        '  cairn learn "<title>" --body -   # markdown on stdin')
+    }
     /**
      * Scope is decided before the write, not regretted after it.
      *
@@ -2431,6 +2470,20 @@ const commands = {
     // belongs, rather than in the row a caller parses.
     for (const warning of result?.warnings ?? []) {
       process.stderr.write(`cairn: ${warning}\n`)
+    }
+
+    // Same-topic entries already in the store. A new fact that contradicts
+    // an old one leaves both reading as true unless somebody links them.
+    if (result?.similar?.length) {
+      process.stderr.write('cairn: existing entries on the same subject:\n')
+      for (const k of result.similar) process.stderr.write(`  ${k.slug}  (${k.scope})  ${truncate(k.title, 70)}\n`)
+      process.stderr.write(
+        `  if one is now wrong: cairn unlearn <slug> --superseded-by ${result.slug}` +
+          ' — or cairn relearn it; if they agree, link them with [[slug]]\n',
+      )
+    }
+    if (FORMAT === 'tsv' && result?.source_task_id && !flags.task) {
+      process.stderr.write('linked to the task this session holds — --task <ref> to name another\n')
     }
 
     // Say what was inferred. Silent correctness is still a surprise the next
@@ -2545,6 +2598,9 @@ const commands = {
       })
       if (FORMAT === 'tsv') {
         process.stderr.write(`not recalled in ${data.days} days — ${data.counted}\n`)
+        // An empty list because the store is younger than the window is "not
+        // yet", and printing only the zero reads as "everything is used".
+        if (data.note) process.stderr.write(`cairn: ${data.note}\n`)
       }
       return
     }
@@ -2898,7 +2954,7 @@ const commands = {
     out.push('')
     out.push(r.knowledge.length ? 'knowledge' : 'knowledge: nothing linked or matching')
     for (const k of r.knowledge) {
-      const marks = [k.stale ? 'stale' : '', k.verified ? 'verified' : ''].filter(Boolean).join(', ')
+      const marks = [factMark(k), k.verified ? 'verified' : ''].filter(Boolean).join(', ')
       out.push(`  ${k.slug}${marks ? `  [${marks}]` : ''}`)
       out.push(`    ${k.title} — ${k.why.join('; ')}`)
     }

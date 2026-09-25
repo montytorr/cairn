@@ -11,6 +11,14 @@ export const dynamic = 'force-dynamic'
 type Params = { slug: string }
 
 /**
+ * Whether a read says it is part of a sweep (`X-Cairn-Read: sweep`, sent by
+ * `cairn know --sweep` or CAIRN_SWEEP=1). The database also tags bursts by
+ * rate (064), because the audit loops that inflated recall never said so.
+ */
+const isSweepRead = (req: Request): boolean =>
+  req.headers.get('x-cairn-read')?.trim().toLowerCase() === 'sweep'
+
+/**
  * Direct recall: the agent already knows what it wants and asks for it by name.
  *
  * Instrumented because this is the single path that answers "do agents call
@@ -24,9 +32,9 @@ type Params = { slug: string }
  * from the corpus afterwards. Absence of a row would say nothing at all.
  */
 export const GET = route<Params>({
-  handler: async ({ actor, params }) => {
+  handler: async ({ actor, params, req }) => {
     const row = await getKnowledge(actor.userId, params.slug)
-    await recordKnowledgeRead(actor, params.slug, Boolean(row))
+    await recordKnowledgeRead(actor, params.slug, Boolean(row), { sweep: isSweepRead(req) })
     if (!row) return fail('not_found', `No knowledge "${params.slug}".`)
     return ok(row)
   },
@@ -42,6 +50,7 @@ export const GET = route<Params>({
  */
 export const PATCH = route<Params, unknown>({
   schema: knowledgeUpdate,
+  secretFields: ['title', 'body', 'reason'],
   handler: async ({ actor, params, body }) => {
     const patch = body as { body?: string; allowUnresolvedRefs?: boolean }
     let warnings: string[] = []

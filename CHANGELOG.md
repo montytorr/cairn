@@ -11,6 +11,24 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Secret-shaped strings are refused on every write that is read back** (CAIRN-285). One
+  detector (`src/lib/secrets.ts`) runs on knowledge create/relearn, task titles, descriptions
+  and resolutions, notes, comments, checkpoints and block reasons: provider token formats
+  (`sbp_`, `sk-`/`sk-ant-`, `ghp_`/`gho_`/`github_pat_`, `AKIA`, `xox?-`, private-key blocks,
+  JWTs) and `password|secret|token|api_key: <value>` where the value is not a placeholder
+  (`<password>`, `***`, `$ENV_VAR`, `process.env.X`, a type, a path). 400 `secret_detected`
+  names the field, rule and line, never the value; the CLI adds what to write instead.
+
+- **Knowledge hygiene** (CAIRN-289, migration 064). `learn` records the session
+  (`source_session_ref`, resolved to `source_session_id` when the row exists) and the one task
+  the session holds; relearn records the editing session on the revision. `learn` lists up to
+  three existing entries on the same subject and suggests `unlearn --superseded-by`. Reads
+  that are sweeps — declared (`know --sweep`, `CAIRN_SWEEP=1`) or 10+ distinct slugs by one
+  actor in a minute — are kept but excluded from recall; history is re-tagged and
+  `knowledge_recall_state` rebuilt. `know --unused` says when the store is younger than the
+  window. A fact that names no file is marked `unverified Nd` after 14 days unconfirmed,
+  worded apart from `stale`. `search_all` ranks with `ts_rank(..., 1|32)` so long imports stop
+  crowding out short answers.
 - **Vitals can see what it was blind to** (CAIRN-288). The CAIRN-282 audit found every vitals
   number correct and the panel green while 17 of 22 claims had been quiet for over 20h, the
   reaper had released nothing for 13 days, the summariser wrote 1 of 16 sessions, and codex and
@@ -253,6 +271,11 @@ out under **Breaking** with what to do about it.
   beside the imported ref rather than instead of it, with the rename and its date on hover.
 
 ### Changed
+
+- **Bodies are required where they carry the value** (CAIRN-291, CAIRN-289). The API now
+  refuses a bug or spike with a description under 40 characters unless `forceEmpty: true`
+  (`cairn add --force-empty` sends it), so the UI and MCP meet the rule the CLI enforced.
+  Knowledge bodies must be non-blank on create and on relearn.
 
 - **Settings has the header bar every other page has** (CAIRN-279), and its Password
   heading matches Labels and Entities instead of being the one uppercase eyebrow.

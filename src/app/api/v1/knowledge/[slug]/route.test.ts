@@ -34,8 +34,8 @@ const actor = {
   sessionId: null,
 }
 
-const read = (slug: string) =>
-  GET(new Request(`https://cairn.example.test/api/v1/knowledge/${slug}`), {
+const read = (slug: string, headers: Record<string, string> = {}) =>
+  GET(new Request(`https://cairn.example.test/api/v1/knowledge/${slug}`, { headers }), {
     params: Promise.resolve({ slug }),
   })
 
@@ -68,6 +68,7 @@ describe('GET /api/v1/knowledge/[slug] recall telemetry', () => {
       actor,
       'supabase-connection-pooling',
       true,
+      { sweep: false },
     )
   })
 
@@ -86,6 +87,20 @@ describe('GET /api/v1/knowledge/[slug] recall telemetry', () => {
       actor,
       'a-fact-that-was-never-written',
       false,
+      { sweep: false },
+    )
+  })
+
+  it('passes on a read that says it is part of a sweep, so it is kept out of recall', async () => {
+    mocks.getKnowledge.mockResolvedValue(entry)
+
+    await read('supabase-connection-pooling', { 'X-Cairn-Read': 'sweep' })
+
+    expect(mocks.recordKnowledgeRead).toHaveBeenCalledWith(
+      actor,
+      'supabase-connection-pooling',
+      true,
+      { sweep: true },
     )
   })
 

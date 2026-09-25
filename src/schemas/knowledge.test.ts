@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SLUG_PATTERN, slugify } from './knowledge'
+import { knowledgeCreate, knowledgeUpdate, SLUG_PATTERN, slugify } from './knowledge'
 
 /**
  * The slug is the only name a fact has. `cairn know <subject>` decides between
@@ -80,5 +80,23 @@ describe('slug length', () => {
     const slug = slugify('a'.repeat(300))
 
     expect(slug.length).toBe(120)
+  })
+})
+
+describe('knowledge bodies (CAIRN-289)', () => {
+  it('refuses a missing, empty or blank body on create', () => {
+    expect(knowledgeCreate.safeParse({ title: 'A claim' }).success).toBe(false)
+    expect(knowledgeCreate.safeParse({ title: 'A claim', body: '' }).success).toBe(false)
+    expect(knowledgeCreate.safeParse({ title: 'A claim', body: ' \n\t ' }).success).toBe(false)
+  })
+
+  it('stores a real body exactly as written', () => {
+    const parsed = knowledgeCreate.parse({ title: 'A claim', body: '  indented\n' })
+    expect(parsed.body).toBe('  indented\n')
+  })
+
+  it('refuses an edit that blanks the body, and leaves an absent body alone', () => {
+    expect(knowledgeUpdate.safeParse({ body: '' }).success).toBe(false)
+    expect(knowledgeUpdate.parse({ title: 'renamed' })).toEqual({ title: 'renamed' })
   })
 })

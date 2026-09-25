@@ -107,6 +107,7 @@ export const GET = route<{ id: string }>({
 
 export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
   schema: createTaskSchema,
+  secretFields: ['title', 'description'],
   handler: async ({ actor, params, body }) => {
     const resolved = await resolveProject(params.id)
     if (!resolved) return fail('not_found', `No project ${params.id}.`)

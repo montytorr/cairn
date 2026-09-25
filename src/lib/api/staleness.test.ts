@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filesNamedIn } from './staleness'
+import { filesNamedIn, UNVERIFIED_DAYS, unverifiedDaysFor } from './staleness'
 
 describe('filesNamedIn', () => {
   it('finds the backticked paths a fact is about', () => {
@@ -46,5 +46,33 @@ describe('filesNamedIn', () => {
 
   it('still refuses a SQL signature, which is what these bodies are full of', () => {
     expect(filesNamedIn('`to_tsvector(regconfig, text)` is only STABLE.')).toEqual([])
+  })
+})
+
+describe('unverifiedDaysFor', () => {
+  const now = Date.parse('2026-09-25T12:00:00Z')
+  const daysAgo = (n: number) => new Date(now - n * 86_400_000).toISOString()
+
+  it('marks a fact with no files once nobody has confirmed it for the window', () => {
+    expect(unverifiedDaysFor({ created_at: daysAgo(UNVERIFIED_DAYS + 1) }, 0, now)).toBe(UNVERIFIED_DAYS + 1)
+  })
+
+  it('stays quiet inside the window', () => {
+    expect(unverifiedDaysFor({ created_at: daysAgo(UNVERIFIED_DAYS - 1) }, 0, now)).toBeNull()
+  })
+
+  it('counts from the last verification, not the first write', () => {
+    expect(
+      unverifiedDaysFor({ created_at: daysAgo(40), verified_at: daysAgo(2) }, 0, now),
+    ).toBeNull()
+  })
+
+  it('leaves facts that name files to the file-based signal', () => {
+    // Two marks for one entry would read as two kinds of evidence; only one is.
+    expect(unverifiedDaysFor({ created_at: daysAgo(90) }, 1, now)).toBeNull()
+  })
+
+  it('says nothing when it cannot tell the age', () => {
+    expect(unverifiedDaysFor({ created_at: null }, 0, now)).toBeNull()
   })
 })

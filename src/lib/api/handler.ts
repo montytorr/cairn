@@ -2,11 +2,18 @@ import { ZodError, type ZodType } from 'zod'
 import { authenticate, type Actor } from './auth'
 import { checkRateLimit } from './rate-limit'
 import { fail, failValidation } from './response'
+import { findSecret, secretRefusal } from '@/lib/secrets'
 
 type Ctx<P, B> = { actor: Actor; params: P; body: B; req: Request; url: URL }
 
 type Config<P, B> = {
   schema?: ZodType<B>
+  /**
+   * Body fields that are stored and read back to other agents, checked for
+   * secret-shaped strings after validation (CAIRN-285). One shared detector,
+   * applied here so no write path can forget it.
+   */
+  secretFields?: readonly string[]
   handler: (ctx: Ctx<P, B>) => Promise<Response>
 }
 
@@ -102,6 +109,18 @@ export const route = <P = Record<string, string>, B = unknown>(config: Config<P,
         const parsed = config.schema.safeParse(raw)
         if (!parsed.success) return failValidation(parsed.error.issues)
         body = parsed.data
+        if (config.secretFields) {
+          const hit = findSecret(body, config.secretFields)
+          // The rule and where, never the value: echoing it would put the
+          // secret in the response, the CLI's stderr and the transcript.
+          if (hit) {
+            return fail('secret_detected', secretRefusal(hit), {
+              field: hit.field,
+              pattern: hit.pattern,
+              line: hit.line,
+            })
+          }
+        }
       }
 
       const params = (await context.params) ?? ({} as P)

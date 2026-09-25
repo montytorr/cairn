@@ -55,6 +55,8 @@ export type RecalledKnowledge = {
   slug: string
   title: string
   stale: boolean
+  /** No files to judge by, and unconfirmed this many days (staleness.ts). */
+  unverified_days: number | null
   verified: boolean
   why: string[]
 }
@@ -196,7 +198,7 @@ const knowledgeFor = async (
 ): Promise<RecalledKnowledge[]> => {
   const { rows } = await pool().query(
     `select k.id, k.slug, k.title, k.body, k.verified_at, k.created_at, k.source_task_id,
-            k.source_session_id, array_agg(distinct r.why) as why
+            k.source_session_id, k.source_session_ref, array_agg(distinct r.why) as why
        from (
          select kf.knowledge_id, 'about ' || kf.path as why
            from knowledge_files kf
@@ -260,7 +262,8 @@ const knowledgeFor = async (
   const bySlug = searched.filter((s) => s.kind === 'knowledge').map((s) => s.ref)
   if (bySlug.length > 0) {
     const { rows: hits } = await pool().query(
-      `select id, slug, title, body, verified_at, created_at, source_task_id, source_session_id
+      `select id, slug, title, body, verified_at, created_at, source_task_id, source_session_id,
+              source_session_ref
          from knowledge where slug = any($1) and superseded_by is null`,
       [bySlug],
     )
@@ -282,6 +285,7 @@ const knowledgeFor = async (
       created_at: row.created_at ? new Date(row.created_at as string).toISOString() : null,
       source_task_id: (row.source_task_id as string | null) ?? null,
       source_session_id: (row.source_session_id as string | null) ?? null,
+      source_session_ref: (row.source_session_ref as string | null) ?? null,
     })),
   )
 
@@ -291,6 +295,7 @@ const knowledgeFor = async (
       slug: row.slug as string,
       title: row.title as string,
       stale: aged.get(row.id as string)?.stale ?? false,
+      unverified_days: aged.get(row.id as string)?.unverifiedDays ?? null,
       verified: Boolean(row.verified_at),
       why,
     }))

@@ -37,6 +37,7 @@ export const GET = route<{ ref: string }>({
  */
 export const POST = route<{ ref: string }, z.infer<typeof createNoteSchema>>({
   schema: createNoteSchema,
+  secretFields: ['note', 'facts'],
   handler: async ({ actor, params, body }) => {
     const task = await findTask(actor, params.ref, TASK_LIST_FIELDS)
     if (!task) return fail('not_found', `No task ${params.ref}.`)

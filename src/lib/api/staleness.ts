@@ -14,6 +14,14 @@ import { linkedFiles } from './knowledge'
  *
  * Deliberately not expiry. A wrong confidence signal is worse than none, so
  * this marks and never hides, and a human or an agent decides.
+ *
+ * A fact that names no file has no such evidence, and 59% of the store names
+ * none — the infra facts most of all (`clawdius-server` still described the
+ * Supabase stack two weeks after it was removed). For those there is a second,
+ * weaker mark: how long since anybody confirmed it. It is labelled apart from
+ * `stale` on purpose. "Several sessions reworked the files under this" is
+ * evidence; "nobody has looked in N days" is only a prompt to look, and must
+ * never read as the first. Marked, not hidden, same as the other.
  */
 
 /**
@@ -49,12 +57,38 @@ export const filesNamedIn = (body: string): string[] => {
  */
 export const STALE_SESSIONS = 2
 
+/**
+ * How long a fact with no files may go unconfirmed before it says so. Two
+ * weeks, because what these entries describe — servers, stacks, containers,
+ * who owns what — is exactly what changed under the Supabase entries inside
+ * that time.
+ */
+export const UNVERIFIED_DAYS = 14
+
 export type Staleness = {
   files: string[]
   touches: number
   sessions: number
   lastTouchedAt: string | null
   stale: boolean
+  /**
+   * Days since it was verified or written, set only when it names no file
+   * and that is at least UNVERIFIED_DAYS. Not evidence of change: a prompt.
+   */
+  unverifiedDays: number | null
+}
+
+/** The age half, on its own so it can be tested without a database. */
+export const unverifiedDaysFor = (
+  entry: Pick<AgeableEntry, 'verified_at' | 'created_at'>,
+  files: number,
+  now = Date.now(),
+): number | null => {
+  if (files > 0) return null
+  const reference = Date.parse(entry.verified_at ?? entry.created_at ?? '')
+  if (Number.isNaN(reference)) return null
+  const days = Math.floor((now - reference) / 86_400_000)
+  return days >= UNVERIFIED_DAYS ? days : null
 }
 
 export type AgeableEntry = {
@@ -65,6 +99,8 @@ export type AgeableEntry = {
   /** The work this fact came out of, whose files it is implicitly about. */
   source_task_id?: string | null
   source_session_id?: string | null
+  /** The session as its runtime named it, for rows written before that session's row existed (064). */
+  source_session_ref?: string | null
 }
 
 /**
@@ -82,8 +118,26 @@ const filesFromSource = async (
   entries: AgeableEntry[],
 ): Promise<Map<string, string[]>> => {
   const taskIds = entries.map((e) => e.source_task_id).filter(Boolean) as string[]
-  const sessionIds = entries.map((e) => e.source_session_id).filter(Boolean) as string[]
   const out = new Map<string, string[]>()
+
+  // A fact learned mid-session names the session before its row exists, so
+  // the ref is resolved here, at read time, once the session has ended.
+  const refs = [
+    ...new Set(
+      entries.filter((e) => !e.source_session_id && e.source_session_ref).map((e) => e.source_session_ref as string),
+    ),
+  ]
+  const resolved = new Map<string, string>()
+  if (refs.length > 0) {
+    const { data } = await admin().from('sessions').select('id, external_id').in('external_id', refs)
+    for (const row of (data ?? []) as { id: string; external_id: string }[]) {
+      if (!resolved.has(row.external_id)) resolved.set(row.external_id, row.id)
+    }
+  }
+  const sessionOf = (e: AgeableEntry) =>
+    e.source_session_id ?? (e.source_session_ref ? (resolved.get(e.source_session_ref) ?? null) : null)
+
+  const sessionIds = entries.map(sessionOf).filter(Boolean) as string[]
   if (taskIds.length === 0 && sessionIds.length === 0) return out
 
   const byTask = new Map<string, string[]>()
@@ -109,9 +163,10 @@ const filesFromSource = async (
   ])
 
   for (const entry of entries) {
+    const session = sessionOf(entry)
     const paths = [
       ...(entry.source_task_id ? (byTask.get(entry.source_task_id) ?? []) : []),
-      ...(entry.source_session_id ? (bySession.get(entry.source_session_id) ?? []) : []),
+      ...(session ? (bySession.get(session) ?? []) : []),
     ]
     if (paths.length > 0) out.set(entry.id, [...new Set(paths)])
   }
@@ -147,7 +202,14 @@ export const stalenessFor = async (
         ...(linked.get(entry.id) ?? []),
       ]),
     ]
-    out.set(entry.id, { files, touches: 0, sessions: 0, lastTouchedAt: null, stale: false })
+    out.set(entry.id, {
+      files,
+      touches: 0,
+      sessions: 0,
+      lastTouchedAt: null,
+      stale: false,
+      unverifiedDays: unverifiedDaysFor(entry, files.length),
+    })
     for (const path of files) {
       byPath.set(path, [...(byPath.get(path) ?? []), entry])
     }

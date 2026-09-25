@@ -24,6 +24,7 @@ const checkpointBody = z.object({
  */
 export const POST = route<{ ref: string }, z.infer<typeof checkpointBody>>({
   schema: checkpointBody,
+  secretFields: ['summary', 'payload'],
   handler: async ({ actor, params, body, req }) => {
     const task = await findTask(actor, params.ref, TASK_LIST_FIELDS)
     if (!task) return fail('not_found', `No task ${params.ref}.`)
