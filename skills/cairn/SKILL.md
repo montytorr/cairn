@@ -237,7 +237,9 @@ cairn release ACME-42
 - **Claiming starts the task.** `claim` sets the status to `doing` for you — there is no
   second command to remember, and no reason to skip it because it looks like ceremony.
 - **Claim the task you just filed, if you are about to do it**, or use `cairn add --start`
-  which files and claims in one call. Filing and closing without claiming leaves the work
+  which files and claims in one call. From an agent runtime `add` claims by default,
+  except when similar open work exists or you already hold a task in that project (it
+  says so); `--no-start` only files it. Filing and closing without claiming leaves the work
   invisible while it happens; on a machine running more than one agent that is exactly
   when a second one picks up the same thing.
 - **You do not have to remember — if you checkpoint.** A checkpoint on an open task
