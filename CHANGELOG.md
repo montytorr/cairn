@@ -35,6 +35,12 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Maintenance runs once per instance** (CAIRN-301). `reconcile` and `vitals` take
+  `--all-instances`, which install-cron now passes: one run per instance under its own
+  maintenance key, and exactly the old single run on a one-instance machine; `--json` gives one
+  document keyed by instance. `vitals --notify` and the sync's `--notify` accept
+  `<instance>:<ref>`, and the sync checks that instance's env for its key. install-cron only
+  schedules the flag once the installed CLI knows it; re-run it on a machine that adds instances.
 - **Commands find their instance from the directory, the ref or the session** (CAIRN-300).
   `cairn route add <instance> [--folder|--session]` saves which instance a repository (by its
   main checkout, so worktrees follow), a folder or one session belongs to. With no route, a

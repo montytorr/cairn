@@ -193,6 +193,38 @@ describe('the maintenance identity never borrows a key', () => {
   })
 })
 
+describe('the sync job on a machine with several instances (CAIRN-301)', () => {
+  const withInstances = async (personalEnv: string) => {
+    const home = await homeWith('')
+    await writeFile(join(home, '.cairn/instances.json'), JSON.stringify({
+      version: 1, instances: { personal: { url: 'https://a.example' }, work: { url: 'https://b.example' } },
+    }))
+    await mkdir(join(home, '.cairn/instances/personal'), { recursive: true })
+    await writeFile(join(home, '.cairn/instances/personal/env'), personalEnv)
+    return home
+  }
+  const check = (home: string, notify: string) =>
+    run('node', ['scripts/sync-agent-files.mjs', '--check', '--notify', notify], {
+      PATH: BASE_PATH, HOME: home, CAIRN_AGENT: 'maintenance',
+    })
+
+  it('asks for the instance when --notify names only a ref', async () => {
+    const out = await check(await withInstances(SPLIT), 'CAIRN-1')
+    expect(out.stdout).toContain('does not say which one CAIRN-1 is on')
+    expect(out.stdout).toContain('<instance>:CAIRN-1')
+    expect(out.code).not.toBe(0)
+  })
+
+  it("checks the named instance's own env for a maintenance key", async () => {
+    const missing = await check(await withInstances(SPLIT), 'personal:CAIRN-1')
+    expect(missing.stdout).toContain(join('.cairn', 'instances', 'personal', 'env'))
+    expect(missing.code).not.toBe(0)
+
+    const present = await check(await withInstances(`${SPLIT}\nCAIRN_API_KEY_MAINTENANCE=m`), 'personal:CAIRN-1')
+    expect(present.stdout).not.toContain('WARNING')
+  })
+})
+
 describe('the machine travels beside the actor', () => {
   it('sends the host, and the actor key is unchanged', async () => {
     const { base, seen } = await serve()
