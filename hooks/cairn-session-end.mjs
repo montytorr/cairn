@@ -19,8 +19,17 @@
  */
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import {
+  appendFileSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -34,8 +43,15 @@ const MAX_DIGEST_CHARS = 24_000
 /**
  * The summariser is itself an agent session, and an agent session ends. Without
  * this guard the SessionEnd hook would summarise the summariser, forever.
+ *
+ * Every summariser, not only this one. Quarry runs the same kind of hook with
+ * its own `claude -p` child and marks it QUARRY_SUMMARISER; checking only our
+ * own flag recorded 37 of Quarry's child runs as Cairn sessions, each wearing
+ * a copy of its parent's summary (CAIRN-287). AGENT_MEMORY_SUMMARISER is the
+ * shared name either tool can set.
  */
-if (process.env.CAIRN_SUMMARISER === '1') process.exit(0)
+const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
+if (SUMMARISER_FLAGS.some((name) => process.env[name] === '1')) process.exit(0)
 
 const DRY_RUN = process.argv.includes('--dry-run')
 
@@ -100,6 +116,51 @@ const textOf = (content) => {
  */
 const SCHEDULED_PROMPT = /^\[cron:[0-9a-f-]{8,}/i
 
+/**
+ * The opening line of a summariser's prompt — ours ("an engineering memory")
+ * or Quarry's ("a sales memory").
+ *
+ * An environment flag is the first defence and it does not always survive: a
+ * CAIRN_SUMMARY_CLI wrapper that drops to another account through sudo resets
+ * the environment, and the child's own SessionEnd then records it. The prompt
+ * survives everything, so a transcript that opens with it is a summariser run
+ * whatever the environment said.
+ */
+const SUMMARISER_PROMPT = /^You are writing one entry in an? [\w -]*memory\b/i
+
+/**
+ * Wrappers a runtime puts around what a person typed. The text inside is the
+ * person; the wrapper is not. OpenClaw began prefixing turns with
+ * `[OpenClaw conversation info: sender={…}]` on 09-23, and six sessions
+ * recorded that line as their request.
+ */
+const OPENCLAW_WRAPPER = /^\[OpenClaw conversation info:/i
+
+const unwrap = (text) => {
+  if (!OPENCLAW_WRAPPER.test(text)) return text
+  // `sender={…}]` closes it; a wrapper in some other shape is its first line.
+  const closed = /^\[OpenClaw conversation info:[\s\S]*?\}\]/i.exec(text)
+  const rest = closed ? text.slice(closed[0].length) : text.split('\n').slice(1).join('\n')
+  return rest.trim()
+}
+
+/**
+ * Turns that are a person but not a request. Kept out of `request` only —
+ * they still count as a person having been there.
+ */
+const TRIVIAL = /^(?:hi|hello|hey|yo|ok(?:ay)?|thanks?(?: you)?|merci|salut|bonjour|continue|go(?: on| ahead)?|yes|no|y|n)[\s.!?]*$/i
+
+/**
+ * A slash command arrives as `<command-name>` markup and is refused below, but
+ * what was typed after it is the request: `/fix the login redirect` is a
+ * person asking for something. The expansion that follows is the skill, not
+ * them, and is marked isMeta.
+ */
+const commandArgs = (text) => {
+  const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1]?.trim()
+  return args && args.split(/\s+/).length >= 3 ? args : null
+}
+
 const isHumanTurn = (text) =>
   text &&
   !text.startsWith('<') &&
@@ -112,12 +173,21 @@ const isHumanTurn = (text) =>
   !/^Reply with exactly one word/i.test(text) &&
   !/^\[cron:[0-9a-f-]{8,}/i.test(text) &&
   !/^Conversation info:/i.test(text) &&
+  !OPENCLAW_WRAPPER.test(text) &&
   !/^#+\s*AGENTS\.md instructions/i.test(text) &&
   !text.startsWith('<INSTRUCTIONS>') &&
   !text.includes('<system-reminder>') &&
   !text.includes('<command-name>') &&
   !text.includes('<local-command') &&
-  !text.startsWith('Caveat:')
+  !text.startsWith('Caveat:') &&
+  !SUMMARISER_PROMPT.test(text)
+
+/** What a person typed in this turn, or null when it was machinery. */
+const humanText = (raw) => {
+  const text = unwrap(raw)
+  if (isHumanTurn(text)) return text
+  return raw.includes('<command-name>') ? commandArgs(raw) : null
+}
 
 const parseTranscript = async (path) => {
   const out = {
@@ -127,12 +197,14 @@ const parseTranscript = async (path) => {
     endedAt: null,
     prompts: [],
     scheduled: false,
+    summariser: false,
     files: new Set(),
     refs: new Set(),
     actedOn: new Set(),
     toolCalls: 0,
     assistantText: [],
   }
+  let spoke = false
 
   const stream = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
 
@@ -155,9 +227,17 @@ const parseTranscript = async (path) => {
     const content = row.message?.content
 
     if (row.type === 'user') {
-      const text = textOf(content).trim()
-      if (SCHEDULED_PROMPT.test(text)) out.scheduled = true
-      if (isHumanTurn(text)) {
+      // A skill's expansion, a caveat: written by the runtime into a user turn.
+      if (row.isMeta) continue
+      const raw = textOf(content).trim()
+      if (!raw) continue
+      if (SCHEDULED_PROMPT.test(raw)) out.scheduled = true
+      const text = humanText(raw)
+      // Before any person spoke, not merely first: a SessionStart hook's
+      // output can land ahead of the prompt.
+      if (!spoke && SUMMARISER_PROMPT.test(raw)) out.summariser = true
+      if (text || SUMMARISER_PROMPT.test(raw)) spoke = true
+      if (text) {
         out.prompts.push(text)
         // Only what the human asked about. Scraping every user turn would pull
         // refs out of tool output, which is how one session claimed to have
@@ -225,12 +305,14 @@ const parseCodexRollout = async (path) => {
     endedAt: null,
     prompts: [],
     scheduled: false,
+    summariser: false,
     files: new Set(),
     refs: new Set(),
     actedOn: new Set(),
     toolCalls: 0,
     assistantText: [],
   }
+  let spoke = false
 
   const stream = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
 
@@ -260,11 +342,14 @@ const parseCodexRollout = async (path) => {
     if (p.type === 'message') {
       // `developer` is the skills and instructions preamble, not a person.
       const text = codexText(p.content).trim()
-      if (p.role === 'user') {
+      if (p.role === 'user' && text) {
         if (SCHEDULED_PROMPT.test(text)) out.scheduled = true
-        if (isHumanTurn(text)) {
-          out.prompts.push(text)
-          for (const m of text.matchAll(TASK_REF)) out.refs.add(m[0])
+        const human = humanText(text)
+        if (!spoke && SUMMARISER_PROMPT.test(text)) out.summariser = true
+        if (human || SUMMARISER_PROMPT.test(text)) spoke = true
+        if (human) {
+          out.prompts.push(human)
+          for (const m of human.matchAll(TASK_REF)) out.refs.add(m[0])
         }
       } else if (p.role === 'assistant' && text) {
         out.assistantText.push(text)
@@ -611,8 +696,8 @@ const rememberSummary = (sessionId, digestHash, summary) => {
 /**
  * The summary for this digest, from the model or from last time.
  *
- * Returns the summary and whether it is new, so the caller can stamp only what
- * it actually paid for.
+ * Returns the summary, whether it is new, and — when the model was asked and
+ * gave nothing usable — why, so the caller can log it and queue a retry.
  */
 const summaryFor = async (sessionId, digest) => {
   const digestHash = createHash('sha256').update(digest).digest('hex')
@@ -625,16 +710,56 @@ const summaryFor = async (sessionId, digest) => {
     }
   }
 
-  const summary = await summarise(digest)
+  const { summary, error } = await summarise(digest)
   if (summary && sessionId) rememberSummary(sessionId, digestHash, summary)
-  return { summary, fresh: true }
+  return { summary, fresh: true, error }
 }
 
-const summarise = (digest) =>
-  new Promise((resolve) => {
-    if (!digest.trim()) return resolve(null)
+/**
+ * Where a summariser failure goes, with what the summariser said.
+ *
+ * Every failure used to be swallowed, stderr included, and the summariser was
+ * down on both hosts for about forty hours on 09-23 without a line anywhere
+ * saying so (CAIRN-287). Still never fatal — this is a hook — but no longer
+ * silent: `tail ~/.cairn/summariser.log` answers "why has nothing got prose".
+ */
+const SUMMARISER_LOG = join(homedir(), '.cairn', 'summariser.log')
+const LOG_MAX_BYTES = 256 * 1024
 
+const logSummariser = (line) => {
+  try {
+    mkdirSync(dirname(SUMMARISER_LOG), { recursive: true })
+    try {
+      if (statSync(SUMMARISER_LOG).size > LOG_MAX_BYTES) {
+        const kept = readFileSync(SUMMARISER_LOG, 'utf8').slice(-LOG_MAX_BYTES / 2)
+        writeFileSync(SUMMARISER_LOG, kept.slice(kept.indexOf('\n') + 1))
+      }
+    } catch {
+      // no log yet
+    }
+    appendFileSync(SUMMARISER_LOG, `${new Date().toISOString()} ${line.replace(/\s+/g, ' ').trim()}\n`)
+  } catch {
+    // A log we cannot write must not cost the session row.
+  }
+}
+
+/**
+ * Asked with no session persistence and from a scratch directory.
+ *
+ * `claude -p` saves its transcript like any session, under the project it was
+ * run from, so the next `claude --continue` there resumed the SUMMARISER and
+ * the person's real work was recorded under the summariser's prompt (af1af02c,
+ * 293 tool calls). `--no-session-persistence` stops the save; the scratch cwd
+ * keeps a CLI too old for the flag from saving into the project. Every
+ * summariser flag is set, so Quarry's hook skips this child the way this hook
+ * skips Quarry's.
+ */
+const NO_PERSISTENCE = '--no-session-persistence'
+
+const runSummariser = (input, persistFlag) =>
+  new Promise((resolve) => {
     let out = ''
+    let err = ''
     let settled = false
     const done = (v) => {
       if (settled) return
@@ -642,48 +767,144 @@ const summarise = (digest) =>
       resolve(v)
     }
 
-    const child = spawn(
-      process.env.CAIRN_SUMMARY_CLI ?? 'claude',
-      ['-p', '--model', MODEL, '--output-format', 'text'],
-      {
-        stdio: ['pipe', 'pipe', 'ignore'],
-        env: { ...process.env, CAIRN_SUMMARISER: '1' },
-      },
-    )
+    const args = ['-p', '--model', MODEL, '--output-format', 'text']
+    if (persistFlag) args.push(NO_PERSISTENCE)
+    const env = { ...process.env }
+    for (const name of SUMMARISER_FLAGS) env[name] = '1'
+
+    let child
+    try {
+      child = spawn(process.env.CAIRN_SUMMARY_CLI ?? 'claude', args, {
+        cwd: tmpdir(),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env,
+      })
+    } catch (error) {
+      return done({ out, err, error: `spawn failed: ${error.message}` })
+    }
 
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
-      done(null)
+      done({ out, err, error: `timed out after ${SUMMARY_TIMEOUT_MS}ms` })
     }, SUMMARY_TIMEOUT_MS)
 
     child.stdout.on('data', (d) => {
       out += d
     })
-    child.on('error', () => {
-      clearTimeout(timer)
-      done(null)
+    child.stderr.on('data', (d) => {
+      if (err.length < 8000) err += d
     })
-    child.on('close', () => {
+    child.on('error', (error) => {
       clearTimeout(timer)
-      const match = out.match(/\{[\s\S]*\}/)
-      if (!match) return done(null)
-      try {
-        done(JSON.parse(match[0]))
-      } catch {
-        done(null)
-      }
+      done({ out, err, error: `spawn failed: ${error.message}` })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      done({ out, err, code })
     })
 
     // A failed spawn leaves stdin null, and writing to it throws synchronously
     // -- which, inside a hook whose whole contract is never to interfere, would
     // take down the recorder over an unavailable summariser.
     try {
-      child.stdin.end(`${PROMPT}\n\n---\n\n${digest}`)
+      child.stdin.on('error', () => {})
+      child.stdin.end(input)
     } catch {
       clearTimeout(timer)
-      done(null)
+      done({ out, err, error: 'could not write the prompt' })
     }
   })
+
+const tail = (text, n) => text.trim().slice(-n)
+
+/** `{summary}` or `{error}`, never a throw. */
+const summarise = async (digest) => {
+  if (!digest.trim()) return { summary: null }
+  const input = `${PROMPT}\n\n---\n\n${digest}`
+
+  let run = await runSummariser(input, true)
+  // A CLI that predates the flag refuses the whole call; ask again without it
+  // rather than lose every summary to an upgrade nobody has run yet.
+  if (
+    run.code &&
+    new RegExp(`(unknown|unrecognized|invalid).*${NO_PERSISTENCE}|${NO_PERSISTENCE}.*(unknown|unrecognized)`, 'i')
+      .test(`${run.err}\n${run.out}`)
+  ) {
+    run = await runSummariser(input, false)
+  }
+
+  if (run.error) return { summary: null, error: run.error }
+  if (run.code) {
+    return { summary: null, error: `exit ${run.code}: ${tail(run.err, 500) || tail(run.out, 300) || 'no output'}` }
+  }
+  const match = run.out.match(/\{[\s\S]*\}/)
+  if (!match) return { summary: null, error: `no JSON in output: ${tail(run.out, 300) || tail(run.err, 300) || 'empty'}` }
+  try {
+    return { summary: JSON.parse(match[0]) }
+  } catch {
+    return { summary: null, error: `unparseable JSON: ${match[0].slice(0, 300)}` }
+  }
+}
+
+/**
+ * Sessions recorded without prose, to be summarised again once the
+ * summariser answers.
+ *
+ * The row is still written at once with its deterministic half — that rule
+ * stands — and its missing prose is what `cairn vitals` counts. What was
+ * missing was any way back: nothing retried, so forty hours of sessions kept
+ * their raw first prompt as a headline for good. This queue holds the
+ * transcript path, which only this machine can read, and the next run of the
+ * hook that reaches a working summariser re-summarises a few of them.
+ *
+ * Bounded every way it can grow: RETRY_BATCH per run, RETRY_MAX_TRIES per
+ * session, RETRY_WINDOW_MS of age, and never sooner than RETRY_SPACING_MS
+ * after the last attempt — Codex runs this hook every turn.
+ */
+const UNSUMMARISED_PATH = join(homedir(), '.cairn', 'unsummarised.json')
+const RETRY_BATCH = Number(process.env.CAIRN_SUMMARY_RETRY_BATCH ?? 2)
+const RETRY_MAX_TRIES = 4
+const RETRY_WINDOW_MS = 48 * 3_600_000
+const RETRY_SPACING_MS = Number(process.env.CAIRN_SUMMARY_RETRY_SPACING_MS ?? 15 * 60_000)
+
+const readUnsummarised = () => {
+  try {
+    const parsed = JSON.parse(readFileSync(UNSUMMARISED_PATH, 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const writeUnsummarised = (queue) => {
+  try {
+    mkdirSync(dirname(UNSUMMARISED_PATH), { recursive: true })
+    writeFileSync(UNSUMMARISED_PATH, JSON.stringify(queue))
+  } catch {
+    // Losing the queue loses a retry, not a session.
+  }
+}
+
+const updateUnsummarised = (sessionId, change) => {
+  const queue = readUnsummarised()
+  const next = change(queue[sessionId] ?? null)
+  if (next) queue[sessionId] = next
+  else delete queue[sessionId]
+  writeUnsummarised(queue)
+}
+
+/** Due for another attempt, oldest failure first. Pure, for the tests. */
+const dueRetries = (queue, now, exclude) =>
+  Object.entries(queue)
+    .filter(([id, e]) =>
+      id !== exclude &&
+      e?.path &&
+      now - (e.firstAt ?? 0) <= RETRY_WINDOW_MS &&
+      (e.tries ?? 0) < RETRY_MAX_TRIES &&
+      now - (e.lastAt ?? 0) >= RETRY_SPACING_MS,
+    )
+    .sort(([, a], [, b]) => (a.firstAt ?? 0) - (b.firstAt ?? 0))
+    .slice(0, RETRY_BATCH)
 
 const DEBUG = process.env.CAIRN_HOOK_DEBUG === '1'
 
@@ -696,7 +917,26 @@ const post = (args) =>
     child.on('close', (code) => resolve(code === 0))
   })
 
-const record = async (payload) => {
+/**
+ * The first thing a person actually asked, for when the summariser gave no
+ * request. Not the first turn blindly: "hello" is a person, and recording it
+ * as what a session was for is how a row reads "hello" months later.
+ */
+const requestFrom = (t) => {
+  const asked = t.prompts.find((p) => !TRIVIAL.test(p))
+  return asked ? asked.replace(/\s+/g, ' ').trim().slice(0, 500) : null
+}
+
+/**
+ * Records one transcript. `opts` carries what a retry has to remember for
+ * itself — the platform and agent the first attempt ran under — and marks the
+ * retry, which posts only if the summary now exists and never re-checkpoints
+ * held tasks from a stale summary.
+ *
+ * Returns `{ sessionId, failed }`, `failed` meaning the summariser was asked and
+ * did not answer, so the caller knows not to spend more calls on retries.
+ */
+const record = async (payload, opts = {}) => {
   let transcriptPath = payload.transcript_path
   let sessionId = payload.session_id
 
@@ -738,7 +978,9 @@ const record = async (payload) => {
           files: keepFiles(t.files, payload.cwd ?? t.cwd).length,
           refs: [...chooseRefs(t, payload.cwd ?? t.cwd, sessionId)].slice(0, 12),
           refsFrom: refSource(t, payload.cwd ?? t.cwd, sessionId),
+          summariser: t.summariser,
           firstPrompt: t.prompts[0]?.slice(0, 120) ?? null,
+          request: requestFrom(t)?.slice(0, 120) ?? null,
         },
         null,
         2,
@@ -746,6 +988,12 @@ const record = async (payload) => {
     )
     return
   }
+
+  // A summariser's own run. Recording it gave 47 of 103 Mac sessions a
+  // borrowed summary and the parent's task refs, with no work behind them. A
+  // person who later resumed it is a real session, and is kept: their turns
+  // are prompts, and the summariser's prompt is not.
+  if (t.summariser && t.prompts.length === 0) return { sessionId, skipped: 'summariser' }
 
   // Nothing happened. A row saying so is noise in every later search.
   //
@@ -756,8 +1004,33 @@ const record = async (payload) => {
   if (t.prompts.length === 0 && t.files.size === 0 && t.refs.size === 0) return
 
   const cwd = payload.cwd ?? t.cwd
+  const platform = opts.platform ?? process.env.CAIRN_PLATFORM ?? 'claude'
+  const agent = opts.agent ?? process.env.CAIRN_AGENT
   const files = keepFiles(t.files, cwd)
-  const summary = (await summaryFor(sessionId, buildDigest(t))).summary ?? {}
+  const outcome = await summaryFor(sessionId, buildDigest(t))
+  const summary = outcome.summary ?? {}
+
+  if (outcome.error) {
+    logSummariser(`${platform} ${sessionId}${opts.retry ? ' retry' : ''}: ${outcome.error}`)
+    updateUnsummarised(sessionId, (e) => ({
+      path: transcriptPath,
+      cwd: cwd ?? null,
+      platform,
+      agent: agent ?? null,
+      firstAt: e?.firstAt ?? Date.now(),
+      lastAt: Date.now(),
+      // Only retries count against the limit: Codex fails once per turn
+      // during an outage, and that is one failure, not forty.
+      tries: (e?.tries ?? 0) + (opts.retry ? 1 : 0),
+    }))
+    // The row already exists from the first attempt; a retry adds nothing
+    // without the prose it came for.
+    if (opts.retry) return { sessionId, failed: true }
+  } else if (outcome.summary && readUnsummarised()[sessionId]) {
+    updateUnsummarised(sessionId, () => null)
+    if (opts.retry) logSummariser(`${platform} ${sessionId} retry: summarised`)
+  }
+  if (opts.retry && !outcome.summary) return { sessionId }
 
   const args = [
     'session',
@@ -765,7 +1038,7 @@ const record = async (payload) => {
     '--id',
     sessionId,
     '--platform',
-    process.env.CAIRN_PLATFORM ?? 'claude',
+    platform,
     '--cwd',
     cwd ?? process.cwd(),
     '--tool-calls',
@@ -776,9 +1049,12 @@ const record = async (payload) => {
   if (files.length) args.push('--files', files.join(','))
   const refs = chooseRefs(t, cwd ?? process.cwd(), sessionId)
   if (refs.size) args.push('--tasks', [...refs].slice(0, 400).join(','))
-  if (process.env.CAIRN_AGENT) args.push('--agent', process.env.CAIRN_AGENT)
+  if (agent) args.push('--agent', agent)
+  // The first attempt checkpointed what was held; a late summary must not
+  // overwrite a checkpoint written since.
+  if (opts.retry) args.push('--no-checkpoint')
 
-  const request = summary.request || t.prompts[0]?.slice(0, 500)
+  const request = summary.request || requestFrom(t)
   if (request) args.push('--request', request)
   // Said by the only party that can still see it. The prompt is deliberately
   // not stored as the request — it made every headline unreadable — so without
@@ -793,6 +1069,33 @@ const record = async (payload) => {
   }
 
   await post(args)
+  return { sessionId, failed: Boolean(outcome.error) }
+}
+
+const retryUnsummarised = async (currentId) => {
+  const now = Date.now()
+  const queue = readUnsummarised()
+  let pruned = false
+  for (const [id, e] of Object.entries(queue)) {
+    const expired = now - (e?.firstAt ?? 0) > RETRY_WINDOW_MS
+    const exhausted = (e?.tries ?? 0) >= RETRY_MAX_TRIES
+    if (e?.path && existsSync(e.path) && !expired && !exhausted) continue
+    if (exhausted || expired) {
+      logSummariser(`${e?.platform ?? '?'} ${id}: gave up after ${e?.tries ?? 0} attempt(s)`)
+    }
+    delete queue[id]
+    pruned = true
+  }
+  if (pruned) writeUnsummarised(queue)
+
+  for (const [id, e] of dueRetries(queue, now, currentId)) {
+    const result = await record(
+      { transcript_path: e.path, session_id: id, cwd: e.cwd ?? undefined },
+      { platform: e.platform, agent: e.agent ?? undefined, retry: true },
+    ).catch(() => null)
+    // Still down: stop paying for timeouts, the next run will try again.
+    if (result?.failed) break
+  }
 }
 
 /**
@@ -857,12 +1160,15 @@ const scan = async (root, windowHours) => {
   }
 
   found.sort((a, b) => a.mtime - b.mtime)
+  let failed = false
   for (const rollout of found) {
-    await record({ transcript_path: rollout.path, session_id: rollout.id })
+    const result = await record({ transcript_path: rollout.path, session_id: rollout.id }).catch(() => null)
+    if (result?.failed) failed = true
     seen.add(rollout.id)
   }
   rememberSeen(seen)
   console.log(`recorded ${found.length} session(s) from ${root}`)
+  if (!failed) await retryUnsummarised(null)
 }
 
 const main = async () => {
@@ -870,7 +1176,10 @@ const main = async () => {
   if (scanRoot) return scan(scanRoot, Number(arg('--window-hours') ?? 24))
 
   const dryIndex = process.argv.indexOf('--dry-run')
-  return record(DRY_RUN ? { transcript_path: process.argv[dryIndex + 1] } : await readStdin())
+  if (DRY_RUN) return record({ transcript_path: process.argv[dryIndex + 1] })
+
+  const result = await record(await readStdin())
+  if (!result?.failed) await retryUnsummarised(result?.sessionId ?? null)
 }
 
 main().catch((error) => {

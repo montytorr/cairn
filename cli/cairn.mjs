@@ -2877,6 +2877,16 @@ const commands = {
       ]) {
         if (flags[flag] !== undefined) payload[field] = await resolveValue(flags[flag])
       }
+      // The same order as `cairn context`: the map, then the remote (which the
+      // server matches against project_repos), then the cwd on the server's
+      // side. Nothing here used to look, and nothing else sent a project, so
+      // every live session landed unattributed (CAIRN-286).
+      if (payload.project === undefined) {
+        const mapped = projectForDir(payload.cwd)
+        if (mapped) payload.project = mapped
+      }
+      const repo = gitRemote(payload.cwd)
+      if (repo) payload.repo = repo
       if (flags['tool-calls']) payload.toolCalls = Number(flags['tool-calls'])
       if (flags['no-checkpoint']) payload.checkpointHeld = false
       if (flags.scheduled) payload.scheduled = true
