@@ -35,6 +35,15 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Several Cairn instances on one machine** (CAIRN-299). `~/.cairn/instances.json` names them
+  — a personal and a work server, say — and each keeps its own keys, outbox, ownership and
+  project map in `~/.cairn/instances/<name>/`. A command uses `--instance`, `CAIRN_INSTANCE` or
+  the configured default; with none, and the machine set to ask, it stops with exit 10 before
+  any request. A key in the environment, or a URL that disagrees with the chosen instance, is
+  refused. `cairn instance [list]` shows them, `cairn instance add <name> --url U [--default]
+  [--adopt]` adds one and can move the existing setup into it. Nothing changes on a machine
+  without the file.
+
 - **OpenClaw gets its briefing from the repo** (CAIRN-292). `hooks/openclaw/cairn-briefing` is
   an `agent:bootstrap` hook that injects a short lifecycle rule plus live `cairn context --cwd
   <workspace>` (5 s deadline, fails open to the rule alone). `install-hooks.mjs` copies it to

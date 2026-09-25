@@ -31,15 +31,16 @@ import {
 import { basename, dirname, join } from 'node:path'
 import { homedir, hostname } from 'node:os'
 
+const CAIRN_DIR = join(homedir(), '.cairn')
+
 /**
  * Credentials come from the environment, falling back to ~/.cairn/env — so an
  * agent skill works without the user having to edit a shell profile first.
  * Format is plain KEY=value lines.
  */
-const fileEnv = () => {
+const fileEnv = (path) => {
   try {
-    const path = `${homedir()}/.cairn/env`
-    if (!existsSync(path)) return {}
+    if (!path || !existsSync(path)) return {}
     return Object.fromEntries(
       readFileSync(path, 'utf8')
         .split('\n')
@@ -64,7 +65,111 @@ const fileEnv = () => {
  */
 const VERSION = '0.6.0'
 
-const FILE_ENV = fileEnv()
+/**
+ * Which Cairn this command talks to, on a machine that uses more than one.
+ *
+ * One machine can hold a personal and a professional instance, and nothing in
+ * a task ref, a project key or a directory name says which a command is for.
+ * Guessing is how a client's notes end up on the personal server, so the
+ * choice is explicit or it is not made: `--instance`, CAIRN_INSTANCE, or the
+ * default ~/.cairn/instances.json names. With none of them, and the file set to
+ * ask, the command stops before any request with exit 10, which tells an agent
+ * to ask the user rather than try again.
+ *
+ * Every instance keeps its own state in ~/.cairn/instances/<name>/ — env,
+ * outbox, ownership, projects.json — because a ref or a directory mapped on
+ * one means nothing on the other. No instances.json is the single-instance
+ * machine this CLI has always served, and nothing about it changes.
+ */
+const INSTANCES_PATH = join(CAIRN_DIR, 'instances.json')
+const INSTANCE_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/
+const UNDECIDED_EXIT = 10
+
+const readInstances = () => {
+  if (!existsSync(INSTANCES_PATH)) return null
+  let config
+  try {
+    config = JSON.parse(readFileSync(INSTANCES_PATH, 'utf8'))
+  } catch (error) {
+    return { error: `~/.cairn/instances.json is not valid JSON (${error.message})` }
+  }
+  if (config?.version !== 1) return { error: '~/.cairn/instances.json: "version" must be 1' }
+  const instances = config.instances
+  if (!instances || typeof instances !== 'object' || Array.isArray(instances) || !Object.keys(instances).length) {
+    return { error: '~/.cairn/instances.json: "instances" must name at least one instance' }
+  }
+  for (const [name, instance] of Object.entries(instances)) {
+    if (!INSTANCE_NAME.test(name)) {
+      return { error: `~/.cairn/instances.json: "${name}" is not an instance name (lowercase letters, digits and dashes)` }
+    }
+    let url
+    try { url = new URL(instance?.url) } catch { /* reported below */ }
+    if (!url || !['http:', 'https:'].includes(url.protocol)) {
+      return { error: `~/.cairn/instances.json: instance "${name}" needs an http(s) "url"` }
+    }
+  }
+  const unclassified = config.unclassified ?? { mode: 'ask' }
+  if (unclassified.mode === 'default' ? !instances[unclassified.instance] : unclassified.mode !== 'ask') {
+    return {
+      error: '~/.cairn/instances.json: "unclassified" must be {"mode": "ask"} or ' +
+        '{"mode": "default", "instance": <one of the instances>}',
+    }
+  }
+  return { instances, unclassified }
+}
+
+/**
+ * Read before the parser runs, because the credentials below depend on it, and
+ * read the way the parser reads it: the last one wins, and a bare `--instance`
+ * is an error rather than "none given" — on a machine with a default, the
+ * second reading would send a mistyped command to the default instance.
+ */
+const requestedInstance = () => {
+  const argv = process.argv.slice(2)
+  let found
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i].startsWith('--instance=')) found = { name: argv[i].slice('--instance='.length) }
+    else if (argv[i] === '--instance') {
+      found = argv[i + 1] && !argv[i + 1].startsWith('--') ? { name: argv[++i] } : { name: '' }
+    }
+  }
+  if (found) return found.name ? found : { error: '--instance needs the name of an instance' }
+  const fromEnv = process.env.CAIRN_INSTANCE?.trim()
+  return fromEnv ? { name: fromEnv } : {}
+}
+
+const INSTANCES = readInstances()
+const INSTANCE = (() => {
+  const { name: requested, error } = requestedInstance()
+  if (error) return { error }
+  if (!INSTANCES) {
+    return requested
+      ? { error: `--instance ${requested}: this machine has no ~/.cairn/instances.json, so it has one instance` }
+      : { name: null, dir: CAIRN_DIR }
+  }
+  if (INSTANCES.error) return { error: INSTANCES.error }
+  const { instances, unclassified } = INSTANCES
+  const named = Object.keys(instances).join(', ')
+  if (requested && !instances[requested]) {
+    return { error: `no instance named "${requested}" in ~/.cairn/instances.json (it has: ${named})` }
+  }
+  const name = requested ?? (unclassified.mode === 'default' ? unclassified.instance : null)
+  if (!name) {
+    return {
+      undecided:
+        `cairn: this machine uses several Cairn instances (${named}) and nothing says which one ` +
+        `this command is for. Ask the user which one, then re-run it with --instance <name>.`,
+    }
+  }
+  return { name, dir: join(CAIRN_DIR, 'instances', name), url: instances[name].url.replace(/\/+$/, '') }
+})()
+
+/** Where this instance's files live, for messages: never a path with a username in it. */
+const STATE_LABEL = INSTANCE.name ? `~/.cairn/instances/${INSTANCE.name}` : '~/.cairn'
+const ENV_LABEL = `${STATE_LABEL}/env`
+const STATE_DIR = INSTANCE.dir ?? CAIRN_DIR
+
+const FILE_ENV = fileEnv(INSTANCE.dir && join(INSTANCE.dir, 'env'))
 /**
  * Which session is running this command.
  *
@@ -127,8 +232,40 @@ const authHeaders = (extra = {}) => ({
   ...extra,
 })
 
-const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://localhost:3000')
-  .replace(/\/+$/, '')
+const trimUrl = (url) => (url ?? '').replace(/\/+$/, '')
+
+const BASE = INSTANCE.url ??
+  (INSTANCES ? '' : trimUrl(process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://localhost:3000'))
+
+/**
+ * With several instances, a URL or key from anywhere but the chosen instance
+ * is refused rather than preferred. The environment wins on a one-instance
+ * machine because it is how a command borrows an identity; here it would be
+ * how a command silently writes to the wrong server, and a key in the
+ * environment does not say which instance it was issued by.
+ */
+const INSTANCE_REFUSAL = (() => {
+  if (INSTANCE.error) return { message: `cairn: ${INSTANCE.error}`, code: 2 }
+  if (INSTANCE.undecided) return { message: INSTANCE.undecided, code: UNDECIDED_EXIT }
+  if (!INSTANCE.name) return null
+  for (const [where, url] of [['CAIRN_BASE_URL', process.env.CAIRN_BASE_URL], [`CAIRN_BASE_URL in ${ENV_LABEL}`, FILE_ENV.CAIRN_BASE_URL]]) {
+    if (url && trimUrl(url) !== BASE) {
+      return {
+        message: `cairn: ${where} points at a different server than instance "${INSTANCE.name}" ` +
+          `(~/.cairn/instances.json). Remove it; the instance decides the server.`,
+        code: 2,
+      }
+    }
+  }
+  if (process.env.CAIRN_API_KEY) {
+    return {
+      message: `cairn: CAIRN_API_KEY is set in the environment, and on a machine with several instances ` +
+        `it cannot say which one issued it. Put the key in ${ENV_LABEL} instead.`,
+      code: 2,
+    }
+  }
+  return null
+})()
 
 /**
  * Which runtime is speaking.
@@ -284,19 +421,23 @@ const BORROWING =
 const MUST_NOT_BORROW = new Set(['maintenance'])
 const IDENTITY_REFUSAL =
   BORROWING && MUST_NOT_BORROW.has(AGENT)
-    ? `cairn: CAIRN_AGENT=${AGENT} has no ${keyNameFor(AGENT)} in ~/.cairn/env, and this identity ` +
+    ? `cairn: CAIRN_AGENT=${AGENT} has no ${keyNameFor(AGENT)} in ${ENV_LABEL}, and this identity ` +
       `refuses to fall back to the default key, which belongs to another runtime. ` +
-      `Add ${keyNameFor(AGENT)}=<a key named ${AGENT}> to ~/.cairn/env.`
+      `Add ${keyNameFor(AGENT)}=<a key named ${AGENT}> to ${ENV_LABEL}.`
     : null
 
 /** Every path that would send the key goes through this first. */
 const requireKey = () => {
+  if (INSTANCE_REFUSAL) {
+    process.stderr.write(`${INSTANCE_REFUSAL.message}\n`)
+    process.exit(INSTANCE_REFUSAL.code)
+  }
   if (IDENTITY_REFUSAL) {
     process.stderr.write(`${IDENTITY_REFUSAL}\n`)
     process.exit(3)
   }
   if (!KEY) {
-    process.stderr.write('CAIRN_API_KEY is not set (env, or ~/.cairn/env).\n')
+    process.stderr.write(`CAIRN_API_KEY is not set (${INSTANCE.name ? ENV_LABEL : `env, or ${ENV_LABEL}`}).\n`)
     process.exit(1)
   }
 }
@@ -305,7 +446,7 @@ if (BORROWING && !IDENTITY_REFUSAL) {
   process.stderr.write(
     `cairn: could not tell which runtime this is${AGENT ? ` (${AGENT} has no ${keyNameFor(AGENT)})` : ''}, ` +
       `so this write will be filed under the default key. ` +
-      `Set CAIRN_AGENT, or add ${AGENT ? keyNameFor(AGENT) : 'CAIRN_API_KEY_<AGENT>'} to ~/.cairn/env.\n`,
+      `Set CAIRN_AGENT, or add ${AGENT ? keyNameFor(AGENT) : 'CAIRN_API_KEY_<AGENT>'} to ${ENV_LABEL}.\n`,
   )
 }
 
@@ -385,11 +526,11 @@ const flags = new Proxy(typedFlags, {
  * the help text is in this set. Add to both, or the test says so.
  */
 const KNOWN_FLAGS = new Set([
-  'agent', 'all', 'allow-dangling', 'also-project', 'archived', 'body',
+  'adopt', 'agent', 'all', 'allow-dangling', 'also-project', 'archived', 'body',
   'branch', 'completed',
-  'confirm', 'cwd', 'dangling', 'days', 'description', 'dir', 'dry-run',
+  'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'dir', 'dry-run',
   'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files',
-  'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id',
+  'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id', 'instance',
   'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'max-parents',
   'message', 'mine', 'next', 'no-checkpoint', 'no-parent', 'no-start', 'notify', 'older',
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
@@ -422,6 +563,8 @@ for (let i = 0; i < argv.length; i += 1) {
 }
 
 const FORMAT = flags.json ? 'json' : flags.pretty ? 'pretty' : 'tsv'
+// Already acted on, before parsing: it chose the credentials above.
+void flags.instance
 
 /**
  * What this file actually is, as a 16-hex sha256 — the same digest
@@ -651,7 +794,7 @@ let FLUSHING = false
  * it may not have won, is worse off than one told plainly that the write
  * failed. Those fail fast instead.
  */
-const OUTBOX_PATH = join(homedir(), '.cairn', 'outbox.jsonl')
+const OUTBOX_PATH = join(STATE_DIR, 'outbox.jsonl')
 const REJECTED_OUTBOX_PATH = `${OUTBOX_PATH}.rejected`
 const OUTBOX_LOCK_PATH = `${OUTBOX_PATH}.lock`
 const OUTBOX_PREFIX = 'outbox.jsonl.'
@@ -1215,8 +1358,8 @@ const emit = (data, opts = {}) => {
  * credentials: a longest-prefix map in ~/.cairn/projects.json, so a monorepo
  * subdirectory can override its parent.
  */
-const PROJECT_MAP_PATH = join(homedir(), '.cairn', 'projects.json')
-const OWNERSHIP_DIR = join(homedir(), '.cairn', 'ownership')
+const PROJECT_MAP_PATH = join(STATE_DIR, 'projects.json')
+const OWNERSHIP_DIR = join(STATE_DIR, 'ownership')
 
 const ownershipPath = (ref) => join(OWNERSHIP_DIR, `${ref.toUpperCase().replace(/[^A-Z0-9-]/g, '_')}.json`)
 
@@ -1316,7 +1459,7 @@ const updateRememberedOwnership = (path, data) => {
  * filters on it exactly. A runtime that cannot name itself writes no session
  * and keeps the old behaviour; nothing is lost that was previously correct.
  */
-const ACTED_PATH = join(homedir(), '.cairn', 'acted.jsonl')
+const ACTED_PATH = join(CAIRN_DIR, 'acted.jsonl')
 const ACTED_MAX_BYTES = 256 * 1024
 const ACTED_KEEP_LINES = 2000
 
@@ -1360,6 +1503,9 @@ const rememberWrite = (method, path, data) => {
         verb: verbOfWrite(method, path),
         cwd: process.cwd(),
         agent: AGENT,
+        // Machine-wide, because the session-end hook reads it before it knows
+        // which instance a session belongs to.
+        ...(INSTANCE.name ? { instance: INSTANCE.name } : {}),
         // Absent on a runtime that cannot name its session. The hook treats
         // absent as "cannot tell", never as "not mine".
         ...(SESSION ? { session: SESSION } : {}),
@@ -1648,6 +1794,11 @@ const HELP = `cairn — agent-first task tracker and shared memory
 
   projects
     cairn map [<KEY>|none]                       which project this directory is
+    cairn instance [list]                        which Cairn instance a command uses, and all of them
+    cairn instance add <name> --url <url> [--default] [--adopt]
+                                                 configure one more; --adopt moves this machine's
+                                                 existing env, map, ownership and queue into it
+    cairn <command> --instance <name>            use that instance (or CAIRN_INSTANCE=<name>)
     cairn --version                              this CLI, the server, and whether they match
     cairn projects [--archived]                  --archived includes retired ones;
                                                  \`was\` lists keys a project used to have
@@ -3070,6 +3221,120 @@ const commands = {
     process.stdout.write(renderContext(data, { fileOnly: Boolean(flags.file) }))
   },
 
+  /**
+   * Which instance this command would use, every instance configured, or one
+   * more. Local only: none of these reads a key or contacts a server, so they
+   * work on a machine whose configuration is exactly what needs looking at.
+   */
+  async instance() {
+    const sub = positional[0] ?? 'show'
+    if (sub === 'show') {
+      if (INSTANCES?.error) die(`cairn: ${INSTANCES.error}`, 2)
+      const shown = INSTANCE.name
+        ? { instance: INSTANCE.name, url: BASE, state: STATE_LABEL }
+        : INSTANCES
+          ? { instance: null, reason: INSTANCE.error ?? 'none chosen for this command' }
+          : { instance: null, reason: 'this machine has one instance (no ~/.cairn/instances.json)', url: BASE, state: STATE_LABEL }
+      return emit(shown)
+    }
+    if (sub === 'list') {
+      if (!INSTANCES) return emit([], { lines: () => ['one instance (no ~/.cairn/instances.json)'] })
+      if (INSTANCES.error) die(`cairn: ${INSTANCES.error}`, 2)
+      return emit(Object.entries(INSTANCES.instances).map(([name, { url }]) => ({
+        instance: name,
+        url,
+        default: INSTANCES.unclassified.mode === 'default' && INSTANCES.unclassified.instance === name ? 'yes' : undefined,
+        keys: existsSync(join(CAIRN_DIR, 'instances', name, 'env'))
+          ? Object.keys(fileEnv(join(CAIRN_DIR, 'instances', name, 'env'))).filter((k) => k.startsWith('CAIRN_API_KEY')).length
+          : 0,
+      })))
+    }
+    if (sub !== 'add') die('usage: cairn instance [show|list|add <name> --url <url> [--default] [--adopt]]')
+
+    const name = need(positional[1], 'usage: cairn instance add <name> --url <url> [--default] [--adopt]')
+    if (!INSTANCE_NAME.test(name)) die(`"${name}" is not an instance name: lowercase letters, digits and dashes, up to 32`)
+    const url = trimUrl(need(flags.url, 'cairn instance add needs --url <the server this instance is>'))
+    try {
+      if (!['http:', 'https:'].includes(new URL(url).protocol)) throw new Error()
+    } catch {
+      die(`--url ${url} is not an http(s) URL`)
+    }
+    if (INSTANCES?.error) die(`cairn: ${INSTANCES.error} — fix it before adding to it`, 2)
+    const config = INSTANCES
+      ? { version: 1, instances: { ...INSTANCES.instances }, unclassified: INSTANCES.unclassified }
+      : { version: 1, instances: {}, unclassified: { mode: 'ask' } }
+    const existing = config.instances[name]
+    if (existing && trimUrl(existing.url) !== url) {
+      die(`instance "${name}" already points at ${existing.url}; edit ~/.cairn/instances.json to change it on purpose`)
+    }
+    config.instances[name] = { url }
+    if (flags.default) config.unclassified = { mode: 'default', instance: name }
+
+    const dir = join(CAIRN_DIR, 'instances', name)
+    const legacy = ['env', 'projects.json', 'ownership'].filter((f) => existsSync(join(CAIRN_DIR, f)))
+    const queued = existsSync(CAIRN_DIR) && readdirSync(CAIRN_DIR).some((f) =>
+      (f === 'outbox.jsonl' || f.startsWith(OUTBOX_PREFIX)) && f !== basename(OUTBOX_LOCK_PATH))
+    const moved = []
+    if (flags.adopt && (legacy.length || queued)) {
+      // The files at the top of ~/.cairn belong to the server they were used
+      // with, found the way it always was: the environment, then ~/.cairn/env,
+      // then localhost. Moving them under a different one would hand one
+      // instance's keys, map and queued writes to another.
+      const legacyUrl = trimUrl(
+        process.env.CAIRN_BASE_URL || fileEnv(join(CAIRN_DIR, 'env')).CAIRN_BASE_URL || 'http://localhost:3000',
+      )
+      if (legacyUrl !== url) {
+        die(`this machine's existing setup points at ${legacyUrl}, not ${url}: ` +
+          '--adopt would move its keys to the wrong instance')
+      }
+      for (const file of legacy) {
+        if (existsSync(join(dir, file))) die(`~/.cairn/instances/${name}/${file} already exists; not overwriting it`)
+      }
+    }
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    if (flags.adopt) {
+      for (const file of legacy) {
+        renameSync(join(CAIRN_DIR, file), join(dir, file))
+        moved.push(file)
+      }
+      // Under the queue's own lock, so a write being queued right now lands
+      // either before the move or in the next process's instance directory.
+      // Appended rather than renamed onto a file already there: an adoption
+      // interrupted halfway is finished by running it again, and a rename
+      // would replace the queued writes it had already moved.
+      await withOutboxLock(() => {
+        for (const file of readdirSync(CAIRN_DIR)) {
+          if (file !== 'outbox.jsonl' && !file.startsWith(OUTBOX_PREFIX)) continue
+          if (file === basename(OUTBOX_LOCK_PATH)) continue
+          const from = join(CAIRN_DIR, file)
+          const to = join(dir, file)
+          if (existsSync(to)) {
+            appendFileSync(to, readFileSync(from), { mode: 0o600 })
+            unlinkSync(from)
+          } else renameSync(from, to)
+          moved.push(file)
+        }
+      })
+    }
+    const temp = `${INSTANCES_PATH}.tmp`
+    writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+    renameSync(temp, INSTANCES_PATH)
+
+    const notes = []
+    if (moved.length) notes.push(`moved ${moved.join(', ')} into ~/.cairn/instances/${name}/`)
+    else if (legacy.includes('env') && !INSTANCES && !flags.adopt) {
+      notes.push('~/.cairn/env is no longer read now that instances are configured; ' +
+        'its keys belong in the instance they were issued by (or re-run with --adopt)')
+    }
+    if (!existsSync(join(dir, 'env'))) {
+      notes.push(`put this instance's keys in ~/.cairn/instances/${name}/env (CAIRN_API_KEY_<RUNTIME>=..., mode 600)`)
+    }
+    if (config.unclassified.mode === 'ask') notes.push('commands with no instance chosen stop and ask (exit 10)')
+    return emit({ instance: name, url, default: flags.default ? 'yes' : undefined, notes }, {
+      lines: (d) => [`instance ${d.instance} -> ${d.url}${d.default ? ' (default)' : ''}`, ...d.notes.map((n) => `  ${n}`)],
+    })
+  },
+
   async map() {
     const dir = flags.dir ?? gitRoot(process.cwd()) ?? process.cwd()
     const key = positional[0]
@@ -3371,16 +3636,21 @@ if (flags.version || command === 'version') {
   // function, so it is said once and only once.
   let server = null
   let res = null
+  // The same refusal every other command gives, as a warning: the local
+  // version is still worth answering with when the configuration is not.
+  if (INSTANCE_REFUSAL) process.stderr.write(`${INSTANCE_REFUSAL.message}\n`)
   try {
-    res = await fetch(`${BASE}/api/v1/health`)
-    server = (await res.json())?.data ?? null
+    if (BASE && !INSTANCE_REFUSAL) {
+      res = await fetch(`${BASE}/api/v1/health`)
+      server = (await res.json())?.data ?? null
+    }
   } catch {
     // Offline, or not pointed at a server yet. The local version still answers.
   }
   const mine = fingerprint()
   process.stdout.write(`cairn ${VERSION}${mine ? ` ${mine}` : ''}\n`)
   if (server) {
-    process.stdout.write(`server ${server.version ?? '?'} (${server.build ?? '?'}) ${BASE}\n`)
+    process.stdout.write(`server ${server.version ?? '?'} (${server.build ?? '?'}) ${BASE}${INSTANCE.name ? ` [instance ${INSTANCE.name}]` : ''}\n`)
     warnIfStale(res)
   }
   process.exit(0)

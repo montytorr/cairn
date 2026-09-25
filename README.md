@@ -618,6 +618,32 @@ cannot answer, the old order stands. Nothing is spawned when the environment is 
 The CLI is deliberately dependency-free — Node 22's built-in `fetch` is enough — so it can
 be dropped onto a box and run with no install step.
 
+**Several instances on one machine** — a personal Cairn and a work one, say. Nothing in a
+task ref, a project key or a directory name says which server a command is for, so the
+choice is made explicitly or not at all:
+
+```bash
+cairn instance add personal --url https://cairn.example.com --adopt   # this machine's existing setup
+cairn instance add work --url https://cairn.work.example              # then its keys in
+                                                                      # ~/.cairn/instances/work/env
+cairn instance list
+cairn note ACME-42 "…" --instance work                                # or CAIRN_INSTANCE=work
+```
+
+- `~/.cairn/instances.json` names the instances and what happens when a command names none:
+  `"unclassified": {"mode": "default", "instance": "personal"}` uses that one, and
+  `{"mode": "ask"}` (the default) stops before any request with **exit 10**, so an agent asks
+  the user instead of guessing. `--default` on `instance add` sets the first form.
+- Each instance keeps its own state in `~/.cairn/instances/<name>/`: `env` (the same per-runtime
+  keys as above), the outbox, ownership and `projects.json`. `--adopt` moves the files at the
+  top of `~/.cairn` into the instance, and refuses if they were used with a different server
+  (`CAIRN_BASE_URL`, then `~/.cairn/env`, then localhost). Interrupted, it finishes on a re-run.
+- `CAIRN_API_KEY` in the environment is refused once instances are configured — it cannot say
+  which instance issued it — and so is a `CAIRN_BASE_URL` that disagrees with the chosen one.
+- Without `instances.json` nothing changes. Choosing the instance from the directory, and
+  per-instance maintenance jobs, are still to come (CAIRN-297); until then a scheduled job on
+  such a machine needs `CAIRN_INSTANCE` or a default.
+
 **Skill** (Claude Code, Codex and OpenClaw all read skill folders):
 
 ```bash
