@@ -42,7 +42,10 @@ const Row = ({ row }: { row: SearchAllRow }) => {
   const href = hrefFor(row)
 
   const body = (
-    <div className="flex min-w-0 items-start gap-2.5">
+    // A bounded measure inside a full-width row: the hover and the rule
+    // still span the page, but the title and its cost stay within one glance
+    // instead of sitting a screen apart on a wide monitor.
+    <div className="flex max-w-4xl min-w-0 items-start gap-2.5">
       <Icon size={13} className={cn('mt-[0.1875rem] shrink-0', tone)} aria-hidden />
 
       <div className="min-w-0 flex-1">
@@ -71,9 +74,16 @@ const Row = ({ row }: { row: SearchAllRow }) => {
         )}
       </div>
 
-      <span className="text-fg-subtle shrink-0 self-center text-[0.6875rem] tabular-nums">
-        ~{Math.ceil(row.body_bytes / 4)}
-      </span>
+      {/* What opening it costs, in the same units `cairn check` prints. A
+          bare "~19" read as a minus sign and a mystery number. */}
+      {row.body_bytes > 0 && (
+        <span
+          className="text-fg-subtle shrink-0 self-center text-[0.6875rem] tabular-nums"
+          title="Roughly how many tokens it takes to read this in full"
+        >
+          ~{Math.ceil(row.body_bytes / 4)} tok
+        </span>
+      )}
     </div>
   )
 

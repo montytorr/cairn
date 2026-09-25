@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
@@ -9,6 +10,7 @@ import { RedirectNotice } from '@/components/redirect-notice'
 import { entitiesForProject } from '@/lib/api/knowledge'
 import { ProjectIcon } from '@/components/icons'
 import { ViewSwitch } from './view-switch'
+import { parseProjectView, viewCookieName } from '@/lib/project-view'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectMenu } from './project-menu'
 import { MobileNavButton } from '@/components/mobile-nav-context'
@@ -55,6 +57,7 @@ const ProjectPage = async ({
     project.key,
   )
   const arrivedFrom = projectRedirectNotice(from, renames)
+  const initialView = parseProjectView((await cookies()).get(viewCookieName(project.key))?.value)
 
   return (
     <div className="flex h-dvh flex-col">
@@ -130,8 +133,15 @@ const ProjectPage = async ({
 
       <RedirectNotice message={arrivedFrom} className="mx-4 mt-3 shrink-0" />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <ViewSwitch tasks={tasks} recentlyClosed={recentlyClosed} projectKey={project.key} />
+      {/* page-scroll-guard: fills the viewport on purpose. ViewSwitch owns the
+          scrolling: the list scrolls as one, the board per column. */}
+      <div className="min-h-0 flex-1">
+        <ViewSwitch
+          tasks={tasks}
+          recentlyClosed={recentlyClosed}
+          projectKey={project.key}
+          initialView={initialView}
+        />
       </div>
       <LiveUpdates projectKey={project.key} />
     </div>

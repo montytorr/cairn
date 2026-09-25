@@ -35,6 +35,9 @@ const BoardPage = async ({
   if (!user) redirect('/login')
 
   const includeClosed = params.closed === '1'
+  const query = new URLSearchParams(
+    Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  ).toString()
   const { tasks, projects, closedHidden } = await listBoardTasks(user.id, { includeClosed })
 
   return (
@@ -55,8 +58,11 @@ const BoardPage = async ({
         </PendingLink>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <CrossProjectBoard tasks={tasks} projects={projects} />
+      {/* page-scroll-guard: fills the viewport on purpose. The board scrolls
+          inside CrossProjectBoard, per column and per lane cell, so the
+          toolbar and column headings never scroll away. */}
+      <div className="min-h-0 flex-1">
+        <CrossProjectBoard tasks={tasks} projects={projects} initialQuery={query} />
       </div>
       <LiveUpdates />
     </div>

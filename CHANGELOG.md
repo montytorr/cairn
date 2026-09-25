@@ -129,6 +129,29 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **Both boards stop at the viewport and scroll per column** (CAIRN-277, CAIRN-278). `/board`
+  and a project's Board view grew with their tallest column, so the page scrolled as a whole
+  and the toolbar and column headings scrolled away with it. Each column is now a panel as
+  tall as the board with its own scroll; the drop target is the scroll box, so a column
+  scrolled halfway still takes a drop anywhere on screen. With swimlanes, each lane cell is
+  capped (`min(26rem, 55dvh)`) and scrolls on its own while the board scrolls through the
+  lanes; the column headings are drawn once and stick, lane names stick to the left when
+  scrolled sideways, and a lane collapses from its name. Both boards share
+  `src/components/board-columns.tsx`, and the project board gained keyboard dragging.
+
+- **A board no longer hydrates as a different board** (CAIRN-277, CAIRN-278). `/board`
+  parsed its view from `window.location`, so the server rendered the default view for a link
+  like `?swimlane=agent`; the project page read List/Board from localStorage, so the server
+  always rendered the list. Both then re-rendered on hydration. The board's query now comes
+  from the server's `searchParams`, and the project view choice is a `cairn-view-<KEY>`
+  cookie (an existing localStorage choice carries over once). dnd-kit's
+  `aria-describedby` counter mismatch is gone too, via a fixed `DndContext` id.
+
+- **Search says what its number means** (CAIRN-280). Every unified result ended in `~19`,
+  which read as a minus sign and a mystery. It is the rough token cost of reading the result
+  — what `cairn check` prints — and now reads `~19 tok`, with a tooltip, hidden when zero.
+  Result rows keep a full-width rule but cap their content at a readable width.
+
 - **`--project <retired key>` answers for the project it became** (CAIRN-264). Every place
   that turned a key into a project matched it as a string, so after AC became HOL, `cairn
   list --project AC` said "No project AC." and `cairn next --project AC` said "nothing open"
@@ -159,6 +182,9 @@ out under **Breaking** with what to do about it.
   beside the imported ref rather than instead of it, with the rename and its date on hover.
 
 ### Changed
+
+- **Settings has the header bar every other page has** (CAIRN-279), and its Password
+  heading matches Labels and Entities instead of being the one uppercase eyebrow.
 
 - **`GET /next?project=` with a key that names no project is a 404** instead of "nothing
   open" (CAIRN-264). Silence was the answer for a typo and for a renamed project alike, and

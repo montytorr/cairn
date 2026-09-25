@@ -47,12 +47,7 @@ export const PasswordSection = () => {
 
   return (
     <section>
-      <div className="mb-3 flex items-baseline gap-2">
-        <h2 className="text-fg-muted text-[0.65625rem] font-medium tracking-[0.06em] uppercase">
-          Password
-        </h2>
-        <span className="bg-border ml-1 h-px flex-1" />
-      </div>
+      <h2 className="text-fg mb-3 text-[0.8125rem] font-medium">Password</h2>
 
       <form onSubmit={submit} className="flex max-w-sm flex-col gap-3">
         <Field label="New password">
