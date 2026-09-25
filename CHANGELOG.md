@@ -11,6 +11,24 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Vitals can see what it was blind to** (CAIRN-288). The CAIRN-282 audit found every vitals
+  number correct and the panel green while 17 of 22 claims had been quiet for over 20h, the
+  reaper had released nothing for 13 days, the summariser wrote 1 of 16 sessions, and codex and
+  openclaw's scheduled runs had stopped. `cairn_vitals_signals` (migration 065, a new function
+  beside `cairn_vitals`, not another rewrite of it) adds: claims with no genuine activity for
+  more than 2h / 24h and the quietest ten (`task_genuine_activity_at` is the reaper's
+  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, the holder's evidence events, or any checkpoint but the
+  session-end "still held" one — and `src/lib/liveness-fixtures.ts` pins the two together);
+  reconcile releases in the window and in 7 days, plus the maintenance identity's last write;
+  sessions and summarised share per runtime and host (`macos`, `linux`, `other`, from the
+  working directory); runtimes and writers absent for the window and the week before; knowledge never
+  verified or not in 30 days (informational). New findings: `claims-quiet`, `reaper-idle`
+  (alarm, reaches the banner), `maintenance-silent`, `summariser-degraded`, `runtime-quiet`,
+  `runtime-absent`, and `signals-unavailable` when the function cannot be read. The
+  summariser's own `claude -p` runs no longer count as sessions. The health banner now says
+  "vitals unavailable" instead of rendering nothing when vitals cannot be read, and the Vitals
+  page renders what it could read when one of its three aggregates fails.
+
 - **How often each fact is actually recalled** (CAIRN-270). 053 recorded which entries every
   search returned and every direct read by slug, and nothing read either per entry.
   `knowledge_recall_counts` (migration 061) does: `cairn know` lists gain a `recalled` column

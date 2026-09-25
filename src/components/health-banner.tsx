@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, HelpCircle } from 'lucide-react'
 import { assess, cachedVitals } from '@/lib/api/vitals'
 
 /**
@@ -21,9 +21,23 @@ export const HealthBanner = async ({ userId }: { userId: string }) => {
     alarms = assess(vitals)
       .filter((f) => f.severity === 'alarm')
       .map((f) => f.message)
-  } catch {
-    // The health check failing is not a reason to fail the page it sits on.
-    return null
+  } catch (error) {
+    // The health check failing is not a reason to fail the page it sits on,
+    // and not a reason to say nothing either. This used to return null, so a
+    // broken vitals read rendered exactly like a healthy one — the one state
+    // a health banner must never be able to confuse. See CAIRN-288.
+    console.error('[health-banner] could not read vitals', error instanceof Error ? error.message : error)
+    return (
+      <Link
+        href="/vitals"
+        className="border-border bg-surface-raised hover:bg-surface flex shrink-0 items-center gap-2 border-b px-3 py-1 transition-colors md:px-4"
+      >
+        <HelpCircle size={12} className="text-fg-subtle shrink-0" aria-hidden />
+        <p className="text-fg-muted min-w-0 text-[0.71875rem]">
+          Vitals unavailable — Cairn cannot currently tell whether it is working.
+        </p>
+      </Link>
+    )
   }
 
   if (alarms.length === 0) return null
