@@ -23,8 +23,14 @@ Install it as the user the gateway runs as:
 node scripts/install-hooks.mjs            # --dry-run prints the exact command instead
 ```
 
-With `openclaw` on PATH (or `CAIRN_OPENCLAW_BIN` pointing at it), that copies the hook to
-`~/.cairn/hooks/openclaw/cairn-briefing` and runs:
+It only links for an account that has an OpenClaw config (`~/.openclaw/openclaw.json`, or
+`OPENCLAW_CONFIG_PATH`). A global install puts `openclaw` on every account's PATH, and
+linking from one that runs no gateway would create a config nobody reads while the real
+gateway stays unbriefed — so that account is skipped and says so. Pass `--openclaw` to link
+anyway, for a gateway you have not configured yet.
+
+With `openclaw` on PATH (or `CAIRN_OPENCLAW_BIN` pointing at it) and a config present, that
+copies the hook to `~/.cairn/hooks/openclaw/cairn-briefing` and runs:
 
 ```bash
 openclaw hooks install --link ~/.cairn/hooks/openclaw/cairn-briefing --force

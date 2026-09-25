@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -83,10 +83,19 @@ process.exit(64)
   await chmod(path, 0o755)
 }
 
-const setup = async () => {
+/**
+ * `gateway` gives the account an OpenClaw config, which is what the account
+ * that runs the gateway has. Without one the installer must not link at all
+ * (CAIRN-296): `openclaw` on PATH is not the same as running a gateway.
+ */
+const setup = async ({ gateway = true }: { gateway?: boolean } = {}) => {
   const home = await temp('cairn-openclaw-home-')
   const bin = await temp('cairn-openclaw-bin-')
   await fakeOpenclaw(bin)
+  if (gateway) {
+    await mkdir(join(home, '.openclaw'), { recursive: true })
+    await writeFile(join(home, '.openclaw', 'openclaw.json'), '{}')
+  }
   const log = join(home, 'openclaw.log')
   const env = { PATH: `${bin}:${BASE_PATH}`, HOME: home, FAKE_OPENCLAW_LOG: log }
   const calls = async () =>
@@ -98,6 +107,41 @@ const setup = async () => {
 }
 
 describe('the installer links the OpenClaw briefing hook', () => {
+  it('skips an account that has OpenClaw on PATH but no config, and links nothing', async () => {
+    const { env, calls, hookDir } = await setup({ gateway: false })
+    const out = await run([], env)
+    expect(out.code, out.stderr).toBe(0)
+    expect(await calls()).toEqual([])
+    expect(existsSync(hookDir)).toBe(false)
+    expect(out.stdout).toContain('this account runs no gateway; skipped')
+    expect(out.stdout).toContain('--openclaw')
+  })
+
+  it('says the same on --dry-run instead of promising a link it would not make', async () => {
+    const { env, calls } = await setup({ gateway: false })
+    const dry = await run(['--dry-run'], env)
+    expect(dry.stdout).toContain('runs no gateway; skipped')
+    expect(dry.stdout).not.toContain('would run: openclaw')
+    expect(await calls()).toEqual([])
+  })
+
+  it('links anyway with --openclaw, for a gateway not configured yet', async () => {
+    const { env, calls, hookDir } = await setup({ gateway: false })
+    const out = await run(['--openclaw'], env)
+    expect(out.code, out.stderr).toBe(0)
+    expect(await calls()).toEqual([['hooks', 'install', '--link', hookDir, '--force']])
+  })
+
+  it('reads the config where OPENCLAW_CONFIG_PATH puts it', async () => {
+    const { env, calls, home } = await setup({ gateway: false })
+    const config = join(home, 'elsewhere', 'openclaw.json')
+    await mkdir(dirname(config), { recursive: true })
+    await writeFile(config, '{}')
+    const out = await run([], { ...env, OPENCLAW_CONFIG_PATH: config })
+    expect(out.code, out.stderr).toBe(0)
+    expect(await calls()).toHaveLength(1)
+  })
+
   it('copies the hook to a stable path, links it with OpenClaw’s own command, and asks for a restart', async () => {
     const { env, calls, hookDir } = await setup()
     const first = await run([], env)

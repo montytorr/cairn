@@ -1623,6 +1623,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn replay                   send writes put aside while the server was down
     cairn relearn <slug> --body -  correct it  [--reason "why"] [--allow-dangling]
                                    --project K | --entity E | --global  re-scope it
+                                   (none clears one side: --entity E --project none moves it)
                                    --files a,b  the files it is about (replaces those named before)
     cairn unlearn <slug> [--superseded-by <slug> [--reason "why"]]
     cairn session list             recent sessions
@@ -2806,8 +2807,24 @@ const commands = {
     if (flags.body !== undefined) patch.body = await resolveValue(flags.body)
     if (flags.title) patch.title = flags.title
     if (flags.label) patch.labels = splitList(flags.label)
-    if (flags.project) patch.projects = splitList(flags.project)
-    if (flags.entity !== undefined) patch.entities = splitList(flags.entity)
+    // A PATCH only touches the side it is given, so `--entity X` adds an entity
+    // and leaves the project in place — and moving a fact from a project to an
+    // entity needed a way to clear one side. `none` is that way, as for `cairn
+    // map none`. An empty value used to be read as "not given" and silently
+    // dropped, the CAIRN-262 failure again; it is refused instead (CAIRN-295).
+    const scopeList = (name) => {
+      const raw = flags[name]
+      if (raw === undefined) return undefined
+      if (raw === true || splitList(raw).length === 0) {
+        die(`--${name} needs a value: a key, a comma list, or none to clear it`)
+      }
+      const list = splitList(raw)
+      return list.length === 1 && list[0].toLowerCase() === 'none' ? [] : list
+    }
+    const projects = scopeList('project')
+    const entities = scopeList('entity')
+    if (projects) patch.projects = projects
+    if (entities) patch.entities = entities
     // `--global` on a PATCH has to CLEAR, where on `learn` it only means "do
     // not infer from this directory". Both scopes go: a fact true everywhere
     // is one with no project and no entity, and clearing only projects would
@@ -2817,7 +2834,7 @@ const commands = {
     // verb, `cairn relearn <slug> --global` parsed, printed the entry with its
     // old scope still on it, and exited 0 (CAIRN-262).
     if (flags.global) {
-      if (flags.project || flags.entity !== undefined) {
+      if (projects !== undefined || entities !== undefined) {
         die('--global means no project and no entity; do not pass it with --project or --entity')
       }
       patch.projects = []

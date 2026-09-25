@@ -19,7 +19,7 @@
  * without touching anyone else's. Every entry it owns is tagged, and tagging
  * is how it knows what is safe to replace.
  *
- * Usage: node scripts/install-hooks.mjs [--dry-run]
+ * Usage: node scripts/install-hooks.mjs [--dry-run] [--openclaw]
  */
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -27,6 +27,8 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const DRY = process.argv.includes('--dry-run')
+/** Link the OpenClaw hook even where this user has no OpenClaw config yet. */
+const FORCE_OPENCLAW = process.argv.includes('--openclaw')
 const HOME = homedir()
 const REPO = dirname(import.meta.dirname)
 
@@ -414,9 +416,11 @@ const onPath = (bin) =>
  * doubt — no file, JSON5 it cannot parse — answers no, and the install runs,
  * which is itself idempotent.
  */
+const openclawConfig = () =>
+  process.env.OPENCLAW_CONFIG_PATH?.trim() || join(HOME, '.openclaw', 'openclaw.json')
+
 const openclawLinked = () => {
-  const path = process.env.OPENCLAW_CONFIG_PATH?.trim() || join(HOME, '.openclaw', 'openclaw.json')
-  const internal = readJson(path)?.hooks?.internal
+  const internal = readJson(openclawConfig())?.hooks?.internal
   return (
     internal?.enabled !== false &&
     (internal?.load?.extraDirs ?? []).includes(OPENCLAW_HOOK) &&
@@ -463,6 +467,16 @@ const installOpenclaw = () => {
   if (!onPath(OPENCLAW_BIN)) {
     log('  openclaw: not on PATH — skipped. Where it runs, as the gateway user:')
     log(`            node scripts/install-hooks.mjs   (or: ${openclawCommand})`)
+    return
+  }
+  // `openclaw` on PATH says it is installed, not that this user runs a gateway:
+  // a global npm install puts it on every account's PATH. Linking from an
+  // account with no config would create one for a gateway that never starts
+  // and leave the real one unbriefed, while reporting success (CAIRN-296).
+  // The config file is what the gateway reads, so its absence is the signal.
+  if (!FORCE_OPENCLAW && !existsSync(openclawConfig())) {
+    log(`  openclaw: no config at ${openclawConfig()} — this account runs no gateway; skipped.`)
+    log('            Run the installer as the gateway\'s user, or pass --openclaw to link here anyway.')
     return
   }
   if (DRY) {
