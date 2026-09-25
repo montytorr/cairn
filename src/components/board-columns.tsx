@@ -30,6 +30,11 @@ const EmptyCell = ({ over }: { over: boolean }) => (
  * stretching the page. Only a full-height column should contain its
  * overscroll (pass `overscroll-contain`): a capped lane cell has to hand the
  * wheel back so the board scrolls on to the next lane.
+ *
+ * `overflow-y-auto` makes overflow-x compute to `auto` too (the
+ * overflow-auto-forces-both-axes trap), so this box clips anything a card
+ * positions outside itself. A menu or popover on a card must render in a
+ * portal, or it disappears here the way the bulk bar's menus once did.
  */
 export const DropList = ({
   dropId,

@@ -10,8 +10,11 @@ import { viewCookieName, type ProjectView } from '@/lib/project-view'
 
 const LEGACY_STORAGE_KEY = (projectKey: string) => `cairn:view:${projectKey}`
 
+// Secure wherever the page itself is served over HTTPS; plain http is only
+// ever local development, where a Secure cookie would never be stored.
 const rememberView = (projectKey: string, view: ProjectView) => {
-  document.cookie = `${viewCookieName(projectKey)}=${view}; path=/; max-age=31536000; samesite=lax`
+  const secure = window.location.protocol === 'https:' ? '; secure' : ''
+  document.cookie = `${viewCookieName(projectKey)}=${view}; path=/; max-age=31536000; samesite=lax${secure}`
 }
 
 /**
