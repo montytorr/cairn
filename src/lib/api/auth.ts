@@ -39,6 +39,7 @@ export type Actor = {
    * never an authorization input.
    */
   host?: string | null
+  /**
    * The API key's bare agent name (`claude-code`, `maintenance`), for agents.
    *
    * `actorId` embeds it, but it also embeds a display name anyone can set, so
