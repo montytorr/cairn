@@ -6,6 +6,7 @@ import { actorLabel } from './actor'
 import type { SessionUpsert } from '@/schemas/session'
 import { recordFiles } from './files'
 import { normalizeDatabaseValue, pool } from '@/lib/db/client'
+import { AUTO_CHECKPOINT_MARKER, UNTOUCHED_CHECKPOINT_PREFIX, isAutoCheckpoint } from '@/lib/checkpoint-origin'
 
 /**
  * Sessions: the episodic record, checkpointed during and written at the end of one.
@@ -87,22 +88,16 @@ const projectIdForSession = async (
 }
 
 /**
- * Checkpoints every task this agent still holds, using the session summary.
+ * Checkpoints what this session held, using the session summary.
  *
  * This is the discipline mechanism, and the reason it lives on the server
  * rather than in the hook: whatever the agent did or did not bother to record,
- * a claim it walked away from stops being a phantom hold on the board. It
- * never *closes* anything — closing needs a resolution somebody meant.
+ * a claim it walked away from still says where it was left. It never *closes*
+ * anything — closing needs a resolution somebody meant — and it never
+ * *releases* anything either; that is reconcile's job, once a claim goes quiet.
  */
-const RECORDED = '_Recorded automatically when the session ended._'
+const RECORDED = AUTO_CHECKPOINT_MARKER
 
-/**
- * Which held tasks this session actually worked, and which it merely held.
- *
- * Pure, and exported, because the distinction is the whole point of the fix and
- * the failure it prevents is silent: a wrong checkpoint reads exactly like a
- * right one.
- */
 /**
  * The subset a given session may write a checkpoint onto.
  *
@@ -113,7 +108,9 @@ const RECORDED = '_Recorded automatically when the session ended._'
  * A task whose claim names no session is kept. It was claimed before the
  * column existed, or by a runtime that cannot name itself, and dropping those
  * would quietly stop checkpointing work that is genuinely held — trading a
- * silent bug for a silent regression.
+ * silent bug for a silent regression. What keeps that safe is planAutoCheckpoints:
+ * a claim this session cannot prove is its own is only ever written where
+ * there is nothing a person or an agent wrote to lose.
  */
 export const heldByThisSession = <T extends { claimed_session: string | null }>(
   held: T[],
@@ -121,6 +118,13 @@ export const heldByThisSession = <T extends { claimed_session: string | null }>(
 ): T[] =>
   sessionId ? held.filter((t) => t.claimed_session === null || t.claimed_session === sessionId) : held
 
+/**
+ * Which held tasks this session actually worked, and which it merely held.
+ *
+ * Pure, and exported, because the distinction is the whole point of the fix and
+ * the failure it prevents is silent: a wrong checkpoint reads exactly like a
+ * right one.
+ */
 export const splitHeldByWorked = <T>(
   held: T[],
   taskRefs: string[],
@@ -145,10 +149,57 @@ export const workedCheckpoint = (summary: string) => `${summary}\n\n${RECORDED}`
 export const untouchedCheckpoint = (taskRefs: string[]) => {
   const elsewhere = taskRefs.slice(0, 5).join(', ')
   return (
-    'Still held, not progressed: the session that held this claim worked' +
+    `${UNTOUCHED_CHECKPOINT_PREFIX}: the session that held this claim worked` +
     (elsewhere ? ` on ${elsewhere}` : ' elsewhere') +
     `.\n\n${RECORDED}`
   )
+}
+
+export type HeldForCheckpoint = {
+  id: string
+  number: number
+  claimed_session: string | null
+  checkpoint_summary: string | null
+  project: { key: string }
+}
+
+/**
+ * What the session-end checkpoint writes, and onto which tasks.
+ *
+ * Pure, because every rule in it exists to stop a loss that nothing reports.
+ * On 2026-09-25 71 tasks carried "Still held, not progressed…" and 28 of them
+ * had had a real checkpoint before it: BB-385's handoff — the one thing that
+ * said which guard suite was green and what was uncommitted — was replaced
+ * with a line about a different session's work (CAIRN-283).
+ *
+ * - A claim naming another session is never touched.
+ * - A task this session did not work gets the "held, not progressed" line only
+ *   where there is no checkpoint at all. Over an automatic one it adds
+ *   nothing true; over a written one it destroys the handoff.
+ * - A task it did work gets the summary. Over a written checkpoint only when
+ *   the claim provably belongs to this session: a claim with no session named
+ *   may be another session's, and a ref in the transcript is not proof of
+ *   work — reading a task mentions it too.
+ * - Rewriting identical text is skipped, so a sweep that re-records a session
+ *   is a no-op rather than a fresh timestamp.
+ */
+export const planAutoCheckpoints = <T extends HeldForCheckpoint>(
+  held: T[],
+  { sessionId, taskRefs, summary }: { sessionId: string | null; taskRefs: string[]; summary: string },
+): { task: T; text: string; worked: boolean }[] => {
+  const refOf = (t: T) => `${t.project.key}-${t.number}`
+  const { touched, untouched } = splitHeldByWorked(heldByThisSession(held, sessionId), taskRefs, refOf)
+  const mine = (t: T) => sessionId !== null && t.claimed_session === sessionId
+  const written = (t: T) => Boolean(t.checkpoint_summary) && !isAutoCheckpoint(t.checkpoint_summary)
+
+  return [
+    ...touched
+      .filter((t) => mine(t) || !written(t))
+      .map((task) => ({ task, text: workedCheckpoint(summary), worked: true })),
+    ...untouched
+      .filter((t) => !t.checkpoint_summary)
+      .map((task) => ({ task, text: untouchedCheckpoint(taskRefs), worked: false })),
+  ].filter(({ task, text }) => task.checkpoint_summary !== text)
 }
 
 const checkpointHeldTasks = async (actor: Actor, session: SessionRow): Promise<string[]> => {
@@ -156,16 +207,12 @@ const checkpointHeldTasks = async (actor: Actor, session: SessionRow): Promise<s
 
   const { data, error } = await admin()
     .from('tasks')
-    .select('id, number, claimed_session, project:projects!project_id!inner(key)')
+    .select(
+      'id, number, claimed_session, checkpoint_summary, ownership_version, checkpoint_version, ' +
+        'project:projects!project_id!inner(key)',
+    )
     .eq('claimed_by', actor.actorId)
   if (error) throw new Error(error.message)
-
-  const all = (data ?? []) as unknown as {
-    id: string
-    number: number
-    claimed_session: string | null
-    project: { key: string }
-  }[]
 
   /**
    * Held by THIS session, not by everything wearing the same name.
@@ -177,13 +224,11 @@ const checkpointHeldTasks = async (actor: Actor, session: SessionRow): Promise<s
    * was consulted. CAIRN-182 fixed the version of this that stamped tasks the
    * session never touched; the same wrong summary arrives here through
    * identity instead of through the file list.
-   *
-   * A task with no claimed_session is still included. It was claimed before
-   * that column existed, or by a runtime with no session to give, and
-   * excluding it would quietly stop checkpointing work that is genuinely held
-   * — a silent regression to fix a silent bug.
    */
-  const held = heldByThisSession(all, actor.sessionId)
+  const held = (data ?? []) as unknown as (HeldForCheckpoint & {
+    ownership_version: number
+    checkpoint_version: number
+  })[]
   if (held.length === 0) return []
 
   const summary = [session.completed, session.next_steps && `Next: ${session.next_steps}`]
@@ -194,41 +239,37 @@ const checkpointHeldTasks = async (actor: Actor, session: SessionRow): Promise<s
   if (!summary) return []
 
   const at = session.ended_at ?? new Date().toISOString()
+  const plan = planAutoCheckpoints(held, { sessionId: actor.sessionId, taskRefs: session.task_refs ?? [], summary })
 
   /**
-   * A held task is not necessarily a worked task.
+   * One guarded write per task, and none of them is a sign of life.
    *
-   * This used to write the same summary to everything the agent held, so a
-   * task claimed days ago and never opened received a progress report about
-   * different work entirely — BB-359, a task about login failures, was stamped
-   * with a summary of a UI refactor. Checkpoints are read back by `cairn
-   * context` and the session banner, so a wrong one is not inert: it is handed
-   * to the next agent as fact.
-   *
-   * `task_refs` already records what the session actually touched, so the two
-   * cases can be told apart without any new data.
+   * auto_checkpoint_task_atomic lands only if the claim, its generation and
+   * the checkpoint this plan read are all unchanged, so a deliberate
+   * checkpoint written in between wins. It leaves updated_at alone: the
+   * reaper reads updated_at as activity, and a session-end hook recording
+   * that a claim exists kept week-old claims alive on every runtime that
+   * records sessions often.
    */
-  const refOf = (t: { number: number; project: { key: string } }) =>
-    `${t.project.key}-${t.number}`
-
-  const { touched, untouched } = splitHeldByWorked(held, session.task_refs ?? [], refOf)
-
-  const write = async (rows: typeof held, text: string) => {
-    if (rows.length === 0) return
-    const { error: updateError } = await admin()
-      .from('tasks')
-      .update({ checkpoint_summary: text, checkpoint_at: at })
-      .in(
-        'id',
-        rows.map((t) => t.id),
-      )
-    if (updateError) throw new Error(updateError.message)
+  const written: string[] = []
+  for (const { task, text, worked } of plan) {
+    const { data: ok, error: writeError } = await admin().rpc<boolean>('auto_checkpoint_task_atomic', {
+      p_task_id: task.id,
+      p_owner_user_id: actor.userId,
+      p_actor_type: actor.actorType,
+      p_actor_id: actor.actorId,
+      p_expected_version: task.ownership_version,
+      p_expected_checkpoint_version: task.checkpoint_version,
+      p_expected_summary: task.checkpoint_summary,
+      p_summary: text,
+      p_at: at,
+      p_data: { worked, session: session.external_id, platform: session.platform_source },
+    })
+    if (writeError) throw new Error(writeError.message)
+    if (ok) written.push(`${task.project.key}-${task.number}`)
   }
 
-  await write(touched, workedCheckpoint(summary))
-  await write(untouched, untouchedCheckpoint(session.task_refs ?? []))
-
-  return held.map(refOf)
+  return written
 }
 
 /**

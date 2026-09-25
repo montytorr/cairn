@@ -61,10 +61,10 @@ export const POST = route<{ ref: string }, z.infer<typeof releaseBody>>({
     if (error) return fail('internal_error', error.message)
     if (!data) return fail('conflict', 'Claim ownership changed; nothing was released.')
 
-    // The claim is gone, so the name of its holder is stale. Left behind it
-    // would answer "which session holds this" with a session that does not.
-    await admin().from('tasks').update({ claimed_session: null }).eq('id', task.id)
-
+    // release_task_atomic clears claimed_session with the claim (063): left
+    // behind it would answer "which session holds this" with one that does
+    // not. It also moves a held `doing` task back to `todo`, as the reaper
+    // does, so a released task stops saying somebody is on it.
     return ok(data)
   },
 })

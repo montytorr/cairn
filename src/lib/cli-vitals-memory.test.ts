@@ -168,3 +168,44 @@ describe('cairn vitals reports facts looked up by name', () => {
     expect(String(note?.body.note)).toContain('looked up by name, no such entry: clawdius-sever')
   })
 })
+
+/**
+ * Migration 065's signals, in the terminal. The claims nobody is on and the
+ * per-runtime split are the numbers CAIRN-282 found invisible everywhere, and
+ * `cairn vitals` is where the agents that hold those claims look.
+ */
+describe('cairn vitals shows the signals cairn_vitals cannot see', () => {
+  const signals = {
+    windowHours: 24,
+    sessions: { recent: 3, recentSummarised: 1, baseline: 1, baselineSummarised: 1, summariserRecent: 2, summariserBaseline: 0 },
+    runtimes: [
+      { runtime: 'openclaw', host: 'linux', recent: 2, recentSummarised: 0, baseline: 9, baselineSummarised: 7, lastSeenAt: '2026-09-25T09:00:00Z' },
+    ],
+    claims: {
+      held: 22,
+      quiet2h: 17,
+      quiet24h: 10,
+      quietest: [
+        { ref: 'BB-385', title: 'Fleet-global MEV auth cooldown', claimedBy: 'openclaw · Dev', lastActivityAt: null, quietMinutes: 10080 },
+      ],
+    },
+    reaper: { releasedInWindow: 0, released7d: 0, lastReleaseAt: null, maintenanceLastWriteAt: null },
+    absentAgents: [],
+    knowledge: { current: 424, neverVerified: 421, unverified30d: 422, verifiedInWindow: 0, lastVerifiedAt: null },
+  }
+
+  it('lists quiet claims, runtimes and verification', async () => {
+    const { stdout } = await vitals({ ...report(memory()), signals })
+    expect(stdout).toContain('claims 17 of 22 quiet >2h, 10 >24h; auto-released 0 in 7d (last never)')
+    expect(stdout).toContain('quiet 168h: BB-385')
+    expect(stdout).toContain('openclaw@linux: 2 sessions, 0 summarised (week before 9, 7)')
+    expect(stdout).toContain('summariser runs not counted as sessions: 2')
+    expect(stdout).toContain('knowledge 421 of 424 never verified')
+  })
+
+  it('prints none of it for a server that cannot send it', async () => {
+    const { stdout, code } = await vitals(report(memory()))
+    expect(code).toBe(0)
+    expect(stdout).not.toContain('quiet >2h')
+  })
+})

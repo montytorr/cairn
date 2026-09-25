@@ -110,13 +110,16 @@ If work is incomplete, leave the task doing with a checkpoint and explicit hando
 claim done merely because the current turn is ending.
 
 A checkpoint is what makes leaving it open safe. Two hours with nothing happening on a
-claim releases it and moves the task back to todo, so the board stops saying someone is
-working on it — the notes and the checkpoint are kept, and the checkpoint is the only
-thing that tells whoever picks it up where you got to.
+claim releases it and moves a `doing` task back to todo, so the board stops saying someone
+is working on it (an `in-review` task stays in review, unclaimed) — the notes and the
+checkpoint are kept, and the checkpoint is the only thing that tells whoever picks it up
+where you got to. `cairn release` does the same to `doing`.
 
 Sessions are created and recorded by the runtime lifecycle; there is deliberately no
 `cairn session create` command. At session start, use `context` and `check`; at session
-end, the runtime/Stop hook writes the episodic record and auto-checkpoints held tasks.
+end, the runtime/Stop hook writes the episodic record and auto-checkpoints what the session
+held — never over a checkpoint you wrote on a claim it cannot prove is yours, and it does
+not keep a claim alive. Your own `checkpoint` is still the handoff that counts.
 If a manual handoff is required and a real session id is available, use `cairn session
 end --id <id>`; never fabricate a session or substitute a second memory/task system.
 
@@ -260,7 +263,7 @@ cairn release ACME-42
 - A claim is independent of `status` — a task can be `doing` and unclaimed, which is what a
   human working on it looks like.
 - A lease goes stale after 15 minutes of silence and can then be taken over. Two hours of
-  silence releases it and returns the task to `todo`.
+  silence releases it and returns a `doing` task to `todo`; `in-review` keeps its status.
 - Leave a checkpoint before you stop; it is how another agent resumes without your
   transcript.
 
