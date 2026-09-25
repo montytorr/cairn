@@ -137,6 +137,26 @@ const ARTEFACTS = [
       at(join(home, '.cairn/hooks/cairn-session-end.mjs')),
     ],
   },
+  /**
+   * OpenClaw's bootstrap hook, which install-hooks.mjs copies here and links
+   * with `openclaw hooks install --link`. A linked directory is read in place,
+   * so keeping this copy current is the whole upgrade — bar a gateway restart,
+   * which is OpenClaw's to do. `needs` is the hook's own directory: repaired
+   * where it was installed, never created. `--also hook:openclaw-briefing=…`
+   * (and `hook:openclaw-briefing-doc=…`) reaches a gateway run as another user.
+   */
+  {
+    name: 'hook:openclaw-briefing',
+    file: 'hooks/openclaw/cairn-briefing/handler.ts',
+    mode: 0o644,
+    targets: [at(join(home, '.cairn/hooks/openclaw/cairn-briefing/handler.ts'))],
+  },
+  {
+    name: 'hook:openclaw-briefing-doc',
+    file: 'hooks/openclaw/cairn-briefing/HOOK.md',
+    mode: 0o644,
+    targets: [at(join(home, '.cairn/hooks/openclaw/cairn-briefing/HOOK.md'))],
+  },
 ]
 
 /**
