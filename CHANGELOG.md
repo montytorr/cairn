@@ -9,6 +9,20 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`relearn` can move a fact from a project to an entity** (CAIRN-295). A scope flag only
+  touches its own side, so `--entity X` added an entity and kept the project, and nothing
+  could clear one side alone: `--project ""` was read as "not given" and dropped without a
+  word. `none` now clears a side — `relearn <slug> --entity E --project none` moves it — and
+  an empty value is refused with that hint.
+- **The installer no longer links OpenClaw for an account that runs no gateway** (CAIRN-296).
+  A global install puts `openclaw` on every account's PATH; linking from one without an
+  OpenClaw config created a config nobody reads and reported success while the real gateway
+  stayed unbriefed. It now links only where `~/.openclaw/openclaw.json` (or
+  `OPENCLAW_CONFIG_PATH`) exists, says why it skipped otherwise — `--dry-run` included — and
+  `--openclaw` overrides for a gateway not configured yet.
+
 ### Added
 
 - **OpenClaw gets its briefing from the repo** (CAIRN-292). `hooks/openclaw/cairn-briefing` is

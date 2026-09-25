@@ -150,7 +150,7 @@ it is a note.
 
 ```bash
 cairn relearn <slug> --body - --reason "why"         # it changed (old version kept)
-cairn relearn <slug> --global                        # re-scope; also --project, --entity
+cairn relearn <slug> --entity E --project none      # re-scope: none clears a side; --global both
 cairn unlearn <old> --superseded-by <new>            # it was wrong
 cairn verify <slug>                                  # still true; you checked
 cairn know <slug> --history

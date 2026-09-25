@@ -143,6 +143,52 @@ describe('relearn --global', () => {
     expect(seen.body).toBeUndefined()
   })
 
+  /**
+   * CAIRN-295. A PATCH touches only the side it is given, so moving a fact from
+   * a project to an entity has to clear the project explicitly. `--entity X`
+   * alone adds and keeps the project, which is right; `none` is the clear.
+   */
+  it('moves a fact from a project to an entity with --project none', async () => {
+    const seen: { body?: Record<string, unknown> } = {}
+    const base = await serve(seen)
+    const { code } = await run(['relearn', 'a-fact', '--entity', 'clawdius', '--project', 'none'], base)
+
+    expect(code).toBe(0)
+    expect(seen.body?.projects).toEqual([])
+    expect(seen.body?.entities).toEqual(['clawdius'])
+  })
+
+  it('clears only the side named none, and leaves the other alone', async () => {
+    const seen: { body?: Record<string, unknown> } = {}
+    const base = await serve(seen)
+    const { code } = await run(['relearn', 'a-fact', '--entity', 'none'], base)
+
+    expect(code).toBe(0)
+    expect(seen.body?.entities).toEqual([])
+    expect(seen.body).not.toHaveProperty('projects')
+  })
+
+  it('adds an entity without touching the project when none is not given', async () => {
+    const seen: { body?: Record<string, unknown> } = {}
+    const base = await serve(seen)
+    await run(['relearn', 'a-fact', '--entity', 'clawdius'], base)
+
+    expect(seen.body?.entities).toEqual(['clawdius'])
+    expect(seen.body).not.toHaveProperty('projects')
+  })
+
+  /** An empty value used to read as "not given" and be dropped without a word. */
+  it('refuses an empty scope instead of silently ignoring it', async () => {
+    const seen: { body?: Record<string, unknown> } = {}
+    const base = await serve(seen)
+    const { code, stderr } = await run(['relearn', 'a-fact', '--entity', 'clawdius', '--project', ''], base)
+
+    expect(code).not.toBe(0)
+    expect(stderr).toContain('--project needs a value')
+    expect(stderr).toContain('none to clear it')
+    expect(seen.body).toBeUndefined()
+  })
+
   it('is offered by the help text, which is the contract people read', async () => {
     const base = await serve({})
     const { stdout } = await run(['help'], base)
