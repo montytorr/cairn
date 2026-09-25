@@ -73,7 +73,7 @@ describe('detectSecret: credential assignments', () => {
     'tokens: 500',
     'secrets: inherit',
     'token_count = 1200',
-    'pwd: /home/cal/project',
+    'pwd: ~/project',
     'secret: https://vault.example.com/x',
     'password: {{ db_password }}',
     'password = your-password-here',
