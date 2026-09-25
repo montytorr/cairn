@@ -414,7 +414,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
 | `cairn session list` · `cairn session end --id <id>` | The episodic record |
 | `cairn reconcile` | Release your own claims that went quiet |
-| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss |
+| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss. It also shows claims with no genuine activity for more than 2h and 24h (by the reaper's own rule: a session-end "still held" checkpoint does not count), whether the reaper has released anything in 7 days, sessions and summarised share per runtime and host (`macos` for `/Users/…`, `linux` for `/home/…` or `/root`), and how much current knowledge has never been verified. The summariser's own runs are not counted as sessions |
 | `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
 | `cairn replay` | Send writes put aside while the server was unreachable. Rarely needed by hand — any successful write drains the queue |
@@ -865,7 +865,7 @@ machine, and running `vitals` in two places reports the same findings twice.
 
 | Job | What it is for |
 |---|---|
-| `reconcile` (30 min) | Releases a claim an agent stopped working on, and moves the task back to todo so `doing` keeps meaning somebody is on it |
+| `reconcile` (30 min) | Releases any claim in the workspace that went quiet for two hours, and moves a `doing` task back to todo so `doing` keeps meaning somebody is on it (`in-review` keeps its status). Workspace-wide only under the `maintenance` key; any other agent's `reconcile` covers its own claims |
 | `vitals` (daily) | Asks whether the memory is still being written and read, and reports **only** when something looks wrong |
 | `agent-files` (hourly on Linux, and on every deploy; on macOS every 15 minutes and at load) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
 | `openclaw-sessions` (30 min) | OpenClaw has no session-end event, so its transcripts are swept instead of waiting to be handed over |

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { assess, type Vitals } from './vitals'
+import {
+  assess,
+  assessSignals,
+  isMaintenance,
+  REAPER_REACH_MINUTES,
+  type RuntimeHost,
+  type Vitals,
+  type VitalsSignals,
+} from './vitals'
 
 /** A healthy week, which every test bends in exactly one direction. */
 const healthy = (over: Partial<Vitals> = {}): Vitals => ({
@@ -194,5 +202,272 @@ describe('the summariser failing silently', () => {
       healthy({ sessions: { recent: 2, recentWithFiles: 2, recentSummarised: 0, baseline: 40, baselineWithFiles: 35 } }),
     ).map((f) => f.code)
     expect(codes).not.toContain('sessions-without-summary')
+  })
+})
+
+/**
+ * The blind spots CAIRN-282 found, each reading green while it failed. The
+ * signals come from migration 065; a healthy set is bent one way per test.
+ */
+const NOW = Date.parse('2026-09-25T12:00:00Z')
+const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+
+const healthySignals = (over: Partial<VitalsSignals> = {}): VitalsSignals => ({
+  windowHours: 24,
+  sessions: {
+    recent: 6,
+    recentSummarised: 6,
+    baseline: 40,
+    baselineSummarised: 30,
+    summariserRecent: 0,
+    summariserBaseline: 0,
+  },
+  runtimes: [
+    { runtime: 'claude', host: 'macos', recent: 6, recentSummarised: 5, baseline: 35, baselineSummarised: 28, lastSeenAt: hoursAgo(1) },
+    { runtime: 'openclaw', host: 'linux', recent: 3, recentSummarised: 3, baseline: 21, baselineSummarised: 18, lastSeenAt: hoursAgo(2) },
+  ],
+  claims: { held: 2, quiet2h: 0, quiet24h: 0, quietest: [] },
+  reaper: { releasedInWindow: 0, released7d: 2, lastReleaseAt: hoursAgo(50), maintenanceLastWriteAt: hoursAgo(50) },
+  absentAgents: [],
+  knowledge: { current: 424, neverVerified: 421, unverified30d: 422, verifiedInWindow: 0, lastVerifiedAt: hoursAgo(250) },
+  ...over,
+})
+
+const withSignals = (signals: VitalsSignals | null, over: Partial<Vitals> = {}) =>
+  healthy({ signals, ...over })
+
+const signalCodes = (v: Vitals) => assessSignals(v, NOW).map((f) => f.code)
+
+const quietClaim = (ref: string, hours: number | null) => ({
+  ref,
+  title: `task ${ref}`,
+  claimedBy: 'openclaw · Dev',
+  lastActivityAt: hours === null ? null : hoursAgo(hours),
+  quietMinutes: hours === null ? null : Math.round(hours * 60),
+})
+
+describe('assessSignals', () => {
+  it('says nothing about a healthy set', () => {
+    expect(assessSignals(withSignals(healthySignals()), NOW)).toEqual([])
+  })
+
+  it('says nothing when the server cannot send signals at all', () => {
+    // A payload from before 065 has no key; that is not a failure to report.
+    expect(assessSignals(healthy(), NOW)).toEqual([])
+  })
+
+  it('reports signals that failed to read rather than reading as healthy', () => {
+    const findings = assessSignals(withSignals(null, { signalsError: 'function does not exist' }), NOW)
+    expect(findings.map((f) => f.code)).toEqual(['signals-unavailable'])
+    expect(findings[0]?.message).toContain('function does not exist')
+  })
+
+  it('treats knowledge never verified as informational, not a finding', () => {
+    // 421 of 424 on the day of the audit. No threshold is defensible yet.
+    expect(signalCodes(withSignals(healthySignals()))).toEqual([])
+  })
+
+  describe('quiet claims', () => {
+    it('warns about a claim nobody has touched for a day, naming it', () => {
+      const v = withSignals(
+        healthySignals({ claims: { held: 22, quiet2h: 17, quiet24h: 1, quietest: [quietClaim('BB-385', 168)] } }),
+      )
+      const f = assessSignals(v, NOW).find((x) => x.code === 'claims-quiet')
+      expect(f?.severity).toBe('warning')
+      expect(f?.message).toContain('BB-385 (168h, openclaw · Dev)')
+      expect(f?.message).toContain('17 of 22')
+    })
+
+    it('warns about three claims quiet for more than 2h', () => {
+      const v = withSignals(
+        healthySignals({
+          claims: {
+            held: 5,
+            quiet2h: 3,
+            quiet24h: 0,
+            quietest: [quietClaim('A-1', 3), quietClaim('A-2', 2.5), quietClaim('A-3', 2.1)],
+          },
+        }),
+      )
+      expect(signalCodes(v)).toContain('claims-quiet')
+    })
+
+    it('stays quiet about one or two claims just past 2h', () => {
+      const v = withSignals(
+        healthySignals({
+          claims: { held: 5, quiet2h: 2, quiet24h: 0, quietest: [quietClaim('A-1', 2.2), quietClaim('A-2', 2.1)] },
+        }),
+      )
+      expect(signalCodes(v)).not.toContain('claims-quiet')
+    })
+  })
+
+  describe('the reaper', () => {
+    const stale = { held: 22, quiet2h: 17, quiet24h: 10, quietest: [quietClaim('BB-385', 168)] }
+    const idle = { releasedInWindow: 0, released7d: 0, lastReleaseAt: null, maintenanceLastWriteAt: null }
+
+    it('alarms when claims are past its reach and it released nothing in 7 days', () => {
+      // The audit's shape: #0 every 30 minutes since 09-12 against 17 quiet claims.
+      const v = withSignals(
+        healthySignals({ claims: stale, reaper: { ...idle, lastReleaseAt: hoursAgo(13 * 24) } }),
+      )
+      const f = assessSignals(v, NOW).find((x) => x.code === 'reaper-idle')
+      expect(f?.severity).toBe('alarm')
+      expect(f?.message).toContain('168h')
+      expect(f?.message).toContain('312h ago')
+      expect(f?.message).toContain('maintenance identity last wrote never')
+      expect(signalCodes(v)).not.toContain('maintenance-silent')
+    })
+
+    it('treats a claim with no activity ever recorded as past its reach', () => {
+      const v = withSignals(
+        healthySignals({
+          claims: { held: 1, quiet2h: 1, quiet24h: 1, quietest: [quietClaim('X-1', null)] },
+          reaper: idle,
+        }),
+      )
+      expect(signalCodes(v)).toContain('reaper-idle')
+    })
+
+    it('warns, not alarms, when it released this week but not in the window', () => {
+      const v = withSignals(healthySignals({ claims: stale }))
+      expect(signalCodes(v)).toContain('maintenance-silent')
+      expect(signalCodes(v)).not.toContain('reaper-idle')
+    })
+
+    it('says nothing when no claim has been quiet long enough for it to act', () => {
+      // Quiet for 2h30 is inside 120 minutes plus the 30-minute schedule.
+      const v = withSignals(
+        healthySignals({
+          claims: { held: 1, quiet2h: 1, quiet24h: 0, quietest: [quietClaim('A-1', 2.5)] },
+          reaper: idle,
+        }),
+      )
+      expect(REAPER_REACH_MINUTES).toBe(180)
+      expect(signalCodes(v)).not.toContain('reaper-idle')
+      expect(signalCodes(v)).not.toContain('maintenance-silent')
+    })
+
+    it('reaches the banner, which shows alarms only', () => {
+      const v = withSignals(healthySignals({ claims: stale, reaper: idle }))
+      expect(assess(v).filter((f) => f.severity === 'alarm').map((f) => f.code)).toContain('reaper-idle')
+    })
+  })
+
+  describe('the summariser per runtime and host', () => {
+    const rt = (over: Partial<RuntimeHost>): RuntimeHost => ({
+      runtime: 'openclaw',
+      host: 'linux',
+      recent: 8,
+      recentSummarised: 8,
+      baseline: 40,
+      baselineSummarised: 30,
+      lastSeenAt: hoursAgo(1),
+      ...over,
+    })
+
+    it('warns at 1 of 16 when one success kept the old alarm green', () => {
+      // 09-24: openclaw 0/8, codex 0/2, claude 1/6, against ~75% the week before.
+      const v = withSignals(
+        healthySignals({
+          runtimes: [
+            rt({ runtime: 'openclaw', recent: 8, recentSummarised: 0 }),
+            rt({ runtime: 'codex', host: 'macos', recent: 2, recentSummarised: 0, baseline: 10, baselineSummarised: 8 }),
+            rt({ runtime: 'claude', host: 'macos', recent: 6, recentSummarised: 1, baseline: 40, baselineSummarised: 32 }),
+          ],
+        }),
+        { sessions: { recent: 16, recentWithFiles: 10, recentSummarised: 1, baseline: 90, baselineWithFiles: 70 } },
+      )
+      expect(codes(v)).not.toContain('sessions-without-summary')
+      const f = assessSignals(v, NOW).find((x) => x.code === 'summariser-degraded')
+      expect(f?.message).toContain('openclaw@linux 0/8')
+      expect(f?.message).toContain('codex@macos 0/2')
+      expect(f?.message).toContain('claude@macos 1/6')
+    })
+
+    it('warns below 50% with three sessions and no baseline', () => {
+      const v = withSignals(
+        healthySignals({ runtimes: [rt({ recent: 4, recentSummarised: 1, baseline: 0, baselineSummarised: 0 })] }),
+      )
+      expect(signalCodes(v)).toContain('summariser-degraded')
+    })
+
+    it('does not judge a runtime by one session against its baseline', () => {
+      const v = withSignals(
+        healthySignals({ runtimes: [rt({ recent: 1, recentSummarised: 0, baseline: 6, baselineSummarised: 6 })] }),
+      )
+      expect(signalCodes(v)).not.toContain('summariser-degraded')
+    })
+
+    it('accepts a runtime that always summarised little, at its own rate', () => {
+      const v = withSignals(
+        healthySignals({ runtimes: [rt({ recent: 2, recentSummarised: 1, baseline: 40, baselineSummarised: 16 })] }),
+      )
+      expect(signalCodes(v)).not.toContain('summariser-degraded')
+    })
+  })
+
+  describe('session volume per runtime and host', () => {
+    const rt = (over: Partial<RuntimeHost>): RuntimeHost => ({
+      runtime: 'claude',
+      host: 'macos',
+      recent: 8,
+      recentSummarised: 6,
+      baseline: 50,
+      baselineSummarised: 40,
+      lastSeenAt: hoursAgo(1),
+      ...over,
+    })
+
+    it('flags a runtime present last week and absent now', () => {
+      // openclaw's scheduled runs stopped on 09-20 inside a healthy-looking total.
+      const v = withSignals(
+        healthySignals({
+          runtimes: [
+            rt({}),
+            rt({ runtime: 'openclaw', host: 'linux', recent: 0, recentSummarised: 0, baseline: 70, lastSeenAt: hoursAgo(30) }),
+          ],
+        }),
+      )
+      const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-quiet')
+      expect(f?.message).toContain('openclaw@linux 0 in 24h, about 10 expected')
+      expect(f?.message).not.toContain('claude@macos')
+    })
+
+    it('flags a runtime well under a third of its usual volume, not only at zero', () => {
+      const v = withSignals(healthySignals({ runtimes: [rt({ recent: 2, recentSummarised: 2, baseline: 140 })] }))
+      expect(signalCodes(v)).toContain('runtime-quiet')
+    })
+
+    it('does not flag a runtime too rarely used to expect one today', () => {
+      const v = withSignals(
+        healthySignals({ runtimes: [rt({ runtime: 'codex', recent: 0, recentSummarised: 0, baseline: 3, baselineSummarised: 3 })] }),
+      )
+      expect(signalCodes(v)).not.toContain('runtime-quiet')
+    })
+
+    it('names a runtime absent for the window and the week before', () => {
+      const v = withSignals(
+        healthySignals({
+          runtimes: [
+            rt({ runtime: 'codex', host: 'linux', recent: 0, recentSummarised: 0, baseline: 0, baselineSummarised: 0, lastSeenAt: hoursAgo(24 * 12) }),
+          ],
+          absentAgents: [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(24 * 10) }],
+        }),
+      )
+      const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-absent')
+      expect(f?.message).toContain('codex@linux sessions (last 288h ago)')
+      expect(f?.message).toContain('codex · Dev writes (last 240h ago)')
+    })
+  })
+
+  it('does not call the maintenance identity a silent runtime', () => {
+    // It writes only when it releases; the reaper checks judge it instead.
+    const v = healthy({
+      agents: [{ agent: 'maintenance · Dev', actorType: 'agent', recent: 0, baseline: 40 }],
+    })
+    expect(codes(v)).not.toContain('agent-silent')
+    expect(isMaintenance('maintenance')).toBe(true)
+    expect(isMaintenance('claude-code · Dev')).toBe(false)
   })
 })

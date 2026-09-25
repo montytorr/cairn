@@ -1584,7 +1584,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn session list             recent sessions
     cairn session checkpoint --id <id>  upsert ongoing session, do not checkpoint held tasks
     cairn session end --id <id>    write the episodic record, checkpoint what is held
-    cairn reconcile                release your own claims that went quiet
+    cairn reconcile                release your own claims that went quiet (2h)
+                                   as CAIRN_AGENT=maintenance: every quiet claim
     cairn vitals [--hours 24] [--all]   is the memory still being written
     cairn vitals --notify <ref>         post findings as a note, silent if none
 
@@ -2938,6 +2939,38 @@ const commands = {
       return out
     }
 
+    /**
+     * What migration 065 can see and cairn_vitals cannot: claims nobody is on,
+     * the reaper, sessions and the summariser per runtime and host, knowledge
+     * verification. Absent on an older server, and then nothing is printed —
+     * `0 quiet` from a server that cannot count them would be a wrong answer.
+     */
+    const signalLines = (s) => {
+      if (!s) return []
+      const quiet = (m) => (m === null ? 'never active' : m >= 120 ? `${Math.round(m / 60)}h` : `${m}m`)
+      const out = [
+        `claims ${s.claims.quiet2h} of ${s.claims.held} quiet >2h, ${s.claims.quiet24h} >24h; ` +
+          `auto-released ${s.reaper.released7d} in 7d (last ${s.reaper.lastReleaseAt?.slice(0, 16) ?? 'never'})`,
+      ]
+      for (const c of s.claims.quietest.slice(0, 5)) {
+        out.push(`  quiet ${quiet(c.quietMinutes)}: ${c.ref} ${truncate(c.title, 50)} (${c.claimedBy})`)
+      }
+      for (const r of s.runtimes) {
+        out.push(
+          `  ${r.runtime}@${r.host}: ${r.recent} sessions, ${r.recentSummarised} summarised ` +
+            `(week before ${r.baseline}, ${r.baselineSummarised})`,
+        )
+      }
+      if (s.sessions.summariserRecent > 0) {
+        out.push(`  summariser runs not counted as sessions: ${s.sessions.summariserRecent}`)
+      }
+      out.push(
+        `knowledge ${s.knowledge.neverVerified} of ${s.knowledge.current} never verified, ` +
+          `${s.knowledge.unverified30d} not in 30 days`,
+      )
+      return out
+    }
+
     const hours = Number(flags.hours ?? 24)
     const data = await request('GET', `/api/v1/vitals?hours=${hours}`)
     const findings = data.findings ?? []
@@ -2950,9 +2983,11 @@ const commands = {
       const note =
         `Cairn vitals, last ${data.windowHours}h:\n` +
         findings.map((f) => `  [${f.severity}] ${f.message}`).join('\n') +
-        `\n\nSessions ${data.sessions.recent} (${data.sessions.recentWithFiles} naming files), ` +
+        `\n\nSessions ${data.sessions.recent} (${data.sessions.recentWithFiles} naming files, ` +
+        `${data.sessions.recentSummarised ?? '?'} summarised), ` +
         `tasks ${data.tasks.opened} opened / ${data.tasks.closed} closed, ` +
         `${data.tasks.stalled} stalled, ${data.autoReleased} claims auto-released.` +
+        (signalLines(data.signals).length ? `\n${signalLines(data.signals).join('\n')}` : '') +
         (memoryLines(data.memory).length ? `\n${memoryLines(data.memory).join('\n')}` : '')
       await request('POST', `/api/v1/tasks/${encodeURIComponent(flags.notify)}/notes`, {
         note,
@@ -2970,14 +3005,16 @@ const commands = {
         if (flags.all || d.findings.length === 0) {
           out.push('')
           out.push(
-            `sessions ${d.sessions.recent} (${d.sessions.recentWithFiles} with files), ` +
-              `week before ${d.sessions.baseline} (${d.sessions.baselineWithFiles})`,
+            `sessions ${d.sessions.recent} (${d.sessions.recentWithFiles} with files` +
+              (d.sessions.recentSummarised !== undefined ? `, ${d.sessions.recentSummarised} summarised` : '') +
+              `), week before ${d.sessions.baseline} (${d.sessions.baselineWithFiles})`,
           )
           out.push(
             `tasks ${d.tasks.opened} opened, ${d.tasks.closed} closed, ` +
               `${d.tasks.stalled} stalled, ${d.tasks.held} held`,
           )
           out.push(`claims auto-released ${d.autoReleased}, knowledge written ${d.knowledgeWritten}`)
+          out.push(...signalLines(d.signals))
           out.push(...memoryLines(d.memory))
           for (const a of d.agents) out.push(`  ${a.agent}: ${a.recent} writes (week before ${a.baseline})`)
         }
@@ -2996,10 +3033,11 @@ const commands = {
         rows: (d) =>
           d.released.map((r) => ({
             ref: r.ref,
+            holder: r.holder ?? '',
             held: `${r.heldForMinutes}m`,
             checkpoint: r.hadCheckpoint ? 'yes' : 'none',
           })),
-        columns: ['ref', 'held', 'checkpoint'],
+        columns: ['ref', 'holder', 'held', 'checkpoint'],
       },
     )
   },

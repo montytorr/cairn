@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { RESOLUTION_KINDS, type ResolutionKind, type TaskStatus } from '@/schemas/task'
 import { Button, Select, Textarea, InlineInput } from '@/components/ui/control'
+import { resolutionSuggestion } from '@/lib/checkpoint-origin'
 
 /**
  * Closing a task requires saying how it ended, so this is the friction point
@@ -10,7 +11,8 @@ import { Button, Select, Textarea, InlineInput } from '@/components/ui/control'
  *
  * It is kept deliberately light — one textarea, prefilled from the last
  * checkpoint where there is one, so the common case is "confirm" rather than
- * "compose". Friction on the close path is where trackers rot, and the whole
+ * "compose". Never from one the session-end hook wrote: that describes a
+ * session, not how this task ended, and a prefilled default gets confirmed. Friction on the close path is where trackers rot, and the whole
  * value of a recorded resolution is lost if people route around it.
  */
 export const ResolutionDialog = ({
@@ -37,7 +39,7 @@ export const ResolutionDialog = ({
     duplicateOf?: string,
   ) => Promise<boolean>
 }) => {
-  const [value, setValue] = useState(suggestion ?? '')
+  const [value, setValue] = useState(resolutionSuggestion(suggestion) ?? '')
   const [kind, setKind] = useState<ResolutionKind>(status === 'cancelled' ? 'wont-fix' : 'fixed')
   const [pending, setPending] = useState(false)
   const [duplicateOf, setDuplicateOf] = useState('')

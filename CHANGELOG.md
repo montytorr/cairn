@@ -11,6 +11,24 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Vitals can see what it was blind to** (CAIRN-288). The CAIRN-282 audit found every vitals
+  number correct and the panel green while 17 of 22 claims had been quiet for over 20h, the
+  reaper had released nothing for 13 days, the summariser wrote 1 of 16 sessions, and codex and
+  openclaw's scheduled runs had stopped. `cairn_vitals_signals` (migration 065, a new function
+  beside `cairn_vitals`, not another rewrite of it) adds: claims with no genuine activity for
+  more than 2h / 24h and the quietest ten (`task_genuine_activity_at` is the reaper's
+  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, the holder's evidence events, or any checkpoint but the
+  session-end "still held" one — and `src/lib/liveness-fixtures.ts` pins the two together);
+  reconcile releases in the window and in 7 days, plus the maintenance identity's last write;
+  sessions and summarised share per runtime and host (`macos`, `linux`, `other`, from the
+  working directory); runtimes and writers absent for the window and the week before; knowledge never
+  verified or not in 30 days (informational). New findings: `claims-quiet`, `reaper-idle`
+  (alarm, reaches the banner), `maintenance-silent`, `summariser-degraded`, `runtime-quiet`,
+  `runtime-absent`, and `signals-unavailable` when the function cannot be read. The
+  summariser's own `claude -p` runs no longer count as sessions. The health banner now says
+  "vitals unavailable" instead of rendering nothing when vitals cannot be read, and the Vitals
+  page renders what it could read when one of its three aggregates fails.
+
 - **How often each fact is actually recalled** (CAIRN-270). 053 recorded which entries every
   search returned and every direct read by slug, and nothing read either per entry.
   `knowledge_recall_counts` (migration 061) does: `cairn know` lists gain a `recalled` column
@@ -146,6 +164,23 @@ out under **Breaking** with what to do about it.
   prints the exact update command. `--version` prints the warning through the same path, once.
   Requests send `x-cairn-host`, and activity events record it in `data.host`. Actor strings are
   unchanged.
+- **The session-end checkpoint stops destroying handoffs and keeping dead claims alive**
+  (CAIRN-283). It wrote onto every task the agent's label held, replacing whatever was there:
+  28 real checkpoints were overwritten with "Still held, not progressed…", BB-385's among
+  them. Now a claim naming another session is never touched, a task the session only held is
+  written only when it has no checkpoint at all, and a written checkpoint is replaced only on
+  a claim that provably belongs to this session. The write goes through
+  `auto_checkpoint_task_atomic` (migration 063), which loses to a concurrent deliberate
+  checkpoint, leaves `updated_at` alone and records an `auto_checkpointed` event. Reconcile no
+  longer reads the "still held" checkpoint as a sign of life, and the close dialog no longer
+  offers automatic text as the resolution.
+
+- **The claim reaper releases quiet claims again** (CAIRN-284). The scheduled `reconcile` runs
+  as the `maintenance` key, and reconcile only ever looked at the caller's own claims, so it had
+  released nothing since 2026-09-12. Under the `maintenance` key (from the key row, never the
+  display name) it now covers the whole workspace; any other agent's still covers its own. A
+  quiet `doing` task goes back to `todo`, `in-review` keeps its status. `cairn release` now
+  moves a held `doing` task back to `todo` too, and both releases clear `claimed_session`.
 
 - **Both boards stop at the viewport and scroll per column** (CAIRN-277, CAIRN-278). `/board`
   and a project's Board view grew with their tallest column, so the page scrolled as a whole
