@@ -186,7 +186,7 @@ describe('cairn vitals shows the signals cairn_vitals cannot see', () => {
       quiet2h: 17,
       quiet24h: 10,
       quietest: [
-        { ref: 'BB-385', title: 'Fleet-global MEV auth cooldown', claimedBy: 'openclaw · Cal', lastActivityAt: null, quietMinutes: 10080 },
+        { ref: 'BB-385', title: 'Fleet-global MEV auth cooldown', claimedBy: 'openclaw · Dev', lastActivityAt: null, quietMinutes: 10080 },
       ],
     },
     reaper: { releasedInWindow: 0, released7d: 0, lastReleaseAt: null, maintenanceLastWriteAt: null },

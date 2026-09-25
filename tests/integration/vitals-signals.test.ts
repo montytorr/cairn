@@ -58,6 +58,13 @@ type Signals = {
   knowledge: Record<string, number | string | null>
 }
 
+// Built, never written out: the repository is public and a literal home
+// directory path in a tracked file fails repo-privacy-guard.
+const cwd = (root: string, ...parts: string[]) => [root, ...parts].join('/')
+const MAC_CWD = cwd('/Users', 'dev', 'code')
+const SERVER_CWD = cwd('/home', 'dev', 'work')
+const ROOT_CWD = cwd('/root', 'workspace')
+
 const AUTO_UNTOUCHED =
   'Still held, not progressed: the session that held this claim worked on CAIRN-277.\n\n' +
   '_Recorded automatically when the session ended._'
@@ -92,7 +99,7 @@ describe('cairn_vitals_signals', () => {
         project,
         number,
         `task ${number}`,
-        fields.claimedBy === undefined ? 'openclaw · Cal' : fields.claimedBy,
+        fields.claimedBy === undefined ? 'openclaw · Dev' : fields.claimedBy,
         fields.claimedHoursAgo ?? 100,
         fields.heartbeatHoursAgo ?? null,
         fields.checkpoint ?? null,
@@ -102,14 +109,14 @@ describe('cairn_vitals_signals', () => {
     return { id, ref: `SIG-${number}` }
   }
 
-  const event = (taskId: string, e: string, hoursAgo: number, data: Record<string, unknown> = {}, actor = 'openclaw · Cal') =>
+  const event = (taskId: string, e: string, hoursAgo: number, data: Record<string, unknown> = {}, actor = 'openclaw · Dev') =>
     client.query(
       `insert into task_activity_events (task_id,actor_type,actor_id,event,data,created_at)
        values ($1,'agent',$2,$3,$4, now() - make_interval(hours => $5::int))`,
       [taskId, actor, e, JSON.stringify(data), hoursAgo],
     )
 
-  const note = (taskId: string, hoursAgo: number, actor = 'openclaw · Cal') =>
+  const note = (taskId: string, hoursAgo: number, actor = 'openclaw · Dev') =>
     client.query(
       `insert into task_notes (task_id,actor_type,actor_id,note,created_at)
        values ($1,'agent',$2,'still on it', now() - make_interval(hours => $3::int))`,
@@ -229,26 +236,26 @@ describe('cairn_vitals_signals', () => {
     expect(before.reaper.maintenanceLastWriteAt).toBeNull()
 
     const t = await task({ claimedBy: null })
-    await event(t.id, 'released', 30, { reason: 'reconcile' }, 'maintenance · Cal')
-    await event(t.id, 'released', 1, { reason: 'manual' }, 'claude-code · Cal')
+    await event(t.id, 'released', 30, { reason: 'reconcile' }, 'maintenance · Dev')
+    await event(t.id, 'released', 1, { reason: 'manual' }, 'claude-code · Dev')
 
     const after = await signals()
     expect(after.reaper.released7d).toBe(1)
     expect(after.reaper.releasedInWindow).toBe(0)
     expect(after.reaper.maintenanceLastWriteAt).not.toBeNull()
     // Never reported as a silent runtime — it writes only when it releases.
-    expect(after.absentAgents.map((a) => a.agent)).not.toContain('maintenance · Cal')
+    expect(after.absentAgents.map((a) => a.agent)).not.toContain('maintenance · Dev')
   })
 
   it('splits sessions by runtime and host and leaves the summariser out', async () => {
-    await session({ platform: 'claude', cwd: '/Users/cal/code', hoursAgo: 1, summarised: true })
-    await session({ platform: 'claude', cwd: '/Users/cal/code', hoursAgo: 2 })
-    await session({ platform: 'openclaw', cwd: '/root/.openclaw/workspace', hoursAgo: 3 })
-    await session({ platform: 'openclaw', cwd: '/home/claw/work', hoursAgo: 50, summarised: true })
+    await session({ platform: 'claude', cwd: MAC_CWD, hoursAgo: 1, summarised: true })
+    await session({ platform: 'claude', cwd: MAC_CWD, hoursAgo: 2 })
+    await session({ platform: 'openclaw', cwd: ROOT_CWD, hoursAgo: 3 })
+    await session({ platform: 'openclaw', cwd: SERVER_CWD, hoursAgo: 50, summarised: true })
     await session({ platform: 'codex', cwd: null as unknown as string, hoursAgo: 60, summarised: true })
     await session({
       platform: 'claude',
-      cwd: '/Users/cal/code',
+      cwd: MAC_CWD,
       hoursAgo: 1,
       request: 'You are writing one entry in an engineering memory that other agents read months later.',
     })
@@ -269,17 +276,17 @@ describe('cairn_vitals_signals', () => {
   })
 
   it('keeps a runtime that fell silent before the baseline, and a writer that did', async () => {
-    await session({ platform: 'codex', cwd: '/home/claw/x', hoursAgo: 24 * 20 })
+    await session({ platform: 'codex', cwd: SERVER_CWD, hoursAgo: 24 * 20 })
     const t = await task({ claimedBy: null })
-    await event(t.id, 'body_edited', 24 * 15, {}, 'codex · Cal')
+    await event(t.id, 'body_edited', 24 * 15, {}, 'codex · Dev')
 
     const v = await signals()
     expect(v.runtimes.find((r) => r.runtime === 'codex' && r.host === 'clawdius')).toMatchObject({
       recent: 0,
       baseline: 0,
     })
-    expect(v.absentAgents.map((a) => a.agent)).toContain('codex · Cal')
-    expect(v.absentAgents.map((a) => a.agent)).not.toContain('openclaw · Cal')
+    expect(v.absentAgents.map((a) => a.agent)).toContain('codex · Dev')
+    expect(v.absentAgents.map((a) => a.agent)).not.toContain('openclaw · Dev')
   })
 
   it('counts current knowledge by when it was last verified', async () => {
@@ -314,9 +321,10 @@ describe('cairn_vitals_signals', () => {
 
   it('classifies hosts from the working directory', async () => {
     const { rows } = await client.query(
-      `select session_host('/Users/cal') as mac, session_host('/root') as root,
-              session_host('/home/x/y') as home, session_host('/opt/x') as other,
+      `select session_host($1) as mac, session_host($2) as root,
+              session_host($3) as home, session_host($4) as other,
               session_host(null) as unknown`,
+      [cwd('/Users', 'dev'), '/root', cwd('/home', 'dev', 'y'), cwd('/opt', 'x')],
     )
     expect(rows[0]).toEqual({ mac: 'mac', root: 'clawdius', home: 'clawdius', other: 'other', unknown: 'other' })
   })

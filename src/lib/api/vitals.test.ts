@@ -241,7 +241,7 @@ const signalCodes = (v: Vitals) => assessSignals(v, NOW).map((f) => f.code)
 const quietClaim = (ref: string, hours: number | null) => ({
   ref,
   title: `task ${ref}`,
-  claimedBy: 'openclaw · Cal',
+  claimedBy: 'openclaw · Dev',
   lastActivityAt: hours === null ? null : hoursAgo(hours),
   quietMinutes: hours === null ? null : Math.round(hours * 60),
 })
@@ -274,7 +274,7 @@ describe('assessSignals', () => {
       )
       const f = assessSignals(v, NOW).find((x) => x.code === 'claims-quiet')
       expect(f?.severity).toBe('warning')
-      expect(f?.message).toContain('BB-385 (168h, openclaw · Cal)')
+      expect(f?.message).toContain('BB-385 (168h, openclaw · Dev)')
       expect(f?.message).toContain('17 of 22')
     })
 
@@ -452,22 +452,22 @@ describe('assessSignals', () => {
           runtimes: [
             rt({ runtime: 'codex', host: 'clawdius', recent: 0, recentSummarised: 0, baseline: 0, baselineSummarised: 0, lastSeenAt: hoursAgo(24 * 12) }),
           ],
-          absentAgents: [{ agent: 'codex · Cal', lastSeenAt: hoursAgo(24 * 10) }],
+          absentAgents: [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(24 * 10) }],
         }),
       )
       const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-absent')
       expect(f?.message).toContain('codex@clawdius sessions (last 288h ago)')
-      expect(f?.message).toContain('codex · Cal writes (last 240h ago)')
+      expect(f?.message).toContain('codex · Dev writes (last 240h ago)')
     })
   })
 
   it('does not call the maintenance identity a silent runtime', () => {
     // It writes only when it releases; the reaper checks judge it instead.
     const v = healthy({
-      agents: [{ agent: 'maintenance · Cal', actorType: 'agent', recent: 0, baseline: 40 }],
+      agents: [{ agent: 'maintenance · Dev', actorType: 'agent', recent: 0, baseline: 40 }],
     })
     expect(codes(v)).not.toContain('agent-silent')
     expect(isMaintenance('maintenance')).toBe(true)
-    expect(isMaintenance('claude-code · Cal')).toBe(false)
+    expect(isMaintenance('claude-code · Dev')).toBe(false)
   })
 })
