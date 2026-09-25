@@ -62,7 +62,14 @@ const describe = (entry: ActivityEntry): React.ReactNode => {
         </>
       )
     case 'released':
-      return d.reason === 'closed' ? <>released it on close</> : <>released it</>
+      return d.reason === 'closed' ? (
+        <>released it on close</>
+      ) : (
+        <>
+          released it{d.reason === 'reconcile' ? <> after it went quiet</> : null}
+          {d.reopened ? <>, back to todo</> : null}
+        </>
+      )
     case 'blocked':
       return <>marked it blocked{d.reason ? <>: {String(d.reason)}</> : null}</>
     case 'unblocked':
@@ -73,6 +80,8 @@ const describe = (entry: ActivityEntry): React.ReactNode => {
       return <>pushed <code className="font-mono text-[0.6875rem]">{val(d.sha)}</code>{d.branch ? <> to {String(d.branch)}</> : null}</>
     case 'checkpointed':
       return <>checkpointed{d.summary ? <>: {String(d.summary)}</> : null}</>
+    case 'auto_checkpointed':
+      return <>checkpointed it automatically at session end{d.worked ? null : <> (held, not worked)</>}</>
     case 'attachment_added':
       return <>attached <code className="font-mono text-[0.6875rem]">{val(d.name)}</code></>
     case 'attachment_removed':

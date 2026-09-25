@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { heldByThisSession, splitHeldByWorked, untouchedCheckpoint, workedCheckpoint } from './sessions'
+import {
+  heldByThisSession,
+  planAutoCheckpoints,
+  splitHeldByWorked,
+  untouchedCheckpoint,
+  workedCheckpoint,
+} from './sessions'
 
 /**
  * Session end checkpoints every task the agent still holds. It used to write
@@ -101,5 +107,67 @@ describe('heldByThisSession', () => {
 
   it('changes nothing for a caller that cannot name its session', () => {
     expect(heldByThisSession(held, null)).toHaveLength(3)
+  })
+})
+
+/**
+ * CAIRN-283: on 2026-09-25 71 tasks carried "Still held, not progressed…" and
+ * 28 had had a real checkpoint before it. BB-385's handoff was replaced with a
+ * line about a different session's work. Each rule below is one way that
+ * happened, and none of them reports itself.
+ */
+describe('planAutoCheckpoints', () => {
+  const task = (
+    number: number,
+    claimed_session: string | null,
+    checkpoint_summary: string | null = null,
+  ) => ({ id: `id-${number}`, number, claimed_session, checkpoint_summary, project: { key: 'BB' } })
+  const plan = (held: ReturnType<typeof task>[], sessionId: string | null, taskRefs: string[]) =>
+    planAutoCheckpoints(held, { sessionId, taskRefs, summary: 'Shipped the fix.' }).map((p) => ({
+      ref: `BB-${p.task.number}`,
+      worked: p.worked,
+      text: p.text,
+    }))
+  const handoff = 'Fleet-global MEV auth cooldown implemented + 18/18 guard suite, uncommitted.'
+
+  it('never writes over a written checkpoint on a task the session only held', () => {
+    expect(plan([task(385, null, handoff)], 'this', ['CAIRN-277'])).toEqual([])
+    expect(plan([task(385, 'this', handoff)], 'this', ['CAIRN-277'])).toEqual([])
+  })
+
+  it('does not replace an earlier automatic checkpoint with a "not progressed" line', () => {
+    expect(plan([task(1, 'this', workedCheckpoint('Did real work.'))], 'this', [])).toEqual([])
+  })
+
+  it('writes the "still held" line only where there is no checkpoint at all', () => {
+    expect(plan([task(1, null)], 'this', ['CAIRN-277'])).toEqual([
+      { ref: 'BB-1', worked: false, text: untouchedCheckpoint(['CAIRN-277']) },
+    ])
+  })
+
+  it('never touches a claim that names another session, worked or not', () => {
+    expect(plan([task(1, 'other'), task(2, 'other', handoff)], 'this', ['BB-1', 'BB-2'])).toEqual([])
+  })
+
+  it('replaces a written checkpoint only on a claim that is provably this session’s', () => {
+    expect(plan([task(1, 'this', handoff)], 'this', ['BB-1'])).toEqual([
+      { ref: 'BB-1', worked: true, text: workedCheckpoint('Shipped the fix.') },
+    ])
+    // A claim naming no session may be anyone's, and a ref in a transcript is
+    // not proof of work: reading a task mentions it too.
+    expect(plan([task(1, null, handoff)], 'this', ['BB-1'])).toEqual([])
+    expect(plan([task(1, 'someone', handoff)], null, ['BB-1'])).toEqual([])
+  })
+
+  it('still checkpoints genuinely held legacy work where nothing would be lost', () => {
+    expect(plan([task(1, null), task(2, null, workedCheckpoint('old'))], 'this', ['BB-1', 'BB-2']))
+      .toEqual([
+        { ref: 'BB-1', worked: true, text: workedCheckpoint('Shipped the fix.') },
+        { ref: 'BB-2', worked: true, text: workedCheckpoint('Shipped the fix.') },
+      ])
+  })
+
+  it('is a no-op when a sweep re-records the same session', () => {
+    expect(plan([task(1, 'this', workedCheckpoint('Shipped the fix.'))], 'this', ['BB-1'])).toEqual([])
   })
 })

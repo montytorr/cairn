@@ -28,6 +28,14 @@ export type Actor = {
    * because Codex and OpenClaw may not have one to give.
    */
   sessionId: string | null
+  /**
+   * The API key's bare agent name (`claude-code`, `maintenance`), for agents.
+   *
+   * `actorId` embeds it, but it also embeds a display name anyone can set, so
+   * anything that grants a power by agent name reads it from here — straight
+   * from the key row, which only an administrator can create.
+   */
+  agentName?: string
 }
 
 /**
@@ -110,6 +118,7 @@ export const authenticate = async (req: Request): Promise<Actor | null> => {
       role: data.role,
       rateKey: `key:${data.id}`,
       sessionId: sessionOf(req),
+      agentName: data.agent_name,
     }
   }
 

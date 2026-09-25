@@ -826,7 +826,7 @@ machine, and running `vitals` in two places reports the same findings twice.
 
 | Job | What it is for |
 |---|---|
-| `reconcile` (30 min) | Releases a claim an agent stopped working on, and moves the task back to todo so `doing` keeps meaning somebody is on it |
+| `reconcile` (30 min) | Releases any claim in the workspace that went quiet for two hours, and moves a `doing` task back to todo so `doing` keeps meaning somebody is on it (`in-review` keeps its status). Workspace-wide only under the `maintenance` key; any other agent's `reconcile` covers its own claims |
 | `vitals` (daily) | Asks whether the memory is still being written and read, and reports **only** when something looks wrong |
 | `agent-files` (hourly, and on every deploy) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
 | `openclaw-sessions` (30 min) | OpenClaw has no session-end event, so its transcripts are swept instead of waiting to be handed over |
