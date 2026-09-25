@@ -53,6 +53,66 @@ export type Vitals = {
   // actorType is optional because a server that predates migration 050 does
   // not send it. Absent means "assume runtime" — see the check below.
   agents: { agent: string; actorType?: string; recent: number; baseline: number }[]
+  /**
+   * What cairn_vitals cannot see: claim liveness, the reaper, the summariser
+   * and session volume per runtime and host, knowledge verification. From
+   * migration 065, in a function of its own.
+   *
+   * Optional and nullable for the reason `closedWithoutTrace` is: a database
+   * without 065 cannot answer, and a check that cannot see a number must not
+   * invent one. `signalsError` says why it is missing, so the absence is
+   * itself reported rather than read as health.
+   */
+  signals?: VitalsSignals | null
+  signalsError?: string
+}
+
+export type RuntimeHost = {
+  runtime: string
+  host: string
+  recent: number
+  recentSummarised: number
+  baseline: number
+  baselineSummarised: number
+  lastSeenAt: string
+}
+
+export type QuietClaim = {
+  ref: string
+  title: string
+  claimedBy: string
+  lastActivityAt: string | null
+  /** null when nothing at all was ever recorded against the claim. */
+  quietMinutes: number | null
+}
+
+export type VitalsSignals = {
+  windowHours: number
+  /** Session totals with the summariser's own runs taken out. */
+  sessions: {
+    recent: number
+    recentSummarised: number
+    baseline: number
+    baselineSummarised: number
+    summariserRecent: number
+    summariserBaseline: number
+  }
+  runtimes: RuntimeHost[]
+  claims: { held: number; quiet2h: number; quiet24h: number; quietest: QuietClaim[] }
+  reaper: {
+    releasedInWindow: number
+    released7d: number
+    lastReleaseAt: string | null
+    maintenanceLastWriteAt: string | null
+  }
+  absentAgents: { agent: string; lastSeenAt: string }[]
+  knowledge: {
+    current: number
+    neverVerified: number
+    unverified30d: number
+    verifiedInWindow: number
+    lastVerifiedAt: string | null
+  }
 }
 
 export type Finding = {
@@ -163,6 +223,10 @@ export const assess = (v: Vitals): Finding[] => {
     // Silently dropping the check there would be worse than the false
     // positive it removes.
     if (agent.actorType === 'human') continue
+    // The reaper writes only when it releases something, so its silence is a
+    // fact about the claims, not about its wiring. It is judged by the claim
+    // checks below, against the claims it should have taken.
+    if (isMaintenance(agent.agent)) continue
     if (agent.recent === 0 && expected(agent.baseline) >= 3) {
       findings.push({
         code: 'agent-silent',
@@ -253,6 +317,187 @@ export const assess = (v: Vitals): Finding[] => {
     })
   }
 
+  findings.push(...assessSignals(v))
+
+  return findings
+}
+
+export const isMaintenance = (actorId: string) =>
+  actorId === 'maintenance' || actorId.startsWith('maintenance · ')
+
+/**
+ * How long a claim may be quiet before the reaper is expected to have taken
+ * it: its 120-minute threshold (src/lib/api/reconcile.ts), plus the 30-minute
+ * schedule it runs on, plus one missed run of slack.
+ */
+export const REAPER_REACH_MINUTES = 120 + 30 + 30
+
+const formatQuiet = (minutes: number | null) =>
+  minutes === null ? 'never active' : minutes >= 120 ? `${Math.round(minutes / 60)}h` : `${minutes}m`
+
+const formatAgo = (iso: string | null, now: number) =>
+  iso ? `${formatQuiet(Math.round((now - new Date(iso).getTime()) / 60_000))} ago` : 'never'
+
+const label = (r: Pick<RuntimeHost, 'runtime' | 'host'>) => `${r.runtime}@${r.host}`
+
+const pct = (n: number, d: number) => `${Math.round((n / d) * 100)}%`
+
+/**
+ * The checks migration 065 made possible, each one a blind spot CAIRN-282
+ * found reading green while it failed.
+ *
+ * Grouped into one finding per check, listing every runtime or claim it
+ * concerns, rather than one finding each. Six rows of "summariser degraded"
+ * are read as noise; one row naming six runtimes is read as a pattern.
+ */
+export const assessSignals = (v: Vitals, now = Date.now()): Finding[] => {
+  const findings: Finding[] = []
+  const hours = `${v.windowHours}h`
+  const scale = v.windowHours / BASELINE_HOURS
+
+  if (v.signals === undefined) return findings
+  if (v.signals === null) {
+    findings.push({
+      code: 'signals-unavailable',
+      severity: 'warning',
+      message:
+        `Claim liveness, the reaper, and summariser and session volume per runtime could not be read` +
+        (v.signalsError ? ` (${v.signalsError})` : '') +
+        `. Those checks are not running, which is not the same as passing.`,
+    })
+    return findings
+  }
+
+  const s = v.signals
+
+  // --- claims nobody is on ------------------------------------------------
+  //
+  // `held` was a bare count and `stalled` only counts UNclaimed work, so a
+  // claim abandoned for a week was invisible unless the reaper released it —
+  // and the reaper had released nothing for thirteen days. Liveness is
+  // task_genuine_activity_at (065): never updated_at, never a checkpoint the
+  // session-end hook wrote, because both are refreshed on claims nobody is
+  // working.
+  const worst = s.claims.quietest
+  const oldestQuiet = worst.length
+    ? Math.max(...worst.map((c) => c.quietMinutes ?? Number.POSITIVE_INFINITY))
+    : 0
+  const beyondReaper = oldestQuiet >= REAPER_REACH_MINUTES
+
+  if (s.claims.quiet24h > 0 || s.claims.quiet2h >= 3) {
+    const named = worst
+      .slice(0, 3)
+      .map((c) => `${c.ref} (${formatQuiet(c.quietMinutes)}, ${c.claimedBy})`)
+      .join(', ')
+    findings.push({
+      code: 'claims-quiet',
+      severity: 'warning',
+      message:
+        `${s.claims.quiet2h} of ${s.claims.held} claims have had no note, checkpoint, status move or ` +
+        `heartbeat for more than 2h, ${s.claims.quiet24h} of them for more than a day: ${named}. ` +
+        `The board shows them taken while nobody is on them.`,
+    })
+  }
+
+  // The reaper, judged by the only trace it leaves: a release. With nothing
+  // to take, it rightly releases nothing, so its silence only means something
+  // when a claim has been quiet for longer than it takes to reach one.
+  const reaperNote =
+    `Last automatic release ${formatAgo(s.reaper.lastReleaseAt, now)}; ` +
+    `the maintenance identity last wrote ${formatAgo(s.reaper.maintenanceLastWriteAt, now)}. ` +
+    `\`CAIRN_AGENT=maintenance cairn reconcile --dry-run\` shows what it would take.`
+  if (beyondReaper && s.reaper.released7d === 0) {
+    findings.push({
+      code: 'reaper-idle',
+      severity: 'alarm',
+      message:
+        `Claims have been quiet for up to ${formatQuiet(Number.isFinite(oldestQuiet) ? oldestQuiet : null)} ` +
+        `and nothing has been released automatically in 7 days. The reaper runs every 30 minutes ` +
+        `and should have taken them. ${reaperNote}`,
+    })
+  } else if (beyondReaper && s.reaper.releasedInWindow === 0) {
+    findings.push({
+      code: 'maintenance-silent',
+      severity: 'warning',
+      message:
+        `Claims have been quiet past the reaper's reach and it released nothing in ${hours}. ` +
+        reaperNote,
+    })
+  }
+
+  // --- the summariser, per runtime and host --------------------------------
+  //
+  // The alarm above fires only when not one session was summarised. On 09-24
+  // one of sixteen was — openclaw 0/8, codex 0/2 — against about 75% the week
+  // before, and one success was enough to stay green. The ratio is compared
+  // with the same runtime's own baseline because runtimes summarise at
+  // different rates for good reasons; the 50% floor catches one with no
+  // baseline to compare with.
+  const degraded = s.runtimes.filter((r) => {
+    if (r.recent === 0) return false
+    const ratio = r.recentSummarised / r.recent
+    const baselineRatio = r.baseline >= 3 ? r.baselineSummarised / r.baseline : null
+    const belowBaseline = baselineRatio !== null && r.recent >= 2 && ratio < baselineRatio / 2
+    const belowFloor = r.recent >= 3 && ratio < 0.5
+    return belowBaseline || belowFloor
+  })
+  if (degraded.length > 0) {
+    findings.push({
+      code: 'summariser-degraded',
+      severity: 'warning',
+      message:
+        `The summariser is writing less than it did: ` +
+        degraded
+          .map(
+            (r) =>
+              `${label(r)} ${r.recentSummarised}/${r.recent} in ${hours}` +
+              (r.baseline > 0 ? ` against ${pct(r.baselineSummarised, r.baseline)} the week before` : ''),
+          )
+          .join('; ') +
+        `. The hook keeps the row when the summariser fails, so this is the only place it shows.`,
+    })
+  }
+
+  // --- session volume, per runtime and host --------------------------------
+  //
+  // The total only alarmed at exactly zero, and a total cannot say which
+  // runtime went quiet: codex at zero for a day and openclaw's scheduled runs
+  // stopping were both inside a healthy-looking eight.
+  const volume = s.runtimes
+    .map((r) => ({ ...r, expected: r.baseline * scale }))
+    .filter((r) => r.expected >= 1 && (r.recent === 0 || (r.expected >= 3 && r.recent < r.expected * 0.3)))
+  if (volume.length > 0) {
+    findings.push({
+      code: 'runtime-quiet',
+      severity: 'warning',
+      message:
+        `Fewer sessions than the week before: ` +
+        volume
+          .map((r) => `${label(r)} ${r.recent} in ${hours}, about ${Math.round(r.expected)} expected`)
+          .join('; ') +
+        `. An idle runtime and a hook that stopped firing look the same here; ` +
+        `check it was meant to be running.`,
+    })
+  }
+
+  // Seen in the month before and not since, so cairn_vitals' lists — which
+  // only reach back a week — no longer contain them at all.
+  const gone = s.runtimes.filter((r) => r.recent === 0 && r.baseline === 0)
+  const goneAgents = s.absentAgents
+  if (gone.length > 0 || goneAgents.length > 0) {
+    findings.push({
+      code: 'runtime-absent',
+      severity: 'warning',
+      message:
+        `Not heard from in ${hours} or the week before: ` +
+        [
+          ...gone.map((r) => `${label(r)} sessions (last ${formatAgo(r.lastSeenAt, now)})`),
+          ...goneAgents.map((a) => `${a.agent} writes (last ${formatAgo(a.lastSeenAt, now)})`),
+        ].join('; ') +
+        `. Retired on purpose, or stopped without anyone noticing.`,
+    })
+  }
+
   return findings
 }
 
@@ -324,10 +569,53 @@ export const readMemoryUseFor = async (userId: string, hours = 24): Promise<Memo
   return data as unknown as MemoryUse
 }
 
-export const readVitalsFor = async (userId: string, hours = 24): Promise<Vitals> => {
-  const { data, error } = await admin().rpc('cairn_vitals', { p_owner: userId, p_hours: hours })
+export const readSignalsFor = async (userId: string, hours = 24): Promise<VitalsSignals> => {
+  const { data, error } = await admin().rpc('cairn_vitals_signals', { p_owner: userId, p_hours: hours })
   if (error) throw new Error(error.message)
-  return data as unknown as Vitals
+  return data as unknown as VitalsSignals
+}
+
+/**
+ * The vital signs, with the summariser's own runs taken out of the session
+ * counts.
+ *
+ * The summariser's `claude -p` is recorded by the Claude SessionEnd hook like
+ * any other session — four or five a week — which inflated the volume and,
+ * having no prose of its own, diluted the summarised share the alarm reads.
+ * 065 counts sessions without them; those totals replace cairn_vitals' here
+ * rather than inside it, for the reason 065's header gives. `withFiles` is
+ * left alone: the summariser touches no file, so it never counted there.
+ *
+ * The signals are optional. Their failure is logged and carried as
+ * `signalsError`, and assess() turns it into a warning — a monitor that goes
+ * quietly blind reads as a healthy one, which is the bug CAIRN-288 is about.
+ */
+export const readVitalsFor = async (userId: string, hours = 24): Promise<Vitals> => {
+  const [base, signals] = await Promise.all([
+    (async () => {
+      const { data, error } = await admin().rpc('cairn_vitals', { p_owner: userId, p_hours: hours })
+      if (error) throw new Error(error.message)
+      return data as unknown as Vitals
+    })(),
+    readSignalsFor(userId, hours).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('[vitals] could not read signals', message)
+      return message
+    }),
+  ])
+
+  if (typeof signals === 'string') return { ...base, signals: null, signalsError: signals }
+
+  return {
+    ...base,
+    sessions: {
+      ...base.sessions,
+      recent: signals.sessions.recent,
+      recentSummarised: signals.sessions.recentSummarised,
+      baseline: signals.sessions.baseline,
+    },
+    signals,
+  }
 }
 
 /**
