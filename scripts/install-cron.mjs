@@ -130,6 +130,15 @@ const JOBS = [
     why: 'Repairs the skill, CLI and hooks wherever a runtime reads a stale copy.',
     requires: [SYNC, NODE],
     at: { minute: 23 },
+    /**
+     * A laptop is not a server. The server is also repaired by every deploy
+     * (CAIRN-257), so hourly is its fallback; a Mac has no such trigger, and
+     * sleeps through slots, so an hourly job left it up to an hour and often
+     * several behind every merge (CAIRN-290). launchd runs a missed calendar
+     * slot on wake — StartInterval would drop it — so: more slots, and a run
+     * at load, which is login and every reinstall.
+     */
+    launchd: { every: 15, runAtLoad: true },
     env: { CAIRN_AGENT: 'maintenance' },
     command: [
       NODE,
@@ -199,7 +208,15 @@ const jobPath = [dirname(CLI), dirname(NODE), '/usr/bin', '/bin', '/usr/sbin', '
   .filter((dir, i, all) => all.indexOf(dir) === i)
   .join(':')
 
-const plist = (job) => `<?xml version="1.0" encoding="UTF-8"?>
+/** A job as launchd runs it: the same job, with its launchd-only differences. */
+const forLaunchd = (job) => {
+  const { launchd, ...rest } = job
+  return launchd ? { ...rest, ...launchd, at: launchd.every ? undefined : rest.at } : rest
+}
+
+const plist = (base) => {
+  const job = forLaunchd(base)
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -226,10 +243,11 @@ ${calendar(job)
   </array>
   <key>StandardOutPath</key><string>${xml(log(job.name))}</string>
   <key>StandardErrorPath</key><string>${xml(log(job.name))}</string>
-  <key>RunAtLoad</key><false/>
+  <key>RunAtLoad</key>${job.runAtLoad ? '<true/>' : '<false/>'}
 </dict>
 </plist>
 `
+}
 
 const launchctl = (args, { tolerate = false } = {}) => {
   try {
@@ -462,15 +480,18 @@ if (USE_LAUNCHD) {
   mkdirSync(LOGS, { recursive: true })
   const uid = process.getuid()
 
-  // Every job is torn down first, including on install: a plist that changed
-  // under a loaded agent is not picked up, and the stale one goes on running.
-  for (const job of JOBS) {
+  // Every job in scope is torn down first, including on install: a plist that
+  // changed under a loaded agent is not picked up, and the stale one goes on
+  // running. In scope, because `--only agent-files` used to boot out every
+  // other agent too and load back only the one named, leaving the rest
+  // unloaded until the next login with their plists still on disk.
+  for (const job of JOBS.filter((j) => !only || only.includes(j.name))) {
     launchctl(['bootout', `gui/${uid}/${LABEL(job.name)}`], { tolerate: true })
     if (REMOVE) rmSync(plistPath(job.name), { force: true })
   }
 
   if (REMOVE) {
-    console.log(`removed ${JOBS.length} agent(s) from ${AGENTS_DIR}`)
+    console.log(`removed ${only ? only.length : JOBS.length} agent(s) from ${AGENTS_DIR}`)
     process.exit(0)
   }
 

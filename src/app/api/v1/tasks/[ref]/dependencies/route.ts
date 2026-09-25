@@ -103,7 +103,7 @@ export const POST = route<{ ref: string }, z.infer<typeof body>>({
         event: 'dependency_added',
         data: { other: input.ref, direction: input.direction },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     return ok({ blocked, blocking, direction: input.direction }, { status: 201 })
   },
@@ -157,7 +157,7 @@ export const DELETE = route<{ ref: string }>({
         event: 'dependency_removed',
         data: { other: input.ref, direction: input.direction },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     return ok({ removed: true })
   },
