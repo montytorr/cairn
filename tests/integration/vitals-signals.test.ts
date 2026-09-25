@@ -292,14 +292,17 @@ describe('cairn_vitals_signals', () => {
   it('keeps a runtime that fell silent before the baseline, and a writer that did', async () => {
     await session({ platform: 'codex', cwd: SERVER_CWD, hoursAgo: 24 * 20 })
     const t = await task({ claimedBy: null })
-    await event(t.id, 'body_edited', 24 * 15, {}, 'codex · Dev')
+    // An identity nothing else in this file writes as: the liveness cases above
+    // record recent events for the usual runtimes, and one recent write rightly
+    // makes a writer present rather than absent.
+    await event(t.id, 'body_edited', 24 * 15, {}, 'retired-runtime · Dev')
 
     const v = await signals()
     expect(v.runtimes.find((r) => r.runtime === 'codex' && r.host === 'linux')).toMatchObject({
       recent: 0,
       baseline: 0,
     })
-    expect(v.absentAgents.map((a) => a.agent)).toContain('codex · Dev')
+    expect(v.absentAgents.map((a) => a.agent)).toContain('retired-runtime · Dev')
     expect(v.absentAgents.map((a) => a.agent)).not.toContain('openclaw · Dev')
   })
 

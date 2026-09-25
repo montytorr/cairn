@@ -48,6 +48,9 @@ describe('detectSecret: credential assignments', () => {
     'client_secret: not-a-real-value-43',
     'pwd=Winter2026',
     'token: abc  pwd=Winter2026',
+    '(password: hunter2x)',
+    'password: hunter2x, then log in',
+    'https://proxy.example.io/v1/?api_key=a1b2c3d4e5f6a7b8&url=https://example.com',
   ])('refuses %s', (text) => {
     expect(detectSecret(text)?.pattern).toBe('credential_assignment')
   })
@@ -81,6 +84,14 @@ describe('detectSecret: credential assignments', () => {
     'token: null',
     'export CAIRN_API_KEY=sk_live_...',
     "CAIRN_OPERATOR_PASSWORD='a-long-password'",
+    'headers → `isOld ? Jwttoken : tm-placement-id`.',
+    'const token : string = read()',
+    '200 `{_links:{signInPassword:{source:"/json/sign-in"}}}`',
+    'passwordRules: [minLength(12)]',
+    'Page gates on ?deal= (interim; signed token=DIS-1234).',
+    '      queueItAcceptedToken: acceptedToken,',
+    '      token = cookieJar[0].value;',
+    'https://proxy.example.io/v1/?api_key=YOUR_KEY&url=https://example.com',
   ])('accepts %s', (text) => {
     expect(detectSecret(text)).toBeNull()
   })

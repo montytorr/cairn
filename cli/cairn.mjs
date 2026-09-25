@@ -86,6 +86,19 @@ const SESSION = (() => {
 })()
 
 /**
+ * A read that is part of a sweep, not a recall (CAIRN-289).
+ *
+ * 1,169 of 1,243 knowledge reads were audit loops fetching 10-141 slugs a
+ * minute, and every one marked its entry as recalled — so `know --unused`
+ * could not find the facts nobody uses. The server also tags bursts by rate;
+ * this is the explicit form, for a script that knows it is sweeping:
+ * `CAIRN_SWEEP=1 cairn know <slug>` or `--sweep`.
+ */
+// Read through `flags` when a request is made, so the flag counts as used by
+// whichever verb it was passed to rather than being reported as ignored.
+const sweeping = () => process.env.CAIRN_SWEEP === '1' || Boolean(flags.sweep)
+
+/**
  * Which machine is speaking.
  *
  * A key names a runtime and a human, and the same key names go onto every
@@ -105,25 +118,12 @@ const HOST = (() => {
   return raw && raw.length <= 100 && /^[A-Za-z0-9._-]+$/.test(raw) ? raw : null
 })()
 
-/**
- * A read that is part of a sweep, not a recall (CAIRN-289).
- *
- * 1,169 of 1,243 knowledge reads were audit loops fetching 10-141 slugs a
- * minute, and every one marked its entry as recalled — so `know --unused`
- * could not find the facts nobody uses. The server also tags bursts by rate;
- * this is the explicit form, for a script that knows it is sweeping:
- * `CAIRN_SWEEP=1 cairn know <slug>` or `--sweep`.
- */
-// Read through `flags` when a request is made, so the flag counts as used by
-// whichever verb it was passed to rather than being reported as ignored.
-const sweeping = () => process.env.CAIRN_SWEEP === '1' || Boolean(flags.sweep)
-
 /** Every request carries it, so no endpoint needs a parameter for it. */
 const authHeaders = (extra = {}) => ({
   Authorization: `Bearer ${KEY}`,
   ...(SESSION ? { 'X-Cairn-Session': SESSION } : {}),
-  ...(HOST ? { 'X-Cairn-Host': HOST } : {}),
   ...(sweeping() ? { 'X-Cairn-Read': 'sweep' } : {}),
+  ...(HOST ? { 'X-Cairn-Host': HOST } : {}),
   ...extra,
 })
 

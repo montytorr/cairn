@@ -25,24 +25,6 @@ out under **Breaking** with what to do about it.
   (`attempt` for dead ends), checkpoint, in-review, done with `--kind verified` when the fix was
   already there — the sweep rule and "when not to file" in its first 60 lines. The release and
   session-end checkpoint rules now say what the code does. AGENTS.md and the README agree.
-
-- **Vitals can see what it was blind to** (CAIRN-288). The CAIRN-282 audit found every vitals
-  number correct and the panel green while 17 of 22 claims had been quiet for over 20h, the
-  reaper had released nothing for 13 days, the summariser wrote 1 of 16 sessions, and codex and
-  openclaw's scheduled runs had stopped. `cairn_vitals_signals` (migration 065, a new function
-  beside `cairn_vitals`, not another rewrite of it) adds: claims with no genuine activity for
-  more than 2h / 24h and the quietest ten (`task_genuine_activity_at` is the reaper's
-  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, the holder's evidence events, or any checkpoint but the
-  session-end "still held" one — and `src/lib/liveness-fixtures.ts` pins the two together);
-  reconcile releases in the window and in 7 days, plus the maintenance identity's last write;
-  sessions and summarised share per runtime and host (`macos`, `linux`, `other`, from the
-  working directory); runtimes and writers absent for the window and the week before; knowledge never
-  verified or not in 30 days (informational). New findings: `claims-quiet`, `reaper-idle`
-  (alarm, reaches the banner), `maintenance-silent`, `summariser-degraded`, `runtime-quiet`,
-  `runtime-absent`, and `signals-unavailable` when the function cannot be read. The
-  summariser's own `claude -p` runs no longer count as sessions. The health banner now says
-  "vitals unavailable" instead of rendering nothing when vitals cannot be read, and the Vitals
-  page renders what it could read when one of its three aggregates fails.
 - **Secret-shaped strings are refused on every write that is read back** (CAIRN-285). One
   detector (`src/lib/secrets.ts`) runs on knowledge create/relearn, task titles, descriptions
   and resolutions, notes, comments, checkpoints and block reasons: provider token formats
@@ -61,6 +43,23 @@ out under **Breaking** with what to do about it.
   window. A fact that names no file is marked `unverified Nd` after 14 days unconfirmed,
   worded apart from `stale`. `search_all` ranks with `ts_rank(..., 1|32)` so long imports stop
   crowding out short answers.
+- **Vitals can see what it was blind to** (CAIRN-288). The CAIRN-282 audit found every vitals
+  number correct and the panel green while 17 of 22 claims had been quiet for over 20h, the
+  reaper had released nothing for 13 days, the summariser wrote 1 of 16 sessions, and codex and
+  openclaw's scheduled runs had stopped. `cairn_vitals_signals` (migration 065, a new function
+  beside `cairn_vitals`, not another rewrite of it) adds: claims with no genuine activity for
+  more than 2h / 24h and the quietest ten (`task_genuine_activity_at` is the reaper's
+  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, the holder's evidence events, or any checkpoint but the
+  session-end "still held" one — and `src/lib/liveness-fixtures.ts` pins the two together);
+  reconcile releases in the window and in 7 days, plus the maintenance identity's last write;
+  sessions and summarised share per runtime and host (`macos`, `linux`, `other`, from the
+  working directory); runtimes and writers absent for the window and the week before; knowledge never
+  verified or not in 30 days (informational). New findings: `claims-quiet`, `reaper-idle`
+  (alarm, reaches the banner), `maintenance-silent`, `summariser-degraded`, `runtime-quiet`,
+  `runtime-absent`, and `signals-unavailable` when the function cannot be read. The
+  summariser's own `claude -p` runs no longer count as sessions. The health banner now says
+  "vitals unavailable" instead of rendering nothing when vitals cannot be read, and the Vitals
+  page renders what it could read when one of its three aggregates fails.
 
 - **How often each fact is actually recalled** (CAIRN-270). 053 recorded which entries every
   search returned and every direct read by slug, and nothing read either per entry.
@@ -180,24 +179,23 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
-- **The session-end checkpoint stops destroying handoffs and keeping dead claims alive**
-  (CAIRN-283). It wrote onto every task the agent's label held, replacing whatever was there:
-  28 real checkpoints were overwritten with "Still held, not progressed…", BB-385's among
-  them. Now a claim naming another session is never touched, a task the session only held is
-  written only when it has no checkpoint at all, and a written checkpoint is replaced only on
-  a claim that provably belongs to this session. The write goes through
-  `auto_checkpoint_task_atomic` (migration 063), which loses to a concurrent deliberate
-  checkpoint, leaves `updated_at` alone and records an `auto_checkpointed` event. Reconcile no
-  longer reads the "still held" checkpoint as a sign of life, and the close dialog no longer
-  offers automatic text as the resolution.
-
-- **The claim reaper releases quiet claims again** (CAIRN-284). The scheduled `reconcile` runs
-  as the `maintenance` key, and reconcile only ever looked at the caller's own claims, so it had
-  released nothing since 2026-09-12. Under the `maintenance` key (from the key row, never the
-  display name) it now covers the whole workspace; any other agent's still covers its own. A
-  quiet `doing` task goes back to `todo`, `in-review` keeps its status. `cairn release` now
-  moves a held `doing` task back to `todo` too, and both releases clear `claimed_session`.
-
+- **Client wiring: identity, host, drift and the per-Read hook** (CAIRN-290).
+  `install-hooks.mjs` no longer writes the `PreToolUse(Read)` hook that CCS-40 removed by hand.
+  It now takes out its own stale entry and leaves other tools' hooks in place. On Codex it
+  lists the hooks that are not Cairn's and flags the ones on `Stop`, which runs every turn.
+  A Codex started from a Claude Code shell used to be filed as claude-code because it inherits
+  `CLAUDECODE`. When both runtimes' markers are present, the CLI now checks the process tree,
+  and `CODEX_THREAD_ID` counts as a Codex marker.
+  `CAIRN_AGENT=maintenance` no longer borrows the default key: it exits 3 until the machine has
+  a `CAIRN_API_KEY_MAINTENANCE`. The sync job logs the CLI's stderr and exits non-zero when its
+  report fails, instead of discarding both.
+  On macOS `agent-files` runs at load and every 15 minutes, and the sync retries a network
+  failure on wake.
+  The drift warning names the newer side, from the release number or the new
+  `x-cairn-built-at` header compared with the CLI file's mtime. When the CLI is behind, it
+  prints the exact update command. `--version` prints the warning through the same path, once.
+  Requests send `x-cairn-host`, and activity events record it in `data.host`. Actor strings are
+  unchanged.
 - **Recorded sessions get a project** (CAIRN-286). 389 of 389 live sessions had none: the
   server only used a key the caller sent, and neither the hook nor `cairn session end` sent
   one. `session end` now resolves it like `cairn context` — the `~/.cairn/projects.json` map —
@@ -216,23 +214,23 @@ out under **Breaking** with what to do about it.
   up to two queued sessions (four tries, 48 hours) without re-checkpointing held tasks. With no
   summary, `request` is the first real thing a person typed — not a skill expansion, `hello`,
   or OpenClaw's `[OpenClaw conversation info: …]` wrapper, which is now stripped.
-- **Client wiring: identity, host, drift and the per-Read hook** (CAIRN-290).
-  `install-hooks.mjs` no longer writes the `PreToolUse(Read)` hook that CCS-40 removed by hand.
-  It now takes out its own stale entry and leaves other tools' hooks in place. On Codex it
-  lists the hooks that are not Cairn's and flags the ones on `Stop`, which runs every turn.
-  A Codex started from a Claude Code shell used to be filed as claude-code because it inherits
-  `CLAUDECODE`. When both runtimes' markers are present, the CLI now checks the process tree,
-  and `CODEX_THREAD_ID` counts as a Codex marker.
-  `CAIRN_AGENT=maintenance` no longer borrows the default key: it exits 3 until the machine has
-  a `CAIRN_API_KEY_MAINTENANCE`. The sync job logs the CLI's stderr and exits non-zero when its
-  report fails, instead of discarding both.
-  On macOS `agent-files` runs at load and every 15 minutes, and the sync retries a network
-  failure on wake.
-  The drift warning names the newer side, from the release number or the new
-  `x-cairn-built-at` header compared with the CLI file's mtime. When the CLI is behind, it
-  prints the exact update command. `--version` prints the warning through the same path, once.
-  Requests send `x-cairn-host`, and activity events record it in `data.host`. Actor strings are
-  unchanged.
+- **The session-end checkpoint stops destroying handoffs and keeping dead claims alive**
+  (CAIRN-283). It wrote onto every task the agent's label held, replacing whatever was there:
+  28 real checkpoints were overwritten with "Still held, not progressed…", BB-385's among
+  them. Now a claim naming another session is never touched, a task the session only held is
+  written only when it has no checkpoint at all, and a written checkpoint is replaced only on
+  a claim that provably belongs to this session. The write goes through
+  `auto_checkpoint_task_atomic` (migration 063), which loses to a concurrent deliberate
+  checkpoint, leaves `updated_at` alone and records an `auto_checkpointed` event. Reconcile no
+  longer reads the "still held" checkpoint as a sign of life, and the close dialog no longer
+  offers automatic text as the resolution.
+
+- **The claim reaper releases quiet claims again** (CAIRN-284). The scheduled `reconcile` runs
+  as the `maintenance` key, and reconcile only ever looked at the caller's own claims, so it had
+  released nothing since 2026-09-12. Under the `maintenance` key (from the key row, never the
+  display name) it now covers the whole workspace; any other agent's still covers its own. A
+  quiet `doing` task goes back to `todo`, `in-review` keeps its status. `cairn release` now
+  moves a held `doing` task back to `todo` too, and both releases clear `claimed_session`.
 
 - **Both boards stop at the viewport and scroll per column** (CAIRN-277, CAIRN-278). `/board`
   and a project's Board view grew with their tallest column, so the page scrolled as a whole
