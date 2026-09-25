@@ -43,7 +43,8 @@
 -- this function. Change one, change the other, and the fixtures.
 --
 -- Signs of life: the claim itself, an explicit heartbeat, a note, the task
--- row's updated_at, and the stored checkpoint — except the one written
+-- row's updated_at, an evidence event recorded by the holder, and the stored
+-- checkpoint — except the one written
 -- without anyone looking. "Still held, not progressed" is the session-end hook
 -- recording that a claim was held while the session worked elsewhere, and
 -- counting it let a runtime that records a session every 30 minutes keep a
@@ -53,10 +54,12 @@
 -- under a transaction-local flag that touch_updated_at honours, so the
 -- session-end sweep no longer stamps every held claim as just edited.
 --
--- Activity events are deliberately NOT read, because the reaper does not read
--- them; that also keeps 063's `auto_checkpointed` event out, which is the
--- one event that must never count. A commit or test run with no other trace
--- is therefore not life to either — if that should change, change both.
+-- Evidence events are CLAIM_EVIDENCE_EVENTS.genuine in reconcile.ts — a
+-- commit, push, test run, deliberate checkpoint or status move — and only
+-- when recorded by the claim's holder: somebody else moving the task is not
+-- the holder working on it. Its `ignored` list (auto_checkpointed, released,
+-- claimed) is excluded by not being named; 063's automatic checkpoint is the
+-- one that must never count.
 -- ---------------------------------------------------------------------------
 
 -- isAutoCheckpoint in src/lib/checkpoint-origin.ts: the text ends with the
@@ -97,7 +100,12 @@ as $$
     t.claimed_at,
     case when not checkpoint_is_untouched(t.checkpoint_summary) then t.checkpoint_at end,
     t.updated_at,
-    (select max(n.created_at) from task_notes n where n.task_id = t.id)
+    (select max(n.created_at) from task_notes n where n.task_id = t.id),
+    (select max(e.created_at)
+       from task_activity_events e
+      where e.task_id = t.id
+        and e.actor_id = t.claimed_by
+        and e.event in ('git_commit', 'git_push', 'run_result', 'checkpointed', 'status_changed'))
   )
   from tasks t
   where t.id = p_task_id
@@ -106,7 +114,8 @@ $$;
 comment on function task_genuine_activity_at(uuid) is
   'The last sign that anyone is on a task, by the rule the reaper applies '
   '(lastSignOfLife, src/lib/api/reconcile.ts): heartbeat, claim, note, '
-  'updated_at, or a checkpoint other than the session-end "still held" one. '
+  'updated_at, an evidence event by the holder (CLAIM_EVIDENCE_EVENTS), or a '
+  'checkpoint other than the session-end "still held" one. '
   'Pinned to the reaper by src/lib/liveness-fixtures.ts — see 065.';
 
 -- ---------------------------------------------------------------------------

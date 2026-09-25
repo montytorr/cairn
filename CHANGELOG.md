@@ -17,7 +17,7 @@ out under **Breaking** with what to do about it.
   openclaw's scheduled runs had stopped. `cairn_vitals_signals` (migration 065, a new function
   beside `cairn_vitals`, not another rewrite of it) adds: claims with no genuine activity for
   more than 2h / 24h and the quietest ten (`task_genuine_activity_at` is the reaper's
-  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, or any checkpoint but the
+  `lastSignOfLife` in SQL — claim, heartbeat, note, `updated_at`, the holder's evidence events, or any checkpoint but the
   session-end "still held" one — and `src/lib/liveness-fixtures.ts` pins the two together);
   reconcile releases in the window and in 7 days, plus the maintenance identity's last write;
   sessions and summarised share per runtime and host (`macos`, `linux`, `other`, from the

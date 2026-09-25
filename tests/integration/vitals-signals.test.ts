@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { isAutoCheckpoint, isUntouchedAutoCheckpoint } from '../../src/lib/checkpoint-origin'
-import { LIVENESS_CASES } from '../../src/lib/liveness-fixtures'
+import { HOLDER, LIVENESS_CASES } from '../../src/lib/liveness-fixtures'
 
 /**
  * What migration 065 counts, proved against the database.
@@ -197,12 +197,14 @@ describe('cairn_vitals_signals', () => {
     for (const c of LIVENESS_CASES) {
       it(c.name, async () => {
         const t = await task({
+          claimedBy: HOLDER,
           claimedHoursAgo: c.claimedHoursAgo,
           heartbeatHoursAgo: c.heartbeatHoursAgo,
           checkpoint: c.checkpoint,
           checkpointHoursAgo: c.checkpointHoursAgo,
         })
         if (c.noteHoursAgo !== null) await note(t.id, c.noteHoursAgo)
+        for (const e of c.events) await event(t.id, e.event, e.hoursAgo, {}, e.actor)
         await setUpdated(t.id, c.updatedHoursAgo)
         expect(await genuine(t.id)).toBe(c.expectedHoursAgo)
       })
@@ -221,13 +223,6 @@ describe('cairn_vitals_signals', () => {
           untouched: isUntouchedAutoCheckpoint(text),
         })
       }
-    })
-
-    it('does not read activity events, so an auto_checkpointed one keeps nothing alive', async () => {
-      const t = await task({ claimedHoursAgo: 50 })
-      await event(t.id, 'auto_checkpointed', 1)
-      await event(t.id, 'released', 1, { reason: 'manual' })
-      expect(await genuine(t.id)).toBe(50)
     })
   })
 
