@@ -87,8 +87,8 @@ export const projectKeyForCheckoutName = (
 
 /**
  * The last resort, for a caller that sent neither a project nor a remote: an
- * older CLI, or a recorder whose cwd has no git in reach. `/home/caladmin/cairn`
- * is a checkout of `github.com/montytorr/cairn`, and nothing else on the
+ * older CLI, or a recorder whose cwd has no git in reach. A server checkout
+ * such as `~/cairn` is a checkout of `github.com/montytorr/cairn`, and nothing else on the
  * server says so.
  *
  * Inference, so it only answers when one project does. Two projects with a

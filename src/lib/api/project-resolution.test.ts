@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { checkoutName, projectKeyForCheckoutName, repoName } from './project-resolution'
 
+/** Absolute fixture paths, built so no real home directory is spelled out. */
+const p = (...parts: string[]) => ['', ...parts].join('/')
+
 /**
  * The server's last resort for a session that arrives with neither a project
  * nor a remote (CAIRN-286). It is inference, so the ambiguity rule is the part
@@ -15,14 +18,14 @@ describe('attributing a session by its checkout name', () => {
   ]
 
   it('reads the directory a checkout was cloned into', () => {
-    expect(checkoutName('/home/caladmin/cairn')).toBe('cairn')
-    expect(checkoutName('/root/projects/cairn/')).toBe('cairn')
-    expect(checkoutName('/Users/cal/Hermes')).toBe('hermes')
+    expect(checkoutName(p('home', 'dev', 'cairn'))).toBe('cairn')
+    expect(checkoutName(`${p('srv', 'projects', 'cairn')}/`)).toBe('cairn')
+    expect(checkoutName(p('Users', 'dev', 'Hermes'))).toBe('hermes')
   })
 
   it('treats a worktree as its parent checkout', () => {
-    expect(checkoutName('/Users/cal/maestro-dev/cairn/.claude/worktrees/agent-a1')).toBe('cairn')
-    expect(checkoutName('/Users/cal/cairn/.worktrees/fix-x')).toBe('cairn')
+    expect(checkoutName(p('Users', 'dev', 'code', 'cairn', '.claude', 'worktrees', 'agent-a1'))).toBe('cairn')
+    expect(checkoutName(p('Users', 'dev', 'cairn', '.worktrees', 'fix-x'))).toBe('cairn')
   })
 
   it('names a repository by the last segment of its remote, however it is spelled', () => {
@@ -45,7 +48,7 @@ describe('attributing a session by its checkout name', () => {
   })
 
   it('answers nothing for a directory no repository is named after', () => {
-    expect(projectKeyForCheckoutName(rows, 'caladmin')).toBeNull()
+    expect(projectKeyForCheckoutName(rows, 'dev')).toBeNull()
     expect(projectKeyForCheckoutName(rows, null)).toBeNull()
   })
 })

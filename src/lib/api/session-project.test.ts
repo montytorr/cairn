@@ -39,7 +39,12 @@ vi.mock('./project-resolution', () => ({
 
 import { upsertSession } from './sessions'
 
-const actor = { userId: 'u', actorId: null, userDisplayName: 'cal' } as unknown as Actor
+/** Absolute fixture paths, built so no real home directory is spelled out. */
+const p = (...parts: string[]) => ['', ...parts].join('/')
+const MAC_HM = p('Users', 'dev', 'hm')
+const SERVER_CAIRN = p('home', 'dev', 'cairn')
+
+const actor = { userId: 'u', actorId: null, userDisplayName: 'dev' } as unknown as Actor
 const upsert = (input: Record<string, unknown>) =>
   upsertSession(actor, sessionUpsert.parse({ externalId: 'x', checkpointHeld: false, ...input }))
 
@@ -52,8 +57,8 @@ describe('which project a recorded session belongs to', () => {
   beforeEach(() => {
     state.written = []
     state.repos = { 'git@github.com:montytorr/cairn.git': 'CAIRN' }
-    state.cwds = { '/Users/cal/hm': 'HM' }
-    state.names = { '/home/caladmin/cairn': 'CAIRN', '/Users/cal/hm': 'NOPE' }
+    state.cwds = { [MAC_HM]: 'HM' }
+    state.names = { [SERVER_CAIRN]: 'CAIRN', [MAC_HM]: 'NOPE' }
     state.failLookups = false
   })
 
@@ -69,18 +74,18 @@ describe('which project a recorded session belongs to', () => {
   })
 
   it('then to sessions already attributed in the same directory', async () => {
-    await upsert({ cwd: '/Users/cal/hm' })
+    await upsert({ cwd: MAC_HM })
     expect(state.written[0]?.project_id).toBe('id-HM')
   })
 
   it('then to the checkout name, for an older CLI that sends only a cwd', async () => {
-    await upsert({ cwd: '/home/caladmin/cairn' })
+    await upsert({ cwd: SERVER_CAIRN })
     expect(state.written[0]?.project_id).toBe('id-CAIRN')
   })
 
   it('records the session unattributed rather than failing when a lookup breaks', async () => {
     state.failLookups = true
-    await upsert({ repo: 'git@github.com:montytorr/cairn.git', cwd: '/home/caladmin/cairn' })
+    await upsert({ repo: 'git@github.com:montytorr/cairn.git', cwd: SERVER_CAIRN })
     expect(state.written[0]?.project_id).toBeNull()
   })
 

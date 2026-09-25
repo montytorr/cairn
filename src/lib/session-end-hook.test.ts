@@ -198,7 +198,7 @@ describe('the session-end hook', () => {
       codex('response_item', { type: 'message', role, content: [{ type: 'input_text', text }] })
     const path = transcript('rollout-2026-09-25T09-00-00-11111111-2222-3333-4444-555555555555', [
       codex('session_meta', { id: '11111111-2222-3333-4444-555555555555' }),
-      codex('turn_context', { cwd: '/root/.openclaw/workspace' }),
+      codex('turn_context', { cwd: '/srv/openclaw/workspace' }),
       say('user', '[OpenClaw conversation info: sender={"id":"42"}]\nRotate the staging certificate'),
       codex('response_item', { type: 'function_call', arguments: '{"cmd":"edit deploy/certs.sh"}' }),
     ])
