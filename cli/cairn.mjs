@@ -29,7 +29,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 
 /**
  * Credentials come from the environment, falling back to ~/.cairn/env — so an
@@ -85,10 +85,31 @@ const SESSION = (() => {
   return raw && raw.length <= 100 && /^[A-Za-z0-9._:-]+$/.test(raw) ? raw : null
 })()
 
+/**
+ * Which machine is speaking.
+ *
+ * A key names a runtime and a human, and the same key names go onto every
+ * machine that human uses — so `claude-code · cal@…` on a laptop and on a
+ * server are one actor string, and a misattributed note cannot be traced back
+ * to the box that wrote it (CAIRN-290). The actor string is deliberately left
+ * alone: it is the join key for the whole history. The host travels beside it
+ * and the server records it where a row already has room for it. An older
+ * server ignores the header.
+ */
+const HOST = (() => {
+  let raw = process.env.CAIRN_HOST
+  if (raw === undefined) {
+    try { raw = hostname() } catch { raw = '' }
+  }
+  raw = String(raw ?? '').trim()
+  return raw && raw.length <= 100 && /^[A-Za-z0-9._-]+$/.test(raw) ? raw : null
+})()
+
 /** Every request carries it, so no endpoint needs a parameter for it. */
 const authHeaders = (extra = {}) => ({
   Authorization: `Bearer ${KEY}`,
   ...(SESSION ? { 'X-Cairn-Session': SESSION } : {}),
+  ...(HOST ? { 'X-Cairn-Host': HOST } : {}),
   ...extra,
 })
 
@@ -111,9 +132,66 @@ const BASE = (process.env.CAIRN_BASE_URL || FILE_ENV.CAIRN_BASE_URL || 'http://l
  * `CLAUDECODE` is set by Claude Code itself; the others are set where the
  * runtime is launched, which is the only place that knows.
  */
+/**
+ * Codex's own markers. CODEX_THREAD_ID is exported into every shell Codex
+ * runs; the CODEX_MANAGED_* pair comes from its npm launcher.
+ */
+const hasCodexMarker = (env) =>
+  Boolean(
+    env.CODEX_THREAD_ID ||
+      env.CODEX_SANDBOX ||
+      env.CODEX_MANAGED_BY_NPM ||
+      env.CODEX_MANAGED_PACKAGE_ROOT,
+  )
+
+/** What a process's command line says it is, from its first two words. */
+const runtimeOfCommand = (command) => {
+  const words = String(command ?? '').trim().split(/\s+/).slice(0, 2).map((w) => basename(w))
+  if (words.some((w) => w === 'codex' || w === 'codex.js')) return 'codex'
+  if (words.some((w) => w === 'claude') || /@anthropic-ai\/claude-code\//.test(command)) return 'claude-code'
+  return null
+}
+
+/**
+ * The nearest ancestor that is a runtime, walking up from this process.
+ *
+ * Environment variables are inherited, so they say every runtime this process
+ * is nested inside and not which one is innermost: a Codex started from a
+ * Claude Code shell carries CLAUDECODE=1 into every command it runs, and all
+ * of its writes were filed as claude-code (CAIRN-290). The process tree is
+ * the one thing that records nesting. Only consulted when the environment is
+ * ambiguous, so the ordinary call pays for no `ps` at all.
+ */
+const innermostRuntime = () => {
+  let pid = process.ppid
+  for (let hop = 0; hop < 20 && pid > 1; hop += 1) {
+    let line
+    try {
+      line = execFileSync('ps', ['-o', 'ppid=,command=', '-p', String(pid)], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 1000,
+      }).trim()
+    } catch {
+      return null
+    }
+    const match = /^(\d+)\s+(.*)$/.exec(line)
+    if (!match) return null
+    const found = runtimeOfCommand(match[2])
+    if (found) return found
+    pid = Number(match[1])
+  }
+  return null
+}
+
 const detectAgent = () => {
   if (process.env.CAIRN_AGENT) return process.env.CAIRN_AGENT.trim().toLowerCase()
-  if (process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT) return 'claude-code'
+  if (process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT) {
+    // Both sets of markers: nested one way or the other. Ask the process tree,
+    // and keep the old answer when it cannot say.
+    if (hasCodexMarker(process.env) && innermostRuntime() === 'codex') return 'codex'
+    return 'claude-code'
+  }
 
   // OpenClaw runs Codex underneath, pointed at a CODEX_HOME of its own
   // (an `.openclaw/.../codex-home` of its own). Testing for
@@ -144,8 +222,7 @@ const detectAgent = () => {
   //
   // These are checked after the OpenClaw tests on purpose: OpenClaw runs Codex
   // underneath and therefore sets them too.
-  if (codexHome || process.env.CODEX_SANDBOX) return 'codex'
-  if (process.env.CODEX_MANAGED_BY_NPM || process.env.CODEX_MANAGED_PACKAGE_ROOT) return 'codex'
+  if (codexHome || hasCodexMarker(process.env)) return 'codex'
   return ''
 }
 
@@ -176,7 +253,41 @@ const KEY = process.env.CAIRN_API_KEY || OWN_KEY || FILE_ENV.CAIRN_API_KEY || ''
  * machine that has not been split, and refusing would break it.
  */
 const SPLIT_KEYS = Object.keys(FILE_ENV).filter((name) => name.startsWith('CAIRN_API_KEY_'))
-if (!process.env.CAIRN_API_KEY && !OWN_KEY && SPLIT_KEYS.length > 0 && FILE_ENV.CAIRN_API_KEY) {
+const BORROWING =
+  !process.env.CAIRN_API_KEY && !OWN_KEY && SPLIT_KEYS.length > 0 && Boolean(FILE_ENV.CAIRN_API_KEY)
+
+/**
+ * Identities that must never borrow, because nobody reads their warnings.
+ *
+ * `maintenance` runs from a schedule, with its output in a log file or thrown
+ * away. On a machine with no CAIRN_API_KEY_MAINTENANCE it fell back to the
+ * plain key, which on that machine was Claude Code's, and 27 scheduled repair
+ * notes on CAIRN-107 were filed as claude-code; the warning went to
+ * `stdio: 'ignore'` (CAIRN-290). An interactive runtime keeps the warning,
+ * because refusing would drop a real session's work; a scheduled job loses
+ * nothing by failing loudly and being fixed.
+ */
+const MUST_NOT_BORROW = new Set(['maintenance'])
+const IDENTITY_REFUSAL =
+  BORROWING && MUST_NOT_BORROW.has(AGENT)
+    ? `cairn: CAIRN_AGENT=${AGENT} has no ${keyNameFor(AGENT)} in ~/.cairn/env, and this identity ` +
+      `refuses to fall back to the default key, which belongs to another runtime. ` +
+      `Add ${keyNameFor(AGENT)}=<a key named ${AGENT}> to ~/.cairn/env.`
+    : null
+
+/** Every path that would send the key goes through this first. */
+const requireKey = () => {
+  if (IDENTITY_REFUSAL) {
+    process.stderr.write(`${IDENTITY_REFUSAL}\n`)
+    process.exit(3)
+  }
+  if (!KEY) {
+    process.stderr.write('CAIRN_API_KEY is not set (env, or ~/.cairn/env).\n')
+    process.exit(1)
+  }
+}
+
+if (BORROWING && !IDENTITY_REFUSAL) {
   process.stderr.write(
     `cairn: could not tell which runtime this is${AGENT ? ` (${AGENT} has no ${keyNameFor(AGENT)})` : ''}, ` +
       `so this write will be filed under the default key. ` +
@@ -352,28 +463,101 @@ const fingerprint = () => {
  * Once per process, because the point is to be noticed, and a line repeated on
  * every request is a line nobody reads.
  */
-let warnedStale = false
-const warnIfStale = (res) => {
-  if (warnedStale) return
-  const version = res?.headers?.get?.('x-cairn-version')
-  const servedHash = res?.headers?.get?.('x-cairn-cli')
+/**
+ * Which side of a drift is newer, when anything can say.
+ *
+ * The warning used to tell everybody to run the sync, and on the server the
+ * sync is what had put the newer file there: it pulls `main` on its own clock,
+ * so for a few minutes after a merge the CLI is AHEAD of the deploy, and the
+ * advice was to fetch the file that was already installed (CAIRN-290).
+ *
+ * Two orderings are available. Releases compare as numbers. Within a release
+ * the server may say when it was built (`x-cairn-built-at`), and this file's
+ * mtime is when it was installed: a CLI written before the image it disagrees
+ * with was built is the older side, and one written after it is almost always
+ * a merge the deploy has not caught up with. Neither -> say so neutrally.
+ */
+const compareReleases = (a, b) => {
+  const parse = (v) => String(v).split('.').map((part) => Number.parseInt(part, 10))
+  const [x, y] = [parse(a), parse(b)]
+  if ([...x, ...y].some(Number.isNaN)) return null
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0) ? -1 : 1
+  }
+  return 0
+}
 
-  let drift = null
+const installedAt = () => {
+  try {
+    return process.argv[1] ? statSync(process.argv[1]).mtimeMs : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The exact command that brings this machine's copy up to date, chosen by what
+ * is installed here rather than by a guess about which host this is.
+ */
+const updateCommand = () => {
+  const home = homedir()
+  const agent = join(home, 'Library/LaunchAgents/com.cairn.agent-files.plist')
+  if (process.platform === 'darwin' && existsSync(agent)) {
+    return `launchctl kickstart gui/${process.getuid()}/com.cairn.agent-files`
+  }
+  const own = join(home, '.cairn/maintenance/install-cron.mjs')
+  if (existsSync(own)) return `node ${own} --run agent-files`
+  // The server's job lives in root's crontab, which is the one --run reads.
+  const shared = '/opt/cairn-maintenance/install-cron.mjs'
+  if (existsSync(shared)) {
+    return `${process.getuid?.() === 0 ? '' : 'sudo '}node ${shared} --run agent-files`
+  }
+  const sync = join(home, '.cairn/maintenance/sync-agent-files.mjs')
+  if (existsSync(sync)) {
+    return `node ${sync} --source https://raw.githubusercontent.com/montytorr/cairn/main`
+  }
+  return `copy cli/cairn.mjs from the deployed commit over ${process.argv[1] ?? 'this file'}`
+}
+
+/** One line, or null when the two agree or the server offers nothing to compare. */
+const driftLine = (headers) => {
+  const version = headers?.get?.('x-cairn-version')
+  const servedHash = headers?.get?.('x-cairn-cli')
+  const builtAt = Date.parse(headers?.get?.('x-cairn-built-at') ?? '')
+
+  let detail = null
+  let order = null
   if (version && version !== VERSION) {
-    drift = `this CLI is ${VERSION}, ${BASE} is ${version}`
+    detail = `this CLI is ${VERSION}, ${BASE} is ${version}`
+    order = compareReleases(VERSION, version)
   } else if (servedHash) {
     const mine = fingerprint()
     // Same release, different file: the case the version can never see.
     if (mine && mine !== servedHash) {
-      drift = `this CLI is ${VERSION} ${mine}, ${BASE} ships ${VERSION} ${servedHash}`
+      detail = `this CLI is ${VERSION} ${mine}, ${BASE} ships ${VERSION} ${servedHash}`
+      const at = installedAt()
+      if (at !== null && Number.isFinite(builtAt)) order = at < builtAt ? -1 : 1
     }
   }
-  if (!drift) return
+  if (!detail) return null
 
+  if (order === -1) return `cairn: this CLI is older than the server (${detail}) — update: ${updateCommand()}`
+  if (order === 1) {
+    return (
+      `cairn: this CLI is newer than the server (${detail}) — probably a merge not deployed yet; ` +
+      `nothing to do unless it persists`
+    )
+  }
+  return `cairn: CLI and server differ (${detail}) — if the server is newer, update: ${updateCommand()}`
+}
+
+let warnedStale = false
+const warnIfStale = (res) => {
+  if (warnedStale) return
+  const line = driftLine(res?.headers)
+  if (!line) return
   warnedStale = true
-  process.stderr.write(
-    `cairn: ${drift} — run scripts/sync-agent-files.mjs, or copy cli/cairn.mjs over\n`,
-  )
+  process.stderr.write(`${line}\n`)
 }
 
 /**
@@ -560,6 +744,7 @@ const hasReplayableOutbox = () => {
  * moved to a rejected sidecar with the response, never silently discarded.
  */
 const flushOutbox = async () => {
+  requireKey()
   let sent = 0
   let rejected = 0
   const claimId = `${process.pid}-${randomUUID()}`
@@ -727,7 +912,7 @@ const flushOutbox = async () => {
 let mutated = false
 
 const request = async (method, path, body, { soft = false } = {}) => {
-  if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
+  requireKey()
   if (method !== 'GET') mutated = true
   const isCheckpoint = path.split('?')[0].endsWith('/checkpoint')
   // A fresh checkpoint must not jump ahead of older durable checkpoints. Drain
@@ -869,7 +1054,7 @@ const mimeOf = (filePath) => {
 }
 
 const upload = async (path, filePath) => {
-  if (!KEY) die('CAIRN_API_KEY is not set (env, or ~/.cairn/env).')
+  requireKey()
   if (!existsSync(filePath)) die(`no such file: ${filePath}`)
 
   const form = new FormData()
@@ -1414,7 +1599,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn session list             recent sessions
     cairn session checkpoint --id <id>  upsert ongoing session, do not checkpoint held tasks
     cairn session end --id <id>    write the episodic record, checkpoint what is held
-    cairn reconcile                release your own claims that went quiet
+    cairn reconcile                release your own claims that went quiet (2h)
+                                   as CAIRN_AGENT=maintenance: every quiet claim
     cairn vitals [--hours 24] [--all]   is the memory still being written
     cairn vitals --notify <ref>         post findings as a note, silent if none
 
@@ -2867,6 +3053,38 @@ const commands = {
       return out
     }
 
+    /**
+     * What migration 065 can see and cairn_vitals cannot: claims nobody is on,
+     * the reaper, sessions and the summariser per runtime and host, knowledge
+     * verification. Absent on an older server, and then nothing is printed —
+     * `0 quiet` from a server that cannot count them would be a wrong answer.
+     */
+    const signalLines = (s) => {
+      if (!s) return []
+      const quiet = (m) => (m === null ? 'never active' : m >= 120 ? `${Math.round(m / 60)}h` : `${m}m`)
+      const out = [
+        `claims ${s.claims.quiet2h} of ${s.claims.held} quiet >2h, ${s.claims.quiet24h} >24h; ` +
+          `auto-released ${s.reaper.released7d} in 7d (last ${s.reaper.lastReleaseAt?.slice(0, 16) ?? 'never'})`,
+      ]
+      for (const c of s.claims.quietest.slice(0, 5)) {
+        out.push(`  quiet ${quiet(c.quietMinutes)}: ${c.ref} ${truncate(c.title, 50)} (${c.claimedBy})`)
+      }
+      for (const r of s.runtimes) {
+        out.push(
+          `  ${r.runtime}@${r.host}: ${r.recent} sessions, ${r.recentSummarised} summarised ` +
+            `(week before ${r.baseline}, ${r.baselineSummarised})`,
+        )
+      }
+      if (s.sessions.summariserRecent > 0) {
+        out.push(`  summariser runs not counted as sessions: ${s.sessions.summariserRecent}`)
+      }
+      out.push(
+        `knowledge ${s.knowledge.neverVerified} of ${s.knowledge.current} never verified, ` +
+          `${s.knowledge.unverified30d} not in 30 days`,
+      )
+      return out
+    }
+
     const hours = Number(flags.hours ?? 24)
     const data = await request('GET', `/api/v1/vitals?hours=${hours}`)
     const findings = data.findings ?? []
@@ -2879,9 +3097,11 @@ const commands = {
       const note =
         `Cairn vitals, last ${data.windowHours}h:\n` +
         findings.map((f) => `  [${f.severity}] ${f.message}`).join('\n') +
-        `\n\nSessions ${data.sessions.recent} (${data.sessions.recentWithFiles} naming files), ` +
+        `\n\nSessions ${data.sessions.recent} (${data.sessions.recentWithFiles} naming files, ` +
+        `${data.sessions.recentSummarised ?? '?'} summarised), ` +
         `tasks ${data.tasks.opened} opened / ${data.tasks.closed} closed, ` +
         `${data.tasks.stalled} stalled, ${data.autoReleased} claims auto-released.` +
+        (signalLines(data.signals).length ? `\n${signalLines(data.signals).join('\n')}` : '') +
         (memoryLines(data.memory).length ? `\n${memoryLines(data.memory).join('\n')}` : '')
       await request('POST', `/api/v1/tasks/${encodeURIComponent(flags.notify)}/notes`, {
         note,
@@ -2899,14 +3119,16 @@ const commands = {
         if (flags.all || d.findings.length === 0) {
           out.push('')
           out.push(
-            `sessions ${d.sessions.recent} (${d.sessions.recentWithFiles} with files), ` +
-              `week before ${d.sessions.baseline} (${d.sessions.baselineWithFiles})`,
+            `sessions ${d.sessions.recent} (${d.sessions.recentWithFiles} with files` +
+              (d.sessions.recentSummarised !== undefined ? `, ${d.sessions.recentSummarised} summarised` : '') +
+              `), week before ${d.sessions.baseline} (${d.sessions.baselineWithFiles})`,
           )
           out.push(
             `tasks ${d.tasks.opened} opened, ${d.tasks.closed} closed, ` +
               `${d.tasks.stalled} stalled, ${d.tasks.held} held`,
           )
           out.push(`claims auto-released ${d.autoReleased}, knowledge written ${d.knowledgeWritten}`)
+          out.push(...signalLines(d.signals))
           out.push(...memoryLines(d.memory))
           for (const a of d.agents) out.push(`  ${a.agent}: ${a.recent} writes (week before ${a.baseline})`)
         }
@@ -2925,10 +3147,11 @@ const commands = {
         rows: (d) =>
           d.released.map((r) => ({
             ref: r.ref,
+            holder: r.holder ?? '',
             held: `${r.heldForMinutes}m`,
             checkpoint: r.hadCheckpoint ? 'yes' : 'none',
           })),
-        columns: ['ref', 'held', 'checkpoint'],
+        columns: ['ref', 'holder', 'held', 'checkpoint'],
       },
     )
   },
@@ -2953,6 +3176,16 @@ const commands = {
       ]) {
         if (flags[flag] !== undefined) payload[field] = await resolveValue(flags[flag])
       }
+      // The same order as `cairn context`: the map, then the remote (which the
+      // server matches against project_repos), then the cwd on the server's
+      // side. Nothing here used to look, and nothing else sent a project, so
+      // every live session landed unattributed (CAIRN-286).
+      if (payload.project === undefined) {
+        const mapped = projectForDir(payload.cwd)
+        if (mapped) payload.project = mapped
+      }
+      const repo = gitRemote(payload.cwd)
+      if (repo) payload.repo = repo
       if (flags['tool-calls']) payload.toolCalls = Number(flags['tool-calls'])
       if (flags['no-checkpoint']) payload.checkpointHeld = false
       if (flags.scheduled) payload.scheduled = true
@@ -2993,11 +3226,12 @@ const command = positional.shift()
 if (flags.version || command === 'version') {
   // Asks the server too, and says when they disagree. A stale copy is
   // invisible otherwise: it goes on working, just not the way the docs say.
+  // The comparison is the one every other request makes, through the same
+  // function, so it is said once and only once.
   let server = null
-  let theirs = null
+  let res = null
   try {
-    const res = await fetch(`${BASE}/api/v1/health`)
-    theirs = res.headers.get('x-cairn-cli')
+    res = await fetch(`${BASE}/api/v1/health`)
     server = (await res.json())?.data ?? null
   } catch {
     // Offline, or not pointed at a server yet. The local version still answers.
@@ -3006,21 +3240,7 @@ if (flags.version || command === 'version') {
   process.stdout.write(`cairn ${VERSION}${mine ? ` ${mine}` : ''}\n`)
   if (server) {
     process.stdout.write(`server ${server.version ?? '?'} (${server.build ?? '?'}) ${BASE}\n`)
-    if (server.version && server.version !== VERSION) {
-      process.stderr.write(
-        `\nthis CLI is ${VERSION}, the server is ${server.version} — ` +
-          `run scripts/sync-agent-files.mjs, or copy cli/cairn.mjs over\n`,
-      )
-    } else if (theirs && mine && theirs !== mine) {
-      // Same release on both sides, different file — the case the version
-      // number can never see. Read off the response header rather than the
-      // body, because the fingerprint describes the deployment, not the
-      // payload, and every route carries it.
-      process.stderr.write(
-        `\nthis CLI is ${mine}, the server ships ${theirs} — same release, different file. ` +
-          `Run scripts/sync-agent-files.mjs, or copy cli/cairn.mjs over\n`,
-      )
-    }
+    warnIfStale(res)
   }
   process.exit(0)
 }

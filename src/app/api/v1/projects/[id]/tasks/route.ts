@@ -148,7 +148,7 @@ export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
       actor_type: actor.actorType,
       actor_id: actor.actorId,
       event: 'created',
-      data: { type: body.type, status: body.status },
+      data: { type: body.type, status: body.status, ...(actor.host ? { host: actor.host } : {}) },
     })
 
     return ok(

@@ -18,6 +18,10 @@ COPY --from=deps /app/node_modules ./node_modules
 ARG GIT_SHA=unknown
 COPY . .
 RUN echo "$GIT_SHA" > public/build-version.txt || (mkdir -p public && echo "$GIT_SHA" > public/build-version.txt)
+# When, so a CLI whose fingerprint disagrees can tell which side is newer:
+# its own mtime against this (CAIRN-290). Below `COPY . .`, so it is rebuilt
+# with every source change rather than cached from the first build.
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > public/build-time.txt
 # The fingerprint of the CLI this image was built beside, so a copied
 # ~/.local/bin/cairn can tell whether it is the current file rather than
 # whether it belongs to the current release — 133 commits fitted inside

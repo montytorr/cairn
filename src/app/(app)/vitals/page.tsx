@@ -165,19 +165,30 @@ const VitalsPage = async ({
   const hours = WINDOWS.some((w) => w.hours === requested) ? requested : 24
   const window = WINDOWS.find((w) => w.hours === hours)?.label ?? '24h'
 
-  let vitals: Vitals | null = null
-  let work: WorkShape | null = null
-  let memory: MemoryUse | null = null
-  let failure: string | null = null
-  try {
-    ;[vitals, work, memory] = await Promise.all([
-      readVitalsFor(user.id, hours),
-      readWorkShapeFor(user.id, hours),
-      readMemoryUseFor(user.id, hours),
-    ])
-  } catch (error) {
-    failure = error instanceof Error ? error.message : 'Could not read the vital signs.'
-  }
+  // Settled separately, not in one try. One aggregate failing used to blank
+  // the whole page — the memory block's failure took the vital signs down
+  // with it, which contradicts the API, where `memory: null` exists so that
+  // one unanswerable question does not stop the others being answered.
+  const [vitalsRead, workRead, memoryRead] = await Promise.allSettled([
+    readVitalsFor(user.id, hours),
+    readWorkShapeFor(user.id, hours),
+    readMemoryUseFor(user.id, hours),
+  ])
+  const value = <T,>(r: PromiseSettledResult<T>): T | null =>
+    r.status === 'fulfilled' ? r.value : null
+  const reason = (r: PromiseSettledResult<unknown>, what: string) =>
+    r.status === 'rejected'
+      ? `${what}: ${r.reason instanceof Error ? r.reason.message : 'could not be read'}`
+      : null
+  const vitals: Vitals | null = value(vitalsRead)
+  const work: WorkShape | null = value(workRead)
+  const memory: MemoryUse | null = value(memoryRead)
+  const failures = [
+    reason(vitalsRead, 'Vital signs'),
+    reason(workRead, 'Where work is stuck'),
+    reason(memoryRead, 'Is the memory being read'),
+  ].filter((f): f is string => f !== null)
+  const signals = vitals?.signals ?? null
 
   const findings = vitals ? assess(vitals) : []
   const busiest = Math.max(1, ...(vitals?.agents ?? []).map((a) => a.recent))
@@ -211,7 +222,12 @@ const VitalsPage = async ({
             centred. A rule half the app follows is not a rule, it just reads
             as two pages somebody forgot. */}
           <div className="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-5 md:px-6">
-          {failure ? <p className="text-danger text-[0.8125rem]">{failure}</p> : null}
+          {failures.map((f) => (
+            <p key={f} className="text-danger text-[0.8125rem]">
+              {f}
+              {vitals ? ' — the rest of this page is still current.' : ''}
+            </p>
+          ))}
 
           {vitals ? (
             <>
@@ -335,6 +351,88 @@ const VitalsPage = async ({
                 </Panel>
               ) : null}
 
+              {signals ? (
+                <Panel
+                  title="Claims nobody is on"
+                  note="no note, checkpoint, edit or heartbeat, by the rule the reaper uses; a session-end &quot;still held&quot; checkpoint does not count"
+                >
+                  <Row
+                    label="held, quiet for more than 2h"
+                    value={`${signals.claims.quiet2h} of ${signals.claims.held}`}
+                  />
+                  <Row label="quiet for more than a day" value={String(signals.claims.quiet24h)} />
+                  <Row
+                    label="released automatically in 7 days"
+                    value={String(signals.reaper.released7d)}
+                    hint={
+                      signals.reaper.lastReleaseAt
+                        ? `(last ${signals.reaper.lastReleaseAt.slice(0, 10)})`
+                        : '(never)'
+                    }
+                  />
+                  {signals.claims.quietest.map((c) => (
+                    <Row
+                      key={c.ref}
+                      label={`${c.ref} · ${c.title}`}
+                      value={
+                        c.quietMinutes === null
+                          ? 'never active'
+                          : c.quietMinutes >= 120
+                            ? `${Math.round(c.quietMinutes / 60)}h`
+                            : `${c.quietMinutes}m`
+                      }
+                      hint={c.claimedBy}
+                    />
+                  ))}
+                </Panel>
+              ) : null}
+
+              {signals && signals.runtimes.length > 0 ? (
+                <Panel
+                  title="Sessions by runtime"
+                  note={`last ${window} against the week before; summarised is the prose half`}
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[0.78125rem]">
+                      <thead>
+                        <tr className="text-fg-subtle border-border border-b text-left text-[0.65625rem] tracking-[0.05em] uppercase">
+                          <th className="py-1.5 font-medium">runtime</th>
+                          <th className="py-1.5 font-medium">host</th>
+                          <th className="py-1.5 text-right font-medium">sessions</th>
+                          <th className="py-1.5 text-right font-medium">summarised</th>
+                          <th className="py-1.5 text-right font-medium">last seen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {signals.runtimes.map((r) => (
+                          <tr key={`${r.runtime}@${r.host}`} className="border-border border-b last:border-0">
+                            <td className="text-fg py-1.5 font-medium">{r.runtime}</td>
+                            <td className="text-fg-muted py-1.5">{r.host}</td>
+                            <td className="text-fg tabular py-1.5 text-right">
+                              {r.recent}
+                              <span className="text-fg-subtle"> ({r.baseline})</span>
+                            </td>
+                            <td className="text-fg tabular py-1.5 text-right">
+                              {r.recent > 0 ? `${Math.round((r.recentSummarised / r.recent) * 100)}%` : '—'}
+                              <span className="text-fg-subtle">
+                                {` (${
+                                  r.baseline > 0
+                                    ? `${Math.round((r.baselineSummarised / r.baseline) * 100)}%`
+                                    : '—'
+                                })`}
+                              </span>
+                            </td>
+                            <td className="text-fg-muted tabular py-1.5 text-right">
+                              {r.lastSeenAt.slice(0, 10)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              ) : null}
+
               {memory ? (
                 <Panel
                   title="Is the memory being read"
@@ -420,7 +518,27 @@ const VitalsPage = async ({
                     value={String(vitals.sessions.recentWithFiles)}
                     hint={`(${vitals.sessions.baselineWithFiles})`}
                   />
+                  <Row
+                    label="summarised"
+                    value={String(vitals.sessions.recentSummarised)}
+                    hint={signals ? `(${signals.sessions.baselineSummarised})` : undefined}
+                  />
+                  {signals && signals.sessions.summariserRecent > 0 ? (
+                    <Row
+                      label="summariser runs, not counted"
+                      value={String(signals.sessions.summariserRecent)}
+                    />
+                  ) : null}
                   <Row label="knowledge written" value={String(vitals.knowledgeWritten)} />
+                  {/* Informational: nothing yet says how often a fact should
+                      be re-checked, so this is a number to read, not an alarm. */}
+                  {signals ? (
+                    <Row
+                      label="knowledge never verified"
+                      value={`${signals.knowledge.neverVerified} of ${signals.knowledge.current}`}
+                      hint={`(${signals.knowledge.unverified30d} not in 30 days)`}
+                    />
+                  ) : null}
                   <Row
                     label="claims released automatically"
                     value={String(vitals.autoReleased)}

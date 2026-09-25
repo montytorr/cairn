@@ -205,15 +205,20 @@ Cairn makes the tracker the memory:
 - **Attributable.** Every write records which agent made it, so "who tried what, and did it
   work" is always answerable.
 
-## Three mechanisms, so nobody has to remember
+## Two mechanisms, so nobody has to remember
 
 This is the part that makes the rest hold. Installed by `node scripts/install-hooks.mjs`.
 
 | When | What happens |
 |---|---|
 | session start | the briefing is injected — what you hold, what is in flight, where the last session in this directory stopped, what is known here |
-| a file is read | what Cairn knows about *that file*, if anything; silence if not |
 | session end | the session is recorded, and any task still held is checkpointed |
+
+There used to be a third, on every file read. It had no cache and no debounce, so each
+`Read` cost a node process and a fresh HTTPS request, and on Codex, which has no `Read`
+tool, it never matched at all. It was removed by hand (CCS-40), and the installer now
+removes its own entry wherever it finds one rather than writing it back. The hook script
+still answers `PreToolUse` if you wire it yourself.
 
 An integration can persist progress without ending a session:
 
@@ -409,7 +414,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
 | `cairn session list` · `cairn session end --id <id>` | The episodic record |
 | `cairn reconcile` | Release your own claims that went quiet |
-| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss |
+| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss. It also shows claims with no genuine activity for more than 2h and 24h (by the reaper's own rule: a session-end "still held" checkpoint does not count), whether the reaper has released anything in 7 days, sessions and summarised share per runtime and host (`macos` for `/Users/…`, `linux` for `/home/…` or `/root`), and how much current knowledge has never been verified. The summariser's own runs are not counted as sessions |
 | `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
 | `cairn replay` | Send writes put aside while the server was unreachable. Rarely needed by hand — any successful write drains the queue |
@@ -477,6 +482,21 @@ only identifier a copied CLI can compute about itself: there is no repository be
 `scripts/sync-agent-files.mjs` prints, so the installer's log line and the server's header
 are the same string for the same file. If the server sends neither header, the CLI says
 nothing: the check is an improvement on silence, never a dependency.
+
+The warning says **which side is newer** when anything can tell. Releases compare as
+numbers. Within a release the image records when it was built, in **`x-cairn-built-at`**,
+and the CLI compares that with its own file's mtime, which is when the sync wrote it. That
+matters because drift runs both ways: a server's sync pulls `main` on its own clock, so for
+a few minutes after a merge its CLI is ahead of its own deploy, and telling it to update
+was advice to fetch the file it already had. When the CLI is behind, the warning prints
+the exact command that updates this machine: the scheduled job if there is one, the sync
+script otherwise. When nothing can order the two, it says only that they differ.
+
+Requests also carry **`x-cairn-host`**, the machine's hostname (`CAIRN_HOST` overrides
+it). Key names are per runtime, not per machine, so a laptop and a server write the same
+actor string. The actor is left alone, because it is what the whole history joins on, and
+the host is recorded beside it in each activity event's `data`. It is self-reported: a
+diagnostic, never an authorization input.
 
 ## Keyboard
 
@@ -575,7 +595,7 @@ It works out which runtime it is in from the environment, in this order, and
 |---|---|
 | Claude Code | `CLAUDECODE=1`, or `CLAUDE_CODE_ENTRYPOINT` |
 | OpenClaw | a `CODEX_HOME` with `openclaw` in it, or **any** `OPENCLAW_*` variable |
-| Codex | `CODEX_HOME`, `CODEX_SANDBOX`, `CODEX_MANAGED_BY_NPM`, `CODEX_MANAGED_PACKAGE_ROOT` |
+| Codex | `CODEX_HOME`, `CODEX_THREAD_ID`, `CODEX_SANDBOX`, `CODEX_MANAGED_BY_NPM`, `CODEX_MANAGED_PACKAGE_ROOT` |
 
 **The order is the point.** OpenClaw *is* Codex with a `CODEX_HOME` of its own, so it sets
 every Codex marker; testing for Codex first would file all of OpenClaw's work as Codex —
@@ -588,6 +608,12 @@ detection returned nothing, the CLI fell back to the machine's default key, and 
 Codex write was filed as whichever agent owned that key. Hence the `CODEX_MANAGED_*`
 markers, which Codex does export. The wrapper still helps; nothing depends on it.
 
+**Nesting is settled by the process tree, not the environment.** A Codex started from a
+Claude Code shell inherits `CLAUDECODE=1`, so by environment alone every write it made was
+filed as claude-code. When Claude Code's marker and a Codex marker are both present, the CLI
+walks up its parent processes and takes the nearest one named `codex` or `claude`. If `ps`
+cannot answer, the old order stands. Nothing is spawned when the environment is unambiguous.
+
 The CLI is deliberately dependency-free — Node 22's built-in `fetch` is enough — so it can
 be dropped onto a box and run with no install step.
 
@@ -599,7 +625,7 @@ cp -r skills/cairn ~/.codex/skills/      # Codex
 cp -r skills/cairn "$CLAWD_HOME"/skills/ # OpenClaw — its own tree, not a dotfile dir
 ```
 
-**Hooks** — the three mechanisms above:
+**Hooks** — the two mechanisms above:
 
 ```bash
 node scripts/install-hooks.mjs        # --dry-run to see what it would write
@@ -610,12 +636,17 @@ CAIRN_HOOK_CLI=/absolute/path/to/cairn-router node scripts/install-hooks.mjs
 It is idempotent: every entry it writes is tagged, so re-running after an upgrade replaces
 its own and touches nobody else's. Coverage differs by runtime:
 
-| Runtime | Session start | File read | Session recorded |
-|---|---|---|---|
-| Claude Code | `SessionStart` | `PreToolUse(Read)` | `SessionEnd` **and** `PreCompact` |
-| Codex | `SessionStart` | `PreToolUse(Read)` | `Stop` — there is no `SessionEnd` |
-| Hermes Agent by Nous Research | `pre_llm_call` on the first turn only | — | — — session recording is deliberately not installed |
-| OpenClaw | manual — push `cairn context` output into the existing `agent:bootstrap` hook | — | swept from disk on a schedule — it has no session event of any kind |
+| Runtime | Session start | Session recorded |
+|---|---|---|
+| Claude Code | `SessionStart` | `SessionEnd` **and** `PreCompact` |
+| Codex | `SessionStart` | `Stop` — there is no `SessionEnd` |
+| Hermes Agent by Nous Research | `pre_llm_call` on the first turn only | — session recording is deliberately not installed |
+| OpenClaw | manual — push `cairn context` output into the existing `agent:bootstrap` hook | swept from disk on a schedule — it has no session event of any kind |
+
+On Codex the installer also lists every hook in `hooks.json` that is not Cairn's, and marks
+the ones on `Stop`: Codex has no `SessionEnd`, so a session-end script written for Claude
+Code runs after **every turn** there, and one that makes a model call bills once per turn.
+It only says so. Removing another tool's hook is that tool's decision.
 
 Hermes Agent by Nous Research **v0.21.3 or newer** requires hook consent on first use. The installer
 uses `hermes config get hooks --json` and `hermes config set --force hooks <json>` to preserve existing
@@ -664,20 +695,31 @@ omitted, so a row never loses prose it already had. The stamps live in
 time.
 
 The hook keeps the row when the summariser cannot be reached, because losing the record of
-a session over a missing summary would be the worse trade. The cost of that choice is that
-the failure is silent: rows keep appearing, with their files and task refs and no prose,
-and nothing says why. It is worth checking once that a session you know about has prose —
-`cairn session list` — rather than assuming. `cairn vitals` reports it daily.
+a session over a missing summary would be the worse trade. It no longer does so silently:
+every failure is appended to `~/.cairn/summariser.log` with what the summariser said (its
+stderr, the exit code, a timeout), and the session is queued in `~/.cairn/unsummarised.json`.
+The next run of the hook that reaches a working summariser re-summarises up to two queued
+sessions and posts the prose onto the existing row — at most four retries per session, 15
+minutes apart, for 48 hours (`CAIRN_SUMMARY_RETRY_BATCH`, `CAIRN_SUMMARY_RETRY_SPACING_MS`).
+When there is no summary, the request falls back to the first thing a person actually typed
+— never a skill expansion, a runtime wrapper or a bare "hello". `cairn vitals` still reports
+sessions without prose daily.
 
 Two cases where the summariser needs help:
 
 - **The transcripts are root's and the login is not.** A swept runtime whose sessions live
   under a `0700` home has to be swept as root, and `claude -p` as root is not logged in.
   Point `CAIRN_SUMMARY_CLI` at a wrapper that drops to the account that is:
-  `sudo -n -u <user> -H env HOME=/home/<user> claude "$@"`.
+  `sudo -n -u <user> -H env HOME=/home/<user> CAIRN_SUMMARISER=1 claude "$@"`.
 - **The summariser is itself a Claude Code session.** It would trigger the hook again, so
-  the hook sets `CAIRN_SUMMARISER=1` in the child and exits immediately when it sees it.
-  Anything wrapping the summariser must pass that through.
+  the hook sets `CAIRN_SUMMARISER=1`, `QUARRY_SUMMARISER=1` and `AGENT_MEMORY_SUMMARISER=1`
+  in the child and exits immediately when it sees any of them — so Quarry's summariser is
+  skipped too, and Quarry skips ours. The child also runs with `--no-session-persistence`
+  from a scratch directory, so `claude --continue` in a project can never resume it. And a
+  transcript whose first turn is a summariser prompt is not recorded whatever the
+  environment said, because a `sudo` wrapper resets the environment. A wrapper should
+  still pass the flags through: `sudo -n -u <user> -H env HOME=/home/<user>
+  CAIRN_SUMMARISER=1 QUARRY_SUMMARISER=1 claude "$@"`.
 
 **When a runtime has no session-end event**, nothing hands the transcript over, so sweep
 instead of waiting:
@@ -820,15 +862,23 @@ launchd does not notice a plist that changed underneath a loaded agent.
 Any job whose prerequisites are missing on that machine is skipped rather than installed
 broken, and `--install` places the maintenance script itself if it is not there yet.
 
+A laptop has no deploy to trigger its sync, and it sleeps through slots, so under launchd
+`agent-files` runs every 15 minutes and at load. launchd runs a slot that was missed during
+sleep as soon as the machine wakes, which is usually before the network is up, so the sync
+retries a network failure for about a minute and a half before it gives up. The job runs as
+`CAIRN_AGENT=maintenance`, and that identity refuses to fall back to another runtime's key:
+give the machine a `CAIRN_API_KEY_MAINTENANCE`, or its reports are refused. The sync warns
+about a missing key on every run.
+
 Install only what that machine is for. A laptop beside a server usually wants
 `--only agent-files`: `reconcile` and `vitals` are about the instance rather than the
 machine, and running `vitals` in two places reports the same findings twice.
 
 | Job | What it is for |
 |---|---|
-| `reconcile` (30 min) | Releases a claim an agent stopped working on, and moves the task back to todo so `doing` keeps meaning somebody is on it |
+| `reconcile` (30 min) | Releases any claim in the workspace that went quiet for two hours, and moves a `doing` task back to todo so `doing` keeps meaning somebody is on it (`in-review` keeps its status). Workspace-wide only under the `maintenance` key; any other agent's `reconcile` covers its own claims |
 | `vitals` (daily) | Asks whether the memory is still being written and read, and reports **only** when something looks wrong |
-| `agent-files` (hourly, and on every deploy) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
+| `agent-files` (hourly on Linux, and on every deploy; on macOS every 15 minutes and at load) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
 | `openclaw-sessions` (30 min) | OpenClaw has no session-end event, so its transcripts are swept instead of waiting to be handed over |
 
 Host-specific paths come from the environment, because a machine's layout does not belong
@@ -840,9 +890,10 @@ machine rather than one host: on macOS the CLI is looked for in `~/.local/bin`, 
 `~/Library/Logs`, and node is the one running the installer. `CAIRN_NOTIFY_VITALS` and
 `CAIRN_NOTIFY_FILES` name a task to report into; leave them unset and the jobs stay quiet.
 
-Run the jobs under an identity of their own — `CAIRN_AGENT=maintenance` with a matching
-`CAIRN_API_KEY_MAINTENANCE` — or every automatic release reads as whichever agent happens
-to own the machine's default key.
+Run the jobs under an identity of their own: `CAIRN_AGENT=maintenance` with a matching
+`CAIRN_API_KEY_MAINTENANCE`. On a machine whose `~/.cairn/env` holds per-runtime keys, the
+CLI refuses to send a maintenance write under the default key (exit 3), because that key
+belongs to some other agent and a scheduled job's warning is read by nobody.
 
 ### Keeping the copies honest
 

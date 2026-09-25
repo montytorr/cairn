@@ -23,12 +23,24 @@ export type ActivityEvent = {
 }
 
 /**
+ * The machine an agent's request came from, folded into the event's `data`.
+ *
+ * `data` is jsonb and already free-form, so this needs no migration and
+ * changes no actor string (CAIRN-290). An event that already names a host
+ * keeps its own.
+ */
+export const withHost = (events: ActivityEvent[], host?: string | null): ActivityEvent[] =>
+  host
+    ? events.map((e) => (e.data && 'host' in e.data ? e : { ...e, data: { ...e.data, host } }))
+    : events
+
+/**
  * Fire-and-forget, and deliberately so: an audit trail must never be the
  * reason a legitimate write fails. Errors are logged, not raised.
  */
-export const recordActivity = async (events: ActivityEvent[], owner: string) => {
+export const recordActivity = async (events: ActivityEvent[], owner: string, host?: string | null) => {
   if (events.length === 0) return
-  const rows = events.map((e) => ({ owner_user_id: owner, ...e }))
+  const rows = withHost(events, host).map((e) => ({ owner_user_id: owner, ...e }))
   const { error } = await admin().from('task_activity_events').insert(rows)
   if (error) console.error('[activity] could not record', error.message, events.length)
 }
