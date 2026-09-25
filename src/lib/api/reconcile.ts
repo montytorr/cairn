@@ -90,6 +90,7 @@ type HeldClaim = {
 export const lastSignOfLife = (
   task: Pick<HeldClaim, 'heartbeat_at' | 'claimed_at' | 'checkpoint_at' | 'updated_at' | 'checkpoint_summary'>,
   lastNoteAt: string | null,
+  lastEvidenceAt: string | null = null,
 ): number =>
   Math.max(
     ...[
@@ -98,12 +99,34 @@ export const lastSignOfLife = (
       isUntouchedAutoCheckpoint(task.checkpoint_summary) ? null : task.checkpoint_at,
       task.updated_at,
       lastNoteAt,
+      lastEvidenceAt,
     ]
       .filter(Boolean)
       .map((iso) => new Date(iso as string).getTime()),
   )
 
-export const releaseNote = (quietFor: number, hadCheckpoint: boolean, status: string) =>
+/**
+ * Which activity events are the holder working, and which are not.
+ *
+ * A commit, a push, a test run or a deliberate checkpoint recorded against the
+ * task is the plainest evidence there is that its claim is alive, and none of
+ * them touches the task row, so without this a claim whose agent committed
+ * thirty minutes ago but never beat looked exactly as quiet as an abandoned
+ * one. Only events by the holder count: somebody else moving the task is not
+ * the holder working on it.
+ *
+ * `ignored` is listed so the decision is explicit rather than implied by
+ * omission: an automatic checkpoint is written without anyone looking, and a
+ * claim or release is ownership bookkeeping (the claim's own time is already
+ * `claimed_at`). Mirrored in SQL by task_genuine_activity_at — keep both in
+ * step.
+ */
+export const CLAIM_EVIDENCE_EVENTS = {
+  genuine: ['git_commit', 'git_push', 'run_result', 'checkpointed', 'status_changed'],
+  ignored: ['auto_checkpointed', 'released', 'claimed'],
+} as const
+
+export const releaseNote =(quietFor: number, hadCheckpoint: boolean, status: string) =>
   `Claim released automatically: nothing happened on this task for ${quietFor} minutes. ` +
   (hadCheckpoint
     ? 'The checkpoint above is where it was left. '
@@ -140,8 +163,12 @@ export const reconcileClaims = async (
   const held = (data ?? []) as unknown as HeldClaim[]
 
   const lastNotes = await lastNoteTimes(held.map((t) => t.id))
+  const lastEvidence = await lastEvidenceTimes(held)
 
-  const stale = held.filter((task) => lastSignOfLife(task, lastNotes.get(task.id) ?? null) < cutoff)
+  const stale = held.filter(
+    (task) =>
+      lastSignOfLife(task, lastNotes.get(task.id) ?? null, lastEvidence.get(task.id) ?? null) < cutoff,
+  )
 
   const released: Reconciled['released'] = []
 
@@ -217,6 +244,41 @@ const lastNoteTimes = async (taskIds: string[]): Promise<Map<string, string>> =>
   for (const row of data ?? []) {
     const id = row.task_id as string
     if (!out.has(id)) out.set(id, row.created_at as string)
+  }
+  return out
+}
+
+/**
+ * Most recent genuine event by the holder, per task, in one query.
+ *
+ * Bounded below by the oldest claim: anything earlier than a task's claim is
+ * older than its `claimed_at` and could never be the latest sign of life.
+ */
+const lastEvidenceTimes = async (
+  held: Pick<HeldClaim, 'id' | 'claimed_by' | 'claimed_at'>[],
+): Promise<Map<string, string>> => {
+  const out = new Map<string, string>()
+  if (held.length === 0) return out
+
+  const holders = new Map(held.map((t) => [t.id, t.claimed_by]))
+  const since = held
+    .map((t) => t.claimed_at)
+    .filter((at): at is string => Boolean(at))
+    .sort()[0]
+
+  let query = admin()
+    .from('task_activity_events')
+    .select('task_id, actor_id, created_at')
+    .in('task_id', [...holders.keys()])
+    .in('event', [...CLAIM_EVIDENCE_EVENTS.genuine])
+  if (since) query = query.gte('created_at', since)
+  const { data, error } = await query.order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+
+  for (const row of data ?? []) {
+    const id = row.task_id as string
+    if (out.has(id) || row.actor_id !== holders.get(id)) continue
+    out.set(id, row.created_at as string)
   }
   return out
 }

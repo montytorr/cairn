@@ -4,6 +4,7 @@ import { untouchedCheckpoint, workedCheckpoint } from './sessions'
 
 const db = vi.hoisted(() => ({
   tasks: [] as Record<string, unknown>[],
+  events: [] as Record<string, unknown>[],
   filters: [] as string[],
   rpcs: [] as Record<string, unknown>[],
 }))
@@ -11,6 +12,7 @@ const db = vi.hoisted(() => ({
 vi.mock('@/lib/db/client', () => ({
   admin: () => ({
     from: (table: string) => {
+      let events: string[] = []
       const query = {
         select: () => query,
         eq: (column: string, value: unknown) => {
@@ -21,10 +23,26 @@ vi.mock('@/lib/db/client', () => ({
           db.filters.push(`${table}.${column} not ${operator} ${String(value)}`)
           return query
         },
-        in: () => query,
+        in: (column: string, values: unknown[]) => {
+          if (column === 'event') events = values as string[]
+          return query
+        },
+        gte: () => query,
         order: () => query,
         then: (resolve: (result: { data: unknown[]; error: null }) => unknown) =>
-          Promise.resolve(resolve({ data: table === 'tasks' ? db.tasks : [], error: null })),
+          Promise.resolve(
+            resolve({
+              data:
+                table === 'tasks'
+                  ? db.tasks
+                  : table === 'task_activity_events'
+                    ? db.events
+                        .filter((e) => events.includes(e.event as string))
+                        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+                    : [],
+              error: null,
+            }),
+          ),
       }
       return query
     },
@@ -35,7 +53,13 @@ vi.mock('@/lib/db/client', () => ({
   }),
 }))
 
-import { lastSignOfLife, reconcileClaims, reconcilesWorkspace, releaseNote } from './reconcile'
+import {
+  CLAIM_EVIDENCE_EVENTS,
+  lastSignOfLife,
+  reconcileClaims,
+  reconcilesWorkspace,
+  releaseNote,
+} from './reconcile'
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
 
@@ -67,6 +91,7 @@ const agent = (agentName: string, actorId = `${agentName} · Monty`): Actor => (
 
 beforeEach(() => {
   db.tasks = []
+  db.events = []
   db.filters = []
   db.rpcs = []
 })
@@ -160,6 +185,43 @@ describe('what counts as a sign of life', () => {
     ]
     const result = await reconcileClaims(agent('maintenance'))
     expect(result.released.map((r) => r.ref)).toEqual(['BB-1'])
+  })
+})
+
+describe('evidence events as signs of life', () => {
+  const event = (event: string, actor_id: string, agoHours: number) => ({
+    task_id: 'task-1',
+    event,
+    actor_id,
+    created_at: hoursAgo(agoHours),
+  })
+
+  it('keeps a claim whose only recent trace is the holder’s commit 30 minutes ago', async () => {
+    db.tasks = [claim(1, 'claude-code · Monty')]
+    db.events = [event('git_commit', 'claude-code · Monty', 0.5)]
+    const result = await reconcileClaims(agent('maintenance'))
+    expect(result.released).toEqual([])
+    expect(db.rpcs).toEqual([])
+  })
+
+  it('releases a claim whose only recent trace is an automatic checkpoint', async () => {
+    db.tasks = [claim(1, 'claude-code · Monty')]
+    db.events = [event('auto_checkpointed', 'claude-code · Monty', 0.1)]
+    const result = await reconcileClaims(agent('maintenance'))
+    expect(result.released.map((r) => r.ref)).toEqual(['BB-1'])
+  })
+
+  it('does not count a recent event by somebody other than the holder', async () => {
+    db.tasks = [claim(1, 'claude-code · Monty')]
+    db.events = [event('status_changed', 'Monty', 0.1)]
+    const result = await reconcileClaims(agent('maintenance'))
+    expect(result.released.map((r) => r.ref)).toEqual(['BB-1'])
+  })
+
+  it('keeps the allow and deny lists disjoint, and ownership bookkeeping out', () => {
+    const genuine: readonly string[] = CLAIM_EVIDENCE_EVENTS.genuine
+    for (const name of CLAIM_EVIDENCE_EVENTS.ignored) expect(genuine).not.toContain(name)
+    expect(CLAIM_EVIDENCE_EVENTS.ignored).toEqual(expect.arrayContaining(['auto_checkpointed', 'released', 'claimed']))
   })
 })
 

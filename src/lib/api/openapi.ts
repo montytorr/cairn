@@ -1131,7 +1131,7 @@ export const openapiSpec = () => ({
         description:
           'The backstop for claims that outlive their session. Releases claims held by ' +
           'the calling agent — or, for the `maintenance` key, by anyone in the workspace — ' +
-          'that have shown no sign of life — heartbeat, note, checkpoint or edit; the ' +
+          'that have shown no sign of life — heartbeat, note, checkpoint, edit, or the holder\'s own commit, push, run or status change; the ' +
           'automatic "still held" checkpoint does not count — for `olderThanMinutes` ' +
           '(default 120, deliberately far longer than the ' +
           '15-minute claim lease, because agents barely heartbeat and a release is not as ' +
