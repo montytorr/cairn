@@ -1,21 +1,41 @@
 import { admin } from '@/lib/db/client'
 import type { Actor } from './auth'
+import { isUntouchedAutoCheckpoint } from '@/lib/checkpoint-origin'
 
 /**
- * The backstop for runtimes with no session-end event.
+ * The backstop for claims that outlive the session that took them.
  *
- * Claude Code has SessionEnd, so its claims get closed out the moment a session
- * does. Codex has only Stop, and OpenClaw has neither — its nearest equivalents
- * are `command:new` and a daily auto-reset. So on those runtimes a claim
- * outlives the session that took it, and the board fills with holds nobody is
- * acting on. Five were already sitting there when this was written.
+ * No runtime releases on session end. Claude Code's SessionEnd records the
+ * session and checkpoints what it held; Codex has only Stop, and OpenClaw has
+ * neither — its nearest equivalents are `command:new` and a daily auto-reset.
+ * So on every runtime a claim can outlive its session, and the board fills
+ * with holds nobody is acting on: 22 were held when CAIRN-284 was filed, 17 of
+ * them silent for more than 20 hours.
  *
- * Run on a schedule (`openclaw automations`, cron, a launchd job), this
- * releases what the agent stopped working on and says so on the task.
+ * Run on a schedule as the maintenance identity (`CAIRN_AGENT=maintenance
+ * cairn reconcile`, installed by scripts/install-cron.mjs), this releases every
+ * quiet claim in the workspace and says so on the task. Run by any other agent
+ * it releases only that agent's own, which is all it ever did — and why the
+ * scheduled job, holding nothing itself, released nothing for two weeks.
  *
- * It deliberately never closes anything. A task without a resolution that
- * someone meant is worse than an open one: it looks answered and is not.
+ * A quiet `doing` task goes back to `todo`. An `in-review` one keeps its
+ * status, because the work is written and the status says so; only the claim
+ * goes. It deliberately never closes anything. A task without a resolution
+ * that someone meant is worse than an open one: it looks answered and is not.
  */
+
+/** The key agent name whose reconcile covers the whole workspace. */
+export const MAINTENANCE_AGENT = 'maintenance'
+
+/**
+ * Whether this caller may release other agents' claims.
+ *
+ * From the key row's agent name, never from `actorId`: that string also
+ * carries a display name any user can edit. Keys are created only by an
+ * administrator, so naming one `maintenance` is itself the grant.
+ */
+export const reconcilesWorkspace = (actor: Pick<Actor, 'actorType' | 'agentName'>): boolean =>
+  actor.actorType === 'agent' && actor.agentName === MAINTENANCE_AGENT
 
 /**
  * Deliberately far longer than the 15-minute claim lease.
@@ -29,9 +49,70 @@ import type { Actor } from './auth'
 const QUIET_MINUTES = 120
 
 export type Reconciled = {
-  released: { ref: string; heldForMinutes: number; hadCheckpoint: boolean; reopened: boolean }[]
+  scope: 'workspace' | 'own'
+  released: {
+    ref: string
+    holder: string
+    heldForMinutes: number
+    hadCheckpoint: boolean
+    reopened: boolean
+  }[]
   quiet: { ref: string; lastNoteAt: string | null }[]
 }
+
+type HeldClaim = {
+  id: string
+  number: number
+  status: string
+  claimed_by: string
+  claimed_at: string | null
+  heartbeat_at: string | null
+  checkpoint_at: string | null
+  updated_at: string | null
+  checkpoint_summary: string | null
+  ownership_version: number
+  project: { key: string }
+}
+
+/**
+ * The last moment anything suggests somebody is on this claim.
+ *
+ * Every sign of life counts, not just an explicit beat. A task being worked
+ * on accumulates notes, checkpoints and edits whether or not anyone remembers
+ * to call `cairn beat`, and releasing over a missing beat alone would punish
+ * the agents doing the work most carefully.
+ *
+ * Except the one written without anyone looking: "Still held, not progressed"
+ * is the session-end hook recording that a claim was held while the session
+ * worked elsewhere. Counting its timestamp let a runtime that records a
+ * session every 30 minutes keep a week-old claim alive forever (CAIRN-283).
+ */
+export const lastSignOfLife = (
+  task: Pick<HeldClaim, 'heartbeat_at' | 'claimed_at' | 'checkpoint_at' | 'updated_at' | 'checkpoint_summary'>,
+  lastNoteAt: string | null,
+): number =>
+  Math.max(
+    ...[
+      task.heartbeat_at,
+      task.claimed_at,
+      isUntouchedAutoCheckpoint(task.checkpoint_summary) ? null : task.checkpoint_at,
+      task.updated_at,
+      lastNoteAt,
+    ]
+      .filter(Boolean)
+      .map((iso) => new Date(iso as string).getTime()),
+  )
+
+export const releaseNote = (quietFor: number, hadCheckpoint: boolean, status: string) =>
+  `Claim released automatically: nothing happened on this task for ${quietFor} minutes. ` +
+  (hadCheckpoint
+    ? 'The checkpoint above is where it was left. '
+    : 'No checkpoint was recorded, so the state is whatever the last note says. ') +
+  (status === 'doing'
+    ? 'Moved back to todo, because nobody is working on it — pick it up and finish it, or close it with a resolution.'
+    : status === 'in-review'
+      ? 'Left in review: the work is written, and nobody holds it now — review it, or claim it to finish it.'
+      : '')
 
 export const reconcileClaims = async (
   actor: Actor,
@@ -40,51 +121,27 @@ export const reconcileClaims = async (
   const quietFor = options.olderThanMinutes ?? QUIET_MINUTES
   const cutoff = Date.now() - quietFor * 60_000
 
-  if (!actor.actorId) return { released: [], quiet: [] }
+  const workspace = reconcilesWorkspace(actor)
+  const scope: Reconciled['scope'] = workspace ? 'workspace' : 'own'
+  if (!actor.actorId) return { scope, released: [], quiet: [] }
 
-  const { data, error } = await admin()
+  const query = admin()
     .from('tasks')
     .select(
-      'id, number, status, claimed_at, heartbeat_at, checkpoint_at, updated_at, ' +
+      'id, number, status, claimed_by, claimed_at, heartbeat_at, checkpoint_at, updated_at, ' +
         'checkpoint_summary, ownership_version, project:projects!project_id!inner(key)',
     )
-    .eq('claimed_by', actor.actorId)
+  const { data, error } = await (workspace
+    ? query.not('claimed_by', 'is', null)
+    : query.eq('claimed_by', actor.actorId))
 
   if (error) throw new Error(error.message)
 
-  const held = (data ?? []) as unknown as {
-    id: string
-    number: number
-    status: string
-    claimed_at: string | null
-    heartbeat_at: string | null
-    checkpoint_at: string | null
-    updated_at: string | null
-    checkpoint_summary: string | null
-    ownership_version: number
-    project: { key: string }
-  }[]
+  const held = (data ?? []) as unknown as HeldClaim[]
 
-  // Every sign of life counts, not just an explicit beat. A task being worked
-  // on accumulates notes, checkpoints and edits whether or not anyone remembers
-  // to call `cairn beat`, and releasing over a missing beat alone would punish
-  // the agents doing the work most carefully.
   const lastNotes = await lastNoteTimes(held.map((t) => t.id))
 
-  const lastSignOfLife = (task: (typeof held)[number]) =>
-    Math.max(
-      ...[
-        task.heartbeat_at,
-        task.claimed_at,
-        task.checkpoint_at,
-        task.updated_at,
-        lastNotes.get(task.id) ?? null,
-      ]
-        .filter(Boolean)
-        .map((iso) => new Date(iso as string).getTime()),
-    )
-
-  const stale = held.filter((task) => lastSignOfLife(task) < cutoff)
+  const stale = held.filter((task) => lastSignOfLife(task, lastNotes.get(task.id) ?? null) < cutoff)
 
   const released: Reconciled['released'] = []
 
@@ -105,25 +162,19 @@ export const reconcileClaims = async (
     const reopen = task.status === 'doing'
 
     if (!options.dryRun) {
-      const note =
-        `Claim released automatically: nothing happened on this task for ${quietFor} minutes. ` +
-        (task.checkpoint_summary
-          ? 'The checkpoint above is where it was left. '
-          : 'No checkpoint was recorded, so the state is whatever the last note says. ') +
-        (reopen
-          ? 'Moved back to todo, because nobody is working on it — pick it up and finish it, or close it with a resolution.'
-          : '')
       const { data: didRelease, error: releaseError } = await admin().rpc<boolean>('reconcile_task_atomic', {
         p_task_id: task.id,
         p_owner_user_id: actor.userId,
         p_actor_type: actor.actorType,
         p_actor_id: actor.actorId,
-        p_expected_holder: actor.actorId,
+        // The holder the snapshot saw, not the caller: in the workspace sweep
+        // they differ, and the swap must still lose if the claim moved.
+        p_expected_holder: task.claimed_by,
         p_expected_version: task.ownership_version,
         p_expected_heartbeat: task.heartbeat_at,
         p_expected_updated_at: task.updated_at,
         p_reopen: reopen,
-        p_note: note,
+        p_note: releaseNote(quietFor, Boolean(task.checkpoint_summary), task.status),
         p_content_hash: `reconcile-${task.id}-${task.ownership_version}-${task.heartbeat_at ?? 'none'}`,
       })
       if (releaseError) throw new Error(releaseError.message)
@@ -132,6 +183,7 @@ export const reconcileClaims = async (
 
     released.push({
       ref,
+      holder: task.claimed_by,
       heldForMinutes,
       hadCheckpoint: Boolean(task.checkpoint_summary),
       reopened: reopen,
@@ -139,6 +191,7 @@ export const reconcileClaims = async (
   }
 
   return {
+    scope,
     released,
     quiet: held
       .filter((task) => !stale.includes(task))

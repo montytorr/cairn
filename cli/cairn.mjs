@@ -1399,7 +1399,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn session list             recent sessions
     cairn session checkpoint --id <id>  upsert ongoing session, do not checkpoint held tasks
     cairn session end --id <id>    write the episodic record, checkpoint what is held
-    cairn reconcile                release your own claims that went quiet
+    cairn reconcile                release your own claims that went quiet (2h)
+                                   as CAIRN_AGENT=maintenance: every quiet claim
     cairn vitals [--hours 24] [--all]   is the memory still being written
     cairn vitals --notify <ref>         post findings as a note, silent if none
 
@@ -2811,10 +2812,11 @@ const commands = {
         rows: (d) =>
           d.released.map((r) => ({
             ref: r.ref,
+            holder: r.holder ?? '',
             held: `${r.heldForMinutes}m`,
             checkpoint: r.hadCheckpoint ? 'yes' : 'none',
           })),
-        columns: ['ref', 'held', 'checkpoint'],
+        columns: ['ref', 'holder', 'held', 'checkpoint'],
       },
     )
   },
