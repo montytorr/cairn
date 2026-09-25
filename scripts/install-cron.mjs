@@ -103,6 +103,27 @@ const ALSO = env('CAIRN_SYNC_ALSO', '')
 const log = (name) => join(LOGS, `cairn-${name}.log`)
 
 /**
+ * Whether the CLI the jobs will run knows --all-instances. Read from the file,
+ * not run: an older copy refuses the flag as unknown and exits 2 on every
+ * run, and the copy is only brought up to date by the agent-files job, which
+ * may not have caught up yet when this installer is run from a fresh checkout.
+ */
+const FANS_OUT = (() => {
+  try {
+    return readFileSync(CLI, 'utf8').includes("'all-instances'")
+  } catch {
+    return true // not installed yet; the copy that arrives will be current
+  }
+})()
+const ALL_INSTANCES = FANS_OUT ? ['--all-instances'] : []
+if (!FANS_OUT && existsSync(join(homedir(), '.cairn', 'instances.json'))) {
+  console.error(
+    `warning: ${CLI} predates --all-instances, so reconcile and vitals will reach one instance only. ` +
+      'Run the agent-files job to update it, then run this installer again.',
+  )
+}
+
+/**
  * The jobs, as schedule + environment + command.
  *
  * Rendered into a crontab line or a launchd plist below. Written this way so
@@ -115,7 +136,9 @@ const JOBS = [
     requires: [CLI],
     every: 30,
     env: { CAIRN_AGENT: 'maintenance' },
-    command: [CLI, 'reconcile'],
+    // One run per instance where a machine has several (README, "Several
+    // instances"); exactly the old run where it has one.
+    command: [CLI, 'reconcile', ...ALL_INSTANCES],
   },
   {
     name: 'vitals',
@@ -123,7 +146,7 @@ const JOBS = [
     requires: [CLI],
     at: { hour: 8, minute: 0 },
     env: { CAIRN_AGENT: 'maintenance' },
-    command: [CLI, 'vitals', ...(NOTIFY_VITALS ? ['--notify', NOTIFY_VITALS] : [])],
+    command: [CLI, 'vitals', ...ALL_INSTANCES, ...(NOTIFY_VITALS ? ['--notify', NOTIFY_VITALS] : [])],
   },
   {
     name: 'agent-files',

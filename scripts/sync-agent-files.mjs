@@ -179,6 +179,15 @@ for (let i = 0; i < process.argv.length; i += 1) {
 
 const CHECK = process.argv.includes('--check')
 const NOTIFY = arg('--notify')
+/**
+ * `personal:CAIRN-107` on a machine with several Cairn instances: the task is
+ * on one of them, and a scheduled job has no directory to route by.
+ */
+const [NOTIFY_INSTANCE, NOTIFY_REF] = NOTIFY?.includes(':')
+  ? [NOTIFY.slice(0, NOTIFY.indexOf(':')), NOTIFY.slice(NOTIFY.indexOf(':') + 1)]
+  : [null, NOTIFY]
+const SEVERAL_INSTANCES = existsSync(join(home, '.cairn', 'instances.json'))
+const ENV_FILE = NOTIFY_INSTANCE ? join(home, '.cairn', 'instances', NOTIFY_INSTANCE, 'env') : join(home, '.cairn/env')
 
 /**
  * Said on every run, not only on the run that has something to report: a
@@ -190,9 +199,13 @@ const NOTIFY = arg('--notify')
 const identityProblem = () => {
   const agent = (process.env.CAIRN_AGENT ?? '').trim().toLowerCase()
   if (!NOTIFY || agent !== 'maintenance' || process.env.CAIRN_API_KEY) return null
+  if (SEVERAL_INSTANCES && !NOTIFY_INSTANCE) {
+    return `WARNING: this machine has several Cairn instances (~/.cairn/instances.json) and --notify ${NOTIFY} ` +
+      `does not say which one ${NOTIFY} is on. Write it as <instance>:${NOTIFY}.`
+  }
   let names = []
   try {
-    names = readFileSync(join(home, '.cairn/env'), 'utf8')
+    names = readFileSync(ENV_FILE, 'utf8')
       .split('\n')
       .map((line) => line.trim().split('=')[0]?.trim())
       .filter(Boolean)
@@ -202,7 +215,7 @@ const identityProblem = () => {
   const split = names.some((name) => name.startsWith('CAIRN_API_KEY_'))
   if (!split || names.includes('CAIRN_API_KEY_MAINTENANCE')) return null
   return (
-    `WARNING: CAIRN_AGENT=maintenance but ${join(home, '.cairn/env')} has no CAIRN_API_KEY_MAINTENANCE. ` +
+    `WARNING: CAIRN_AGENT=maintenance but ${ENV_FILE} has no CAIRN_API_KEY_MAINTENANCE. ` +
     `Reports to ${NOTIFY} will be refused rather than filed under another runtime's key.`
   )
 }
@@ -316,7 +329,7 @@ if (NOTIFY && repaired.length > 0) {
       .filter((line) => line.trim())
       .map((line) => `  cairn: ${line.replace(/^cairn: /, '')}`)
   try {
-    const stderr = execFileSync('cairn', ['note', NOTIFY, note, '--kind', 'note'], {
+    const stderr = execFileSync('cairn', ['note', NOTIFY_REF, note, '--kind', 'note', ...(NOTIFY_INSTANCE ? ['--instance', NOTIFY_INSTANCE] : [])], {
       stdio: ['ignore', 'ignore', 'pipe'],
       encoding: 'utf8',
     })

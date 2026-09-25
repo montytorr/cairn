@@ -419,6 +419,7 @@ const LOCAL_ONLY = new Set(['route', 'instance', 'help'])
 const EARLY_COMMAND = earlyPositional[0]
 const JUST_HELP = (!EARLY_COMMAND && !process.argv.includes('--version')) || EARLY_COMMAND === 'help' || process.argv.includes('--help')
 const INTERACTIVE = Boolean(process.stdin.isTTY && process.stderr.isTTY) && !LOCAL_ONLY.has(EARLY_COMMAND) &&
+  !process.argv.includes('--all-instances') &&
   !JUST_HELP && !process.argv.includes('--version') && EARLY_COMMAND !== 'version'
 
 const selectInstance = async () => {
@@ -814,7 +815,7 @@ const flags = new Proxy(typedFlags, {
  * the help text is in this set. Add to both, or the test says so.
  */
 const KNOWN_FLAGS = new Set([
-  'adopt', 'agent', 'all', 'allow-dangling', 'also-project', 'archived', 'body',
+  'adopt', 'agent', 'all', 'all-instances', 'allow-dangling', 'also-project', 'archived', 'body',
   'branch', 'completed',
   'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'dir', 'dry-run',
   'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files', 'folder',
@@ -2180,6 +2181,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    as CAIRN_AGENT=maintenance: every quiet claim
     cairn vitals [--hours 24] [--all]   is the memory still being written
     cairn vitals --notify <ref>         post findings as a note, silent if none
+    cairn reconcile|vitals --all-instances   once per instance on a machine with several;
+                                        vitals --notify <instance>:<ref>[,…] says where each reports
 
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
@@ -4080,6 +4083,85 @@ if (!command || flags.help || command === 'help') {
 }
 if (!commands[command]) {
   die(`unknown command "${command}"\n\nvalid: ${Object.keys(commands).sort().join(' ')}`)
+}
+
+/**
+ * `reconcile` and `vitals` are about an instance, not a directory, and they
+ * run from a scheduler whose directory is `/`. On a machine with several
+ * instances, routing would send them to the default or nowhere, so a
+ * scheduled job says --all-instances and gets one run per instance, each
+ * under that instance's own maintenance key. With one instance it changes
+ * nothing, which is why install-cron can always pass it.
+ */
+const FANS_OUT = new Set(['reconcile', 'vitals'])
+/**
+ * The task one instance reports to, out of `--notify personal:CAIRN-107,work:OPS-3`.
+ * Only vitals reports, so only vitals looks: reading the flag for reconcile
+ * would mark it used and silence the warning that it does nothing there.
+ */
+const notifyFor = (name, several, required) => {
+  if (command !== 'vitals' || !('notify' in typedFlags)) return undefined
+  if (typedFlags.notify === true) die('--notify needs the task to report to (<instance>:<ref> on a machine with several)')
+  const entries = String(flags.notify).split(',').map((e) => e.trim()).filter(Boolean)
+  const mine = entries.find((e) => e.startsWith(`${name}:`))
+  if (mine) return mine.slice(name.length + 1)
+  const plain = entries.filter((e) => !e.includes(':'))
+  if (plain.length && several) {
+    die(`--notify ${plain[0]}: with several instances, say which one the task is on (--notify <instance>:${plain[0]})`)
+  }
+  // In a fan-out an instance with no entry simply does not report; a single
+  // run given a list that leaves it out is a mistake worth saying.
+  if (!plain.length && required) die(`--notify ${flags.notify} has no entry for instance ${name || '(none chosen)'}`)
+  return plain[0]
+}
+
+if (flags['all-instances']) {
+  if (!FANS_OUT.has(command)) {
+    die(`--all-instances is for ${[...FANS_OUT].join(' and ')}, the commands about an instance rather than a directory`)
+  }
+  if (flags.instance) die('--all-instances and --instance contradict each other; give one')
+  if (INSTANCES && !INSTANCES.error) {
+    const names = Object.keys(INSTANCES.instances)
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !['CAIRN_API_KEY', 'CAIRN_BASE_URL', 'CAIRN_INSTANCE'].includes(k)))
+    const plan = names.map((name) => ({ name, notify: notifyFor(name, names.length > 1, false) }))
+    const passthrough = []
+    const argv = process.argv.slice(2)
+    for (let i = 0; i < argv.length; i += 1) {
+      const [flag] = argv[i].split('=')
+      if (['--all-instances', '--instance', '--notify'].includes(flag)) {
+        if (flag !== '--all-instances' && !argv[i].includes('=') && argv[i + 1] && !argv[i + 1].startsWith('--')) i += 1
+        continue
+      }
+      passthrough.push(argv[i])
+    }
+    // JSON is one document keyed by instance, so a caller can still parse it;
+    // the table form reads as one section per instance.
+    const structured = FORMAT !== 'tsv'
+    const results = {}
+    let failed = 0
+    for (const { name, notify } of plan) {
+      if (!structured) process.stdout.write(`== instance ${name} ==\n`)
+      const result = spawnSync(
+        process.execPath,
+        [process.argv[1], ...passthrough, '--instance', name, ...(notify ? ['--notify', notify] : [])],
+        { env, stdio: ['ignore', structured ? 'pipe' : 'inherit', 'inherit'], encoding: 'utf8', timeout: 5 * 60_000 },
+      )
+      if (structured) {
+        try { results[name] = JSON.parse(result.stdout) } catch { results[name] = { error: `exit ${result.status ?? result.signal}` } }
+      }
+      if (result.status !== 0) {
+        failed += 1
+        process.stderr.write(`cairn: ${command} on instance ${name} failed (exit ${result.status ?? result.signal})\n`)
+      }
+    }
+    if (structured) console.log(JSON.stringify({ instances: results }, null, 2))
+    process.exit(failed ? 1 : 0)
+  }
+}
+if (INSTANCES && !INSTANCES.error && command === 'vitals' && 'notify' in typedFlags) {
+  // Run for one instance, --notify may still be written instance:REF.
+  const chosen = notifyFor(INSTANCE.name ?? '', false, true)
+  if (chosen !== undefined) typedFlags.notify = chosen
 }
 await commands[command]()
 

@@ -670,8 +670,15 @@ cairn route list | pending | remove [--folder]
 The session-start briefing passes that instruction to the agent, so it asks the first time
 it needs Cairn. A session that ends before anyone answered is not guessed at or dropped: the
 session-end hook parks it in `~/.cairn/unrouted/`, and `route add` sends it (without
-checkpointing, since it may be days old). Per-instance maintenance jobs are still to come
-(CAIRN-297); until then a scheduled job on such a machine needs `CAIRN_INSTANCE` or a default.
+checkpointing, since it may be days old).
+
+**Maintenance** is about an instance, not a directory, and runs from a scheduler at `/`, so
+`reconcile` and `vitals` take `--all-instances`: one run per instance, each with that
+instance's own `CAIRN_API_KEY_MAINTENANCE`, exiting non-zero if any failed. The scheduled jobs
+always pass it, and with one instance it changes nothing. Name the task each instance reports
+to: `CAIRN_NOTIFY_VITALS=personal:CAIRN-107,work:OPS-3`, and `CAIRN_NOTIFY_FILES=personal:CAIRN-107`
+for the agent-files sync. A bare ref is refused there, since it exists on only one instance.
+The MCP server routes by the directory it was started in, like any other command.
 
 **Skill** (Claude Code, Codex and OpenClaw all read skill folders):
 
