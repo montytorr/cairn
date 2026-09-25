@@ -89,7 +89,7 @@ export const DELETE = route<Params>({
         event: 'knowledge_deleted',
         data: { slug: params.slug, title: doomed?.title?.slice(0, 200) ?? null },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     return ok({ deleted: params.slug })
   },

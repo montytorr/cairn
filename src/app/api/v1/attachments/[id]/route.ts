@@ -61,7 +61,7 @@ export const DELETE = route<{ id: string }>({
         event: 'attachment_removed',
         data: { name: row.original_name },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     return ok({ deleted: true, id: row.id })
   },

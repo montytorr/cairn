@@ -159,11 +159,70 @@ for (let i = 0; i < process.argv.length; i += 1) {
 
 const CHECK = process.argv.includes('--check')
 const NOTIFY = arg('--notify')
+
+/**
+ * Said on every run, not only on the run that has something to report: a
+ * missing key found only when a repair happens is found once a week, in the
+ * one log line nobody is reading that day. Mirrors the CLI's rule — a split
+ * ~/.cairn/env with no key for this identity means the report would be filed
+ * as someone else, so the CLI refuses it.
+ */
+const identityProblem = () => {
+  const agent = (process.env.CAIRN_AGENT ?? '').trim().toLowerCase()
+  if (!NOTIFY || agent !== 'maintenance' || process.env.CAIRN_API_KEY) return null
+  let names = []
+  try {
+    names = readFileSync(join(home, '.cairn/env'), 'utf8')
+      .split('\n')
+      .map((line) => line.trim().split('=')[0]?.trim())
+      .filter(Boolean)
+  } catch {
+    return null
+  }
+  const split = names.some((name) => name.startsWith('CAIRN_API_KEY_'))
+  if (!split || names.includes('CAIRN_API_KEY_MAINTENANCE')) return null
+  return (
+    `WARNING: CAIRN_AGENT=maintenance but ${join(home, '.cairn/env')} has no CAIRN_API_KEY_MAINTENANCE. ` +
+    `Reports to ${NOTIFY} will be refused rather than filed under another runtime's key.`
+  )
+}
+const IDENTITY_PROBLEM = identityProblem()
+if (IDENTITY_PROBLEM) {
+  console.log(IDENTITY_PROBLEM)
+  process.exitCode = 1
+}
 const hash = (buffer) => createHash('sha256').update(buffer).digest('hex').slice(0, 16)
+
+/**
+ * A laptop wakes before its network does.
+ *
+ * launchd runs a missed calendar slot the moment the machine wakes, which is
+ * exactly when DNS is not up yet: the Mac's log had 20 ENOTFOUND and 22
+ * "fetch failed" runs, each one another hour on a stale CLI (CAIRN-290). So a
+ * network error is retried for about a minute and a half before it counts. An
+ * HTTP error is an answer, not an outage, and is not retried.
+ */
+const RETRY_DELAYS_MS = (process.env.CAIRN_SYNC_RETRY_MS ?? '5000,15000,30000,45000')
+  .split(',')
+  .map(Number)
+  .filter((n) => Number.isFinite(n) && n >= 0)
+
+const fetchWithRetry = async (url) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetch(url)
+    } catch (error) {
+      if (attempt >= RETRY_DELAYS_MS.length) throw error
+      const why = error.cause?.code ?? error.message
+      console.log(`  (network: ${why}; retrying in ${RETRY_DELAYS_MS[attempt] / 1000}s)`)
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+    }
+  }
+}
 
 const readSource = async (file) => {
   if (!/^https?:\/\//.test(SOURCE)) return readFileSync(join(SOURCE, file))
-  const response = await fetch(`${SOURCE.replace(/\/+$/, '')}/${file}`)
+  const response = await fetchWithRetry(`${SOURCE.replace(/\/+$/, '')}/${file}`)
   if (!response.ok) throw new Error(`${file} returned ${response.status}`)
   return Buffer.from(await response.arrayBuffer())
 }
@@ -226,11 +285,27 @@ if (NOTIFY && repaired.length > 0) {
     `(${repaired.length} cop${repaired.length === 1 ? 'y' : 'ies'}):\n` +
     repaired.map((line) => `  ${line}`).join('\n') +
     `\n\nEach was being read by a runtime in that state until now.`
+  // stderr is kept, not thrown away. It is where the CLI says whose key it is
+  // using, and discarding it hid for weeks that a scheduled job with
+  // CAIRN_AGENT=maintenance and no maintenance key was filing its reports as
+  // another runtime (CAIRN-290). The CLI now refuses that outright; this is
+  // what makes the refusal reach the log, and the exit code the scheduler.
+  const said = (text) =>
+    String(text ?? '')
+      .split('\n')
+      .filter((line) => line.trim())
+      .map((line) => `  cairn: ${line.replace(/^cairn: /, '')}`)
   try {
-    execFileSync('cairn', ['note', NOTIFY, note, '--kind', 'note'], { stdio: 'ignore' })
+    const stderr = execFileSync('cairn', ['note', NOTIFY, note, '--kind', 'note'], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      encoding: 'utf8',
+    })
     console.log(`\nreported to ${NOTIFY}`)
-  } catch {
-    console.log(`\ncould not report to ${NOTIFY}`)
+    for (const line of said(stderr)) console.log(line)
+  } catch (error) {
+    console.log(`\nCOULD NOT REPORT to ${NOTIFY} (exit ${error.status ?? error.code ?? '?'})`)
+    for (const line of said(error.stderr)) console.log(line)
+    process.exitCode = 1
   }
 }
 

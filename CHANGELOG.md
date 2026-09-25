@@ -147,6 +147,23 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **Client wiring: identity, host, drift and the per-Read hook** (CAIRN-290).
+  `install-hooks.mjs` no longer writes the `PreToolUse(Read)` hook that CCS-40 removed by hand.
+  It now takes out its own stale entry and leaves other tools' hooks in place. On Codex it
+  lists the hooks that are not Cairn's and flags the ones on `Stop`, which runs every turn.
+  A Codex started from a Claude Code shell used to be filed as claude-code because it inherits
+  `CLAUDECODE`. When both runtimes' markers are present, the CLI now checks the process tree,
+  and `CODEX_THREAD_ID` counts as a Codex marker.
+  `CAIRN_AGENT=maintenance` no longer borrows the default key: it exits 3 until the machine has
+  a `CAIRN_API_KEY_MAINTENANCE`. The sync job logs the CLI's stderr and exits non-zero when its
+  report fails, instead of discarding both.
+  On macOS `agent-files` runs at load and every 15 minutes, and the sync retries a network
+  failure on wake.
+  The drift warning names the newer side, from the release number or the new
+  `x-cairn-built-at` header compared with the CLI file's mtime. When the CLI is behind, it
+  prints the exact update command. `--version` prints the warning through the same path, once.
+  Requests send `x-cairn-host`, and activity events record it in `data.host`. Actor strings are
+  unchanged.
 - **Recorded sessions get a project** (CAIRN-286). 389 of 389 live sessions had none: the
   server only used a key the caller sent, and neither the hook nor `cairn session end` sent
   one. `session end` now resolves it like `cairn context` — the `~/.cairn/projects.json` map —

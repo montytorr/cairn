@@ -66,7 +66,7 @@ export const POST = route({
           event: 'project_created',
           data: { key: body.key, title: body.title },
         },
-      ], actor.userId)
+      ], actor.userId, actor.host)
     }
 
     if (error) {

@@ -96,7 +96,7 @@ export const POST = route<{ ref: string }>({
         event: 'attachment_added',
         data: { name: file.name, bytes: file.size, mime: file.type || null },
       },
-    ], actor.userId)
+    ], actor.userId, actor.host)
 
     return ok({ ...data, ...(await signUrls(storagePath, file.name, file.type)) }, { status: 201 })
   },
