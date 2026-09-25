@@ -13,14 +13,25 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
  */
 const cli = join(process.cwd(), 'cli', 'cairn.mjs')
 
-type Seen = { auth?: string; path?: string }[]
+type Seen = { auth?: string; path?: string; body?: string }[]
 
-const serve = (seen: Seen, status = 200) =>
+/**
+ * The routing cache refresh (`GET /api/v1/projects?archived=1`) is answered
+ * with `projects` and kept out of `seen`, so each test counts the commands it
+ * ran and nothing else.
+ */
+const serve = (seen: Seen, status = 200, projects: string[] = []) =>
   new Promise<{ server: Server; url: string }>((resolve) => {
     const server = createServer((req, res) => {
-      req.resume()
+      let body = ''
+      req.on('data', (c) => { body += c })
       req.on('end', () => {
-        seen.push({ auth: req.headers.authorization, path: req.url })
+        if (req.method === 'GET' && req.url === '/api/v1/projects?archived=1') {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ success: true, data: projects.map((key) => ({ key, former_keys: [] })) }))
+          return
+        }
+        seen.push({ auth: req.headers.authorization, path: req.url, body })
         res.writeHead(status, { 'content-type': 'application/json' })
         res.end(JSON.stringify(status === 200
           ? { success: true, data: { id: 1, results: [], count: 0 } }

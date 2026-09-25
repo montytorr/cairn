@@ -46,8 +46,17 @@ const readStdin = async () => {
   }
 }
 
-/** Runs a CLI with a hard deadline, and treats every failure as "say nothing". */
-const runTool = (bin, args, timeoutMs) =>
+/** The CLI's "several instances, and nothing says which" (cli/cairn.mjs). */
+const UNDECIDED_EXIT = 10
+
+/**
+ * Runs a CLI with a hard deadline, and treats every failure as "say nothing" —
+ * except the CLI saying it cannot tell which instance this directory is for.
+ * That is not a failure to hide: its stderr is the instruction the agent needs
+ * (ask the user, save the answer), and a silent briefing would leave the agent
+ * to find out at its first write.
+ */
+const runTool = (bin, args, timeoutMs, { undecided = false } = {}) =>
   new Promise((resolve) => {
     let out = ''
     let settled = false
@@ -57,7 +66,8 @@ const runTool = (bin, args, timeoutMs) =>
       resolve(value)
     }
 
-    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'ignore'] })
+    let err = ''
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       done('')
@@ -66,17 +76,20 @@ const runTool = (bin, args, timeoutMs) =>
     child.stdout.on('data', (d) => {
       out += d
     })
+    child.stderr.on('data', (d) => {
+      err += d
+    })
     child.on('error', () => {
       clearTimeout(timer)
       done('')
     })
     child.on('close', (code) => {
       clearTimeout(timer)
-      done(code === 0 ? out : '')
+      done(code === 0 ? out : undecided && code === UNDECIDED_EXIT ? err : '')
     })
   })
 
-const run = (args) => runTool(CLI, args, TIMEOUT_MS)
+const run = (args) => runTool(CLI, args, TIMEOUT_MS, { undecided: true })
 
 /** One line about the map, or nothing at all. Never throws, never blocks. */
 const trigLine = async () => {

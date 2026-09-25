@@ -35,6 +35,13 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **Commands find their instance from the directory, the ref or the session** (CAIRN-300).
+  `cairn route add <instance> [--folder|--session]` saves which instance a repository (by its
+  main checkout, so worktrees follow), a folder or one session belongs to. With no route, a
+  command's ref goes to the one instance known to have its project. With no answer anywhere, the command stops with
+  exit 10 and prints what to ask — at a terminal it asks — and the session-start briefing
+  passes that on to the agent. Sessions that end before anyone answered are parked in
+  `~/.cairn/unrouted/` and sent by `route add`.
 - **Several Cairn instances on one machine** (CAIRN-299). `~/.cairn/instances.json` names them
   — a personal and a work server, say — and each keeps its own keys, outbox, ownership and
   project map in `~/.cairn/instances/<name>/`. A command uses `--instance`, `CAIRN_INSTANCE` or

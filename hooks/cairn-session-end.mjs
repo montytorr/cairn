@@ -908,14 +908,36 @@ const dueRetries = (queue, now, exclude) =>
 
 const DEBUG = process.env.CAIRN_HOOK_DEBUG === '1'
 
+/** The CLI's "several instances, and nothing says which" (cli/cairn.mjs). */
+const UNDECIDED_EXIT = 10
+const UNROUTED_DIR = join(homedir(), '.cairn', 'unrouted')
+
 const post = (args) =>
   new Promise((resolve) => {
     const child = spawn(CLI, args, {
       stdio: ['ignore', DEBUG ? 'inherit' : 'ignore', DEBUG ? 'inherit' : 'ignore'],
     })
-    child.on('error', () => resolve(false))
-    child.on('close', (code) => resolve(code === 0))
+    child.on('error', () => resolve(null))
+    child.on('close', (code) => resolve(code))
   })
+
+/**
+ * Nobody has said which instance this session's directory belongs to, and a
+ * hook cannot ask. Guessing would file it on the wrong server; dropping it
+ * would lose it. So it waits here, one file per session — a later attempt for
+ * the same session replaces the earlier one — and `cairn route add` sends it
+ * the moment the answer is saved.
+ */
+const park = (sessionId, cwd, args, platform, agent) => {
+  try {
+    mkdirSync(UNROUTED_DIR, { recursive: true, mode: 0o700 })
+    const file = join(UNROUTED_DIR, `${sessionId.replace(/[^A-Za-z0-9._:-]/g, '_')}.json`)
+    writeFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), sessionId, cwd, platform, agent: agent ?? null, args })}\n`, { mode: 0o600 })
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * The first thing a person actually asked, for when the summariser gave no
@@ -1068,7 +1090,8 @@ const record = async (payload, opts = {}) => {
     if (summary[key]) args.push(flag, String(summary[key]).slice(0, 8000))
   }
 
-  await post(args)
+  const code = await post(args)
+  if (code === UNDECIDED_EXIT) park(sessionId, cwd ?? process.cwd(), args, platform, agent)
   return { sessionId, failed: Boolean(outcome.error) }
 }
 

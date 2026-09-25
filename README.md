@@ -640,9 +640,38 @@ cairn note ACME-42 "…" --instance work                                # or CAI
   (`CAIRN_BASE_URL`, then `~/.cairn/env`, then localhost). Interrupted, it finishes on a re-run.
 - `CAIRN_API_KEY` in the environment is refused once instances are configured — it cannot say
   which instance issued it — and so is a `CAIRN_BASE_URL` that disagrees with the chosen one.
-- Without `instances.json` nothing changes. Choosing the instance from the directory, and
-  per-instance maintenance jobs, are still to come (CAIRN-297); until then a scheduled job on
-  such a machine needs `CAIRN_INSTANCE` or a default.
+- Without `instances.json` nothing changes.
+
+**Which instance a command goes to**, when it does not say, is decided in this order, and
+nothing is ever guessed from a project name, a remote or a directory name:
+
+1. `--instance` or `CAIRN_INSTANCE`;
+2. a saved route for the directory: an **exact** route names one repository — its main
+   checkout, so every worktree and subdirectory follows — or one plain directory; a
+   **folder** route covers everything under it. Exact beats folder, folder routes never
+   overlap, and none may cover `~` or `/`;
+3. the command's ref (`note WORK-12 …`, never a flag's value), when exactly one instance is
+   known to have its project — each instance's keys are cached from its own responses, at
+   most six hours old. A route still wins over it, with a hint to add `--instance`;
+4. an answer saved for this session only;
+5. the default instance, if `unclassified` names one.
+
+Otherwise the command stops with exit 10 before any request and prints what to ask and the
+command that saves the answer; at a terminal it asks you instead.
+
+```bash
+cairn route                                # this directory's instance, and why
+cairn route add work                       # this repository (or directory)
+cairn route add work --folder              # ~/clients and everything under it
+cairn route add personal --session         # just this session
+cairn route list | pending | remove [--folder]
+```
+
+The session-start briefing passes that instruction to the agent, so it asks the first time
+it needs Cairn. A session that ends before anyone answered is not guessed at or dropped: the
+session-end hook parks it in `~/.cairn/unrouted/`, and `route add` sends it (without
+checkpointing, since it may be days old). Per-instance maintenance jobs are still to come
+(CAIRN-297); until then a scheduled job on such a machine needs `CAIRN_INSTANCE` or a default.
 
 **Skill** (Claude Code, Codex and OpenClaw all read skill folders):
 
