@@ -47,8 +47,10 @@ const emittedByCode = () => {
       for (const m of source.matchAll(/\bevent:\s*'([a-z_]+)'/g)) events.add(m[1] as string)
       for (const m of source.matchAll(/\bpush\(\s*'([a-z_]+)'/g)) events.add(m[1] as string)
       // The field -> event map in activity.ts is a list of tuples, not calls.
+      // Keyed on its declaration, not on the word: `TASK_LIST_FIELDS` is
+      // imported by routes whose two-item lists are field names, not events.
       for (const m of source.matchAll(/\[\s*'[a-z_]+'\s*,\s*'([a-z_]+)'\s*\]/g)) {
-        if (source.includes('FIELDS')) events.add(m[1] as string)
+        if (/\bconst FIELDS\b/.test(source)) events.add(m[1] as string)
       }
     }
   }

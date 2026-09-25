@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { createKnowledge, listKnowledge } from '@/lib/api/knowledge'
+import { searchAll } from '@/lib/api/search'
 import {
   checkReferences,
   knownSlugs,
@@ -10,7 +11,7 @@ import {
 } from '@/lib/api/knowledge-graph'
 import { knowledgeCreate, slugify } from '@/schemas/knowledge'
 import { liveProjectKey } from '@/lib/api/project-keys'
-import { COUNTED, RECALL_WINDOW_DAYS, recallCounts, unusedKnowledge } from '@/lib/api/knowledge-use'
+import { COUNTED, RECALL_WINDOW_DAYS, recallCounts, unusedKnowledge, unusedWindow } from '@/lib/api/knowledge-use'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,8 +38,8 @@ export const GET = route({
     const { entity, label, superseded, limit, unused } = parsed.data
 
     if (unused !== undefined) {
-      const results = await unusedKnowledge(unused, limit)
-      return ok({ count: results.length, days: unused, counted: COUNTED, results })
+      const [results, window] = await Promise.all([unusedKnowledge(unused, limit), unusedWindow(unused)])
+      return ok({ count: results.length, days: unused, counted: COUNTED, ...window, results })
     }
 
     // Normalised here so every scope below — the project's own rows AND the
@@ -111,8 +112,35 @@ export const GET = route({
 const referenceCheck = async (body: string, slug: string) =>
   checkReferences({ body, slug, known: await knownSlugs() })
 
+/**
+ * Entries that already say something about the same thing (CAIRN-289).
+ *
+ * `clawdius-server` described per-project Supabase stacks while
+ * `active-clawdius-applications-use-two-native-postgresql-17-containers` said
+ * the opposite; neither linked the other, because nothing at write time asked
+ * whether the store already held a claim on the subject. `cairn add` has
+ * always warned about similar existing work before filing a task; this is
+ * the same question for a fact, asked after the write so it can never block
+ * one. The precise arm only — at least half the title's distinctive terms —
+ * because a nudge that fires on every write teaches people to ignore it.
+ * Not recorded as a search: it is not a recall, and counting it would mark
+ * every neighbour of every new fact as used.
+ */
+const similarKnowledge = async (userId: string, title: string, slug: string) => {
+  try {
+    const { rows } = await searchAll(userId, title, { kinds: ['knowledge'] }, 8)
+    return rows
+      .filter((r) => r.kind === 'knowledge' && !r.widened && r.ref !== slug && r.status !== 'superseded')
+      .slice(0, 3)
+      .map((r) => ({ slug: r.ref, title: r.title, scope: r.project_key ?? 'global' }))
+  } catch {
+    return []
+  }
+}
+
 export const POST = route({
   schema: knowledgeCreate,
+  secretFields: ['title', 'body'],
   handler: async ({ actor, body }) => {
     let warnings: string[] = []
     if (body.body.includes('[[')) {
@@ -132,9 +160,17 @@ export const POST = route({
 
     try {
       const row = await createKnowledge(actor, body)
+      const similar = row ? await similarKnowledge(actor.userId, row.title, row.slug) : []
       // Accepted, and still said out loud: a reference to something nobody has
       // written is recorded, never silent.
-      return ok(warnings.length > 0 ? { ...row, warnings } : row, { status: 201 })
+      return ok(
+        {
+          ...row,
+          ...(warnings.length > 0 ? { warnings } : {}),
+          ...(similar.length > 0 ? { similar } : {}),
+        },
+        { status: 201 },
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not record that.'
       const code = message.includes('already exists') ? 'conflict' : 'validation_failed'

@@ -296,6 +296,7 @@ export const buildContext = async (
       created_at: r.created_at,
       source_task_id: r.source_task_id,
       source_session_id: r.source_session_id,
+      source_session_ref: r.source_session_ref ?? null,
     })),
   )
   const knowledge = rows.map((r) => ({
@@ -315,6 +316,7 @@ export const buildContext = async (
           ? 'global'
           : (r.projects ?? []).join(','),
     stale: Boolean(aged.get(r.id)?.stale),
+    unverified_days: aged.get(r.id)?.unverifiedDays ?? null,
   }))
 
   // --- claims nobody is acting on ---------------------------------------

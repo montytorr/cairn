@@ -68,6 +68,7 @@ const suggestResolution = async (taskId: string, checkpoint: unknown) => {
 
 export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
   schema: updateTaskSchema,
+  secretFields: ['title', 'description', 'resolution'],
   handler: async ({ actor, params, body }) => {
     const task = await findTask(actor, params.ref)
     if (!task) return fail('not_found', `No task ${params.ref}.`)

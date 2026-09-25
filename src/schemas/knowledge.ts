@@ -68,10 +68,25 @@ export const slugify = (title: string): string => {
 export const normalizeSlugRef = (raw: string): string =>
   raw.trim().toLowerCase().replace(/_/g, '-')
 
+/**
+ * A body is required and must say something (CAIRN-289).
+ *
+ * It defaulted to '' and the CLI sent `flags.body ?? ''`, so a fact could be
+ * filed as a bare title — two were, and they read in every list exactly like
+ * an entry with an explanation behind it. Checked rather than trimmed: what an
+ * author wrote is stored as written.
+ */
+const knowledgeBody = z
+  .string()
+  .max(100_000)
+  .refine((body) => body.trim().length > 0, {
+    message: 'A fact needs a body: what it means and how it was found. Pass it with --body (or --body - for stdin).',
+  })
+
 export const knowledgeCreate = z.object({
   slug: knowledgeSlug.optional(),
   title: z.string().min(1).max(300),
-  body: z.string().max(100_000).default(''),
+  body: knowledgeBody,
   labels: z.array(z.string().min(1).max(40)).max(20).default([]),
   projects: z.array(z.string().min(1).max(10)).max(20).default([]),
   /** Groupings this is true of — a business, a stack, a subsystem. */
@@ -102,7 +117,7 @@ export const knowledgeCreate = z.object({
  */
 export const knowledgeUpdate = z.object({
   title: z.string().min(1).max(300).optional(),
-  body: z.string().max(100_000).optional(),
+  body: knowledgeBody.optional(),
   labels: z.array(z.string().min(1).max(40)).max(20).optional(),
   projects: z.array(z.string().min(1).max(10)).max(20).optional(),
   entities: z.array(z.string().min(1).max(40)).max(20).optional(),

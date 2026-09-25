@@ -285,8 +285,9 @@ label for a thing nobody wrote down.
 
 **A bug or a spike without a body is refused.** Not to be difficult: it is the
 same rule as `done` refusing without a resolution, and that rule is why every
-close carries one. Pass `--force-empty` when the title really is the whole
-story, and expect to almost never need it.
+close carries one — and the server holds it, so the UI and MCP meet it too. Pass
+`--force-empty` when the title really is the whole story, and expect to almost
+never need it.
 
 What earns its place in the body:
 
@@ -323,6 +324,16 @@ Write it the moment you learn something that will be true next month:
 cairn learn "Supavisor pools are per-tenant, not per-connection-string" \
   --label supabase,postgres --body -
 ```
+
+A body is required. The session is recorded with the fact, and so is the task this session
+holds when it holds exactly one — `--task <ref>` to name a different one. If entries on the
+same subject already exist, `learn` lists them: when the new fact makes one wrong, supersede
+it (`cairn unlearn <old> --superseded-by <new>`) instead of leaving both to read as true.
+
+**Never write a credential.** Every write that is read back — knowledge, notes, comments,
+descriptions, resolutions, checkpoints — refuses secret-shaped strings (`sk-…`, `ghp_…`,
+`AKIA…`, private keys, JWTs, `password: <value>`). Write where it lives instead: `$ENV_VAR`,
+a vault path, `<password>`.
 
 ### The title is the claim; the slug is the handle
 
@@ -382,11 +393,14 @@ at something nobody has written.
 ### What is not connected
 
 ```bash
-cairn know --unused      # entries no search or read has returned in 30 days
+cairn know --unused      # entries no search or read has returned in 30 days (says so if the store is younger)
 cairn know --gaps        # the shape of the memory: islands, orphans, dead references
 cairn know --orphans     # entries nothing links to, that link to nothing
 cairn know --dangling    # references pointing at entries nobody ever wrote
 ```
+
+Scripted reads are not recalls: pass `--sweep` (or `CAIRN_SWEEP=1`) when looping over
+entries, and bursts of ten or more slugs a minute are tagged as sweeps anyway.
 
 A list of knowledge shows what is there. These show what is not, which is the part that
 goes wrong quietly: an entry nobody links to is one nobody finds by following a trail,
@@ -469,7 +483,9 @@ replacement — so a correction beats the claim it corrects wherever both match.
 
 `verify` is the cheap half of that. A fact whose files several sessions have reworked since
 it was last confirmed is marked **stale** in `check` and in the briefing; verifying clears
-the mark without making you restate the body. Confirming an old fact is as useful as
+the mark without making you restate the body. A fact that names no file cannot go stale,
+so after 14 days unconfirmed it is marked **unverified Nd** instead — age, not evidence of
+change: check it, then `verify` or `relearn`. Confirming an old fact is as useful as
 writing a new one, and a great deal faster.
 
 ### Knowledge or a note?

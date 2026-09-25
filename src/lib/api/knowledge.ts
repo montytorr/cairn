@@ -20,7 +20,7 @@ import { projectIdForFormerKey } from './project-keys'
 
 const COLUMNS =
   'id, slug, title, body, labels, verified_at, superseded_by, actor_type, actor_id, ' +
-  'source_task_id, source_session_id, created_at, updated_at'
+  'source_task_id, source_session_id, source_session_ref, created_at, updated_at'
 
 export type KnowledgeRow = {
   id: string
@@ -34,6 +34,8 @@ export type KnowledgeRow = {
   actor_id: string | null
   source_task_id: string | null
   source_session_id: string | null
+  /** The session that wrote it, as the caller named it (064). */
+  source_session_ref?: string | null
   created_at: string
   updated_at: string
   projects?: string[]
@@ -330,6 +332,54 @@ export const getKnowledge = async (_userId: string, slug: string): Promise<Knowl
   return row ?? null
 }
 
+/**
+ * Where a fact came from, filled in from the request rather than asked for
+ * (CAIRN-289).
+ *
+ * 0 of 425 entries carried a session or a task: `cairn learn` never sent
+ * either and nobody passed `--task`, so Mac and Clawdius writes, and the work
+ * a fact came out of, could not be told apart — and staleness, which follows
+ * a fact's source to the files that work touched, had nothing to follow.
+ *
+ * The session arrives on every request as `X-Cairn-Session`. It is stored as
+ * given (`source_session_ref`), because the `sessions` row it names is
+ * normally written at session END, after the fact was learned: the foreign
+ * key is filled only when the row already exists, and readers resolve the
+ * ref through `sessions.external_id` otherwise. Resolving it later by
+ * updating the fact is not an option — every UPDATE of knowledge fires
+ * knowledge_touch and would stamp it as just edited.
+ *
+ * The task is the one this session holds, when it holds exactly one. Two held
+ * tasks is a guess, and a wrong source is worse than none; `--task` settles it.
+ */
+export const inferProvenance = async (
+  session: string | null,
+  given: { sessionId: string | null; taskId: string | null },
+): Promise<{ sessionId: string | null; taskId: string | null }> => {
+  if (!session) return given
+  const [sessionRow, held] = await Promise.all([
+    given.sessionId
+      ? Promise.resolve(null)
+      : pool().query<{ id: string }>(
+          'select id from sessions where external_id = $1 order by created_at limit 1',
+          [session],
+        ),
+    given.taskId
+      ? Promise.resolve(null)
+      : pool().query<{ id: string }>(
+          `select id from tasks
+            where claimed_session = $1 and claimed_by is not null
+              and status not in ('done', 'cancelled')
+            limit 2`,
+          [session],
+        ),
+  ])
+  return {
+    sessionId: given.sessionId ?? sessionRow?.rows[0]?.id ?? null,
+    taskId: given.taskId ?? (held?.rows.length === 1 ? (held.rows[0]?.id ?? null) : null),
+  }
+}
+
 export const createKnowledge = async (actor: Actor, input: KnowledgeCreate) => {
   const slug = input.slug ?? slugify(input.title)
   if (!slug) throw new Error('Could not derive a slug from that title; pass --slug.')
@@ -348,6 +398,10 @@ export const createKnowledge = async (actor: Actor, input: KnowledgeCreate) => {
     if (!task) throw new Error(`No task ${input.sourceTaskRef}.`)
     sourceTaskId = task.id
   }
+  const provenance = await inferProvenance(actor.sessionId, {
+    sessionId: input.sourceSessionId ?? null,
+    taskId: sourceTaskId,
+  })
 
   let data: KnowledgeRow
   try {
@@ -355,10 +409,10 @@ export const createKnowledge = async (actor: Actor, input: KnowledgeCreate) => {
       const inserted = await client.query(
         `insert into knowledge
           (owner_user_id, slug, title, body, labels, actor_type, actor_id,
-           source_task_id, source_session_id, verified_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+           source_task_id, source_session_id, source_session_ref, verified_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
         [actor.userId, slug, input.title, input.body, input.labels, actor.actorType,
-          actor.actorId, sourceTaskId, input.sourceSessionId ?? null,
+          actor.actorId, provenance.taskId, provenance.sessionId, actor.sessionId,
           input.verified ? new Date().toISOString() : null],
       )
       const row = inserted.rows[0] as KnowledgeRow
@@ -494,11 +548,12 @@ const recordRevision = async (
   await client.query(
     `insert into knowledge_revisions
        (knowledge_id, revision, title, body, labels, projects, entities, verified_at,
-        superseded_by, change, edited_by_type, edited_by, reason)
-     select $1, coalesce(max(revision), 0) + 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        superseded_by, change, edited_by_type, edited_by, edited_session, reason)
+     select $1, coalesce(max(revision), 0) + 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
        from knowledge_revisions where knowledge_id = $1`,
     [knowledgeId, live.title, live.body, live.labels, live.project_keys, live.entity_keys,
-      live.verified_at, live.superseded_by, change, actor.actorType, actor.actorId, reason ?? null],
+      live.verified_at, live.superseded_by, change, actor.actorType, actor.actorId,
+      actor.sessionId, reason ?? null],
   )
 }
 
