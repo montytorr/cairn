@@ -420,6 +420,9 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
 | `cairn replay` | Send writes put aside while the server was unreachable. Rarely needed by hand — any successful write drains the queue |
 | `cairn map <KEY>` | Tell Cairn which project this checkout is. Validates the key, and claims the repository so every other clone and worktree resolves too. `cairn map none` releases both |
+| `cairn instance [list]` · `cairn instance add <name> --url U [--default] [--adopt]` · `cairn instance policy ask\|default <name>` | Several Cairn instances on one machine: which one a command uses, adding one, and what a directory with no route does ([below](#agent-setup)) |
+| `cairn route` · `cairn route add <instance> [--folder\|--session]` · `cairn route list\|pending\|remove` | Which instance this directory belongs to, saving the answer, and the sessions waiting for one |
+| `--instance <name>` (any command) · `--all-instances` (`reconcile`, `vitals`) | Send this one command to that instance, or run the job once per instance |
 
 `cairn --help` is the full reference.
 
@@ -676,8 +679,9 @@ checkpointing, since it may be days old).
 
 **Maintenance** is about an instance, not a directory, and runs from a scheduler at `/`, so
 `reconcile` and `vitals` take `--all-instances`: one run per instance, each with that
-instance's own `CAIRN_API_KEY_MAINTENANCE`, exiting non-zero if any failed. The scheduled jobs
-always pass it, and with one instance it changes nothing. Name the task each instance reports
+instance's own `CAIRN_API_KEY_MAINTENANCE`, exiting non-zero if any failed; with one instance
+it changes nothing. `install-cron` schedules it once the installed CLI knows the flag, so
+re-run `node scripts/install-cron.mjs` after adding instances. Name the task each instance reports
 to: `CAIRN_NOTIFY_VITALS=personal:CAIRN-107,work:OPS-3`, and `CAIRN_NOTIFY_FILES=personal:CAIRN-107`
 for the agent-files sync. A bare ref is refused there, since it exists on only one instance.
 The MCP server routes by the directory it was started in, like any other command.
@@ -690,11 +694,12 @@ cp -r skills/cairn ~/.codex/skills/      # Codex
 cp -r skills/cairn "$CLAWD_HOME"/skills/ # OpenClaw — its own tree, not a dotfile dir
 ```
 
-**Hooks** — the two mechanisms above:
+**Hooks** — the two mechanisms described under [Two mechanisms](#two-mechanisms-so-nobody-has-to-remember):
 
 ```bash
 node scripts/install-hooks.mjs        # --dry-run to see what it would write
-# For a classified local router instead of a global `cairn` executable:
+# Hermes only, for an external router instead of the `cairn` on PATH (choosing between
+# several instances is built in; see above):
 CAIRN_HOOK_CLI=/absolute/path/to/cairn-router node scripts/install-hooks.mjs
 ```
 
@@ -817,6 +822,9 @@ ran and understood nothing".
 | `ownership/` | which tasks this machine holds |
 | `recorded-rollouts` | which swept transcripts have already been turned into sessions, so a sweep on a timer is idempotent |
 | `hooks/`, `maintenance/` | where the installers put the copies they manage |
+| `instances.json` | only on a machine with several instances: each one's URL, the saved routes, and what an unrouted directory does |
+| `instances/<name>/` | that instance's own `env`, outbox, `ownership/`, `projects.json` and `project-keys.json` (its project keys, for routing a ref); on such a machine the files above with those names are not read |
+| `session-routes/`, `unrouted/` | answers given for one session only, and sessions that ended before anyone said which instance they belong to |
 
 **MCP** (optional — native tool-calling for Claude Code and Codex; OpenClaw reaches it
 through `mcporter`). The server lives in [`mcp/`](./mcp), holds no logic of its own, and
@@ -949,8 +957,8 @@ machine, and running `vitals` in two places reports the same findings twice.
 
 | Job | What it is for |
 |---|---|
-| `reconcile` (30 min) | Releases any claim in the workspace that went quiet for two hours, and moves a `doing` task back to todo so `doing` keeps meaning somebody is on it (`in-review` keeps its status). Workspace-wide only under the `maintenance` key; any other agent's `reconcile` covers its own claims |
-| `vitals` (daily) | Asks whether the memory is still being written and read, and reports **only** when something looks wrong |
+| `reconcile` (30 min) | Releases any claim in the workspace that went quiet for two hours, and moves a `doing` task back to todo so `doing` keeps meaning somebody is on it (`in-review` keeps its status). Workspace-wide only under the `maintenance` key; any other agent's `reconcile` covers its own claims. Once per instance on a machine with several |
+| `vitals` (daily) | Asks whether the memory is still being written and read, and reports **only** when something looks wrong. Once per instance on a machine with several |
 | `agent-files` (hourly on Linux, and on every deploy; on macOS every 15 minutes and at load) | Repairs the skill, CLI and hooks wherever a runtime is reading a stale copy |
 | `openclaw-sessions` (30 min) | OpenClaw has no session-end event, so its transcripts are swept instead of waiting to be handed over |
 
@@ -961,10 +969,13 @@ in this repository: `CAIRN_CLI_PATH`, `CAIRN_NODE_PATH`, `CAIRN_LOG_DIR`,
 `CAIRN_SYNC_ALSO` for copies outside the running user's home. The defaults describe the
 machine rather than one host: on macOS the CLI is looked for in `~/.local/bin`, logs go to
 `~/Library/Logs`, and node is the one running the installer. `CAIRN_NOTIFY_VITALS` and
-`CAIRN_NOTIFY_FILES` name a task to report into; leave them unset and the jobs stay quiet.
+`CAIRN_NOTIFY_FILES` name a task to report into; leave them unset and the jobs stay quiet. On
+a machine with several instances, write them `<instance>:<ref>` (vitals takes a comma list,
+one per instance).
 
 Run the jobs under an identity of their own: `CAIRN_AGENT=maintenance` with a matching
-`CAIRN_API_KEY_MAINTENANCE`. On a machine whose `~/.cairn/env` holds per-runtime keys, the
+`CAIRN_API_KEY_MAINTENANCE` (in each instance's `env`, where there are several). On a machine
+whose `~/.cairn/env` holds per-runtime keys, the
 CLI refuses to send a maintenance write under the default key (exit 3), because that key
 belongs to some other agent and a scheduled job's warning is read by nobody.
 
