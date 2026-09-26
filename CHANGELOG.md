@@ -9,32 +9,6 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
-### Fixed
-
-- **`cairn instance add` no longer deletes saved routes** (CAIRN-302). It rebuilt `instances.json`
-  from the instances alone, so adding one deleted the routes.
-- **One runtime's queued writes no longer quarantine another's** (CAIRN-298). Every runtime
-  on a machine shares `~/.cairn/outbox.jsonl`, and replay moved any item it had not queued
-  itself to `outbox.jsonl.rejected`, so a Codex drain threw away notes Claude Code had queued
-  during an outage and the reverse. Such an item now waits for its own runtime (or instance),
-  and is quarantined only after 30 days nobody replayed it. A write queued under a key its
-  runtime no longer holds is still refused, as before. `cairn replay` says how many are waiting.
-  Two things this exposed are fixed with it: writes put back after a replay now go in front
-  of anything queued meanwhile, so a checkpoint is never sent ahead of an older one; and a
-  queue holding only other runtimes' writes no longer sets off a replay on every command.
-- **`relearn` can move a fact from a project to an entity** (CAIRN-295). A scope flag only
-  touches its own side, so `--entity X` added an entity and kept the project, and nothing
-  could clear one side alone: `--project ""` was read as "not given" and dropped without a
-  word. `none` now clears a side — `relearn <slug> --entity E --project none` moves it — and
-  an empty value is refused with that hint.
-- **The installer no longer links OpenClaw for an account that runs no gateway** (CAIRN-296).
-  A global install puts `openclaw` on every account's PATH; linking from one without an
-  OpenClaw config created a config nobody reads and reported success while the real gateway
-  stayed unbriefed. It now links only where the account's OpenClaw config (`OPENCLAW_CONFIG_PATH`
-  or `~/.openclaw/openclaw.json`) configures a gateway — a client config that only mirrors
-  another gateway's auth does not count — says why it skipped otherwise, `--dry-run` included,
-  and `--openclaw` overrides for a gateway not configured yet.
-
 ### Added
 
 - **Setup asks whether to use a default instance or ask** (CAIRN-302). Adding a second
@@ -229,7 +203,56 @@ out under **Breaking** with what to do about it.
   retired. Creating a project refuses a retired key up front for the same reason, rather than
   after the server does.
 
+### Changed
+
+- **The README is reorganised and brought up to date.** Agent setup is split into sections
+  (keys, skill and hooks, sessions, MCP, what lives on disk, several instances); the command
+  table is grouped and covers `recall`, knowledge history, `--unused`, `--sweep`, `project
+  create`, `route` and `instance`; the API list matches the routes on disk; the walkthrough
+  shows `add` claiming for an agent; and stale passages (three hooks, a file-open briefing,
+  the MCP tool count, the data model) are corrected. Historical detail that read as current
+  behaviour — how the search arms and the Codex detection came to be — is cut to what
+  explains the present. The version badge now follows releases.
+- **Bodies are required where they carry the value** (CAIRN-291, CAIRN-289). The API now
+  refuses a bug or spike with a description under 40 characters unless `forceEmpty: true`
+  (`cairn add --force-empty` sends it), so the UI and MCP meet the rule the CLI enforced.
+  Knowledge bodies must be non-blank on create and on relearn.
+
+- **Settings has the header bar every other page has** (CAIRN-279), and its Password
+  heading matches Labels and Entities instead of being the one uppercase eyebrow.
+
+- **`GET /next?project=` with a key that names no project is a 404** instead of "nothing
+  open" (CAIRN-264). Silence was the answer for a typo and for a renamed project alike, and
+  it read as true for both.
+
 ### Fixed
+
+- **The `?` shortcut list named the wrong keys.** It said `1`–`4` were Active, Backlog, All
+  and Recent; the list has seven: Doing, Todo, Active, Backlog, All, Recent, Closed. `Esc`
+  also clears the selection, and now says so.
+- **`cairn instance add` no longer deletes saved routes** (CAIRN-302). It rebuilt `instances.json`
+  from the instances alone, so adding one deleted the routes.
+- **One runtime's queued writes no longer quarantine another's** (CAIRN-298). Every runtime
+  on a machine shares `~/.cairn/outbox.jsonl`, and replay moved any item it had not queued
+  itself to `outbox.jsonl.rejected`, so a Codex drain threw away notes Claude Code had queued
+  during an outage and the reverse. Such an item now waits for its own runtime (or instance),
+  and is quarantined only after 30 days nobody replayed it. A write queued under a key its
+  runtime no longer holds is still refused, as before. `cairn replay` says how many are waiting.
+  Two things this exposed are fixed with it: writes put back after a replay now go in front
+  of anything queued meanwhile, so a checkpoint is never sent ahead of an older one; and a
+  queue holding only other runtimes' writes no longer sets off a replay on every command.
+- **`relearn` can move a fact from a project to an entity** (CAIRN-295). A scope flag only
+  touches its own side, so `--entity X` added an entity and kept the project, and nothing
+  could clear one side alone: `--project ""` was read as "not given" and dropped without a
+  word. `none` now clears a side — `relearn <slug> --entity E --project none` moves it — and
+  an empty value is refused with that hint.
+- **The installer no longer links OpenClaw for an account that runs no gateway** (CAIRN-296).
+  A global install puts `openclaw` on every account's PATH; linking from one without an
+  OpenClaw config created a config nobody reads and reported success while the real gateway
+  stayed unbriefed. It now links only where the account's OpenClaw config (`OPENCLAW_CONFIG_PATH`
+  or `~/.openclaw/openclaw.json`) configures a gateway — a client config that only mirrors
+  another gateway's auth does not count — says why it skipped otherwise, `--dry-run` included,
+  and `--openclaw` overrides for a gateway not configured yet.
 
 - **Client wiring: identity, host, drift and the per-Read hook** (CAIRN-290).
   `install-hooks.mjs` no longer writes the `PreToolUse(Read)` hook that CCS-40 removed by hand.
@@ -335,20 +358,6 @@ out under **Breaking** with what to do about it.
   hidden on a phone and whenever the task had an `external_ref` — which is every task in a
   project imported from Linear, the case that exposed this — and is now shown on every width,
   beside the imported ref rather than instead of it, with the rename and its date on hover.
-
-### Changed
-
-- **Bodies are required where they carry the value** (CAIRN-291, CAIRN-289). The API now
-  refuses a bug or spike with a description under 40 characters unless `forceEmpty: true`
-  (`cairn add --force-empty` sends it), so the UI and MCP meet the rule the CLI enforced.
-  Knowledge bodies must be non-blank on create and on relearn.
-
-- **Settings has the header bar every other page has** (CAIRN-279), and its Password
-  heading matches Labels and Entities instead of being the one uppercase eyebrow.
-
-- **`GET /next?project=` with a key that names no project is a 404** instead of "nothing
-  open" (CAIRN-264). Silence was the answer for a typo and for a renamed project alike, and
-  it read as true for both.
 
 ## [0.6.0] — 2026-09-22
 

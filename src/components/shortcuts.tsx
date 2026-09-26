@@ -16,10 +16,14 @@ const GROUPS: { title: string; keys: [string[], string][] }[] = [
     title: 'Lists',
     keys: [
       [['/'], 'Focus the filter'],
-      [['1'], 'Active'],
-      [['2'], 'Backlog'],
-      [['3'], 'All'],
-      [['4'], 'Recent'],
+      [['1'], 'Doing'],
+      [['2'], 'Todo'],
+      [['3'], 'Active'],
+      [['4'], 'Backlog'],
+      [['5'], 'All'],
+      [['6'], 'Recent'],
+      [['7'], 'Closed'],
+      [['Esc'], 'Clear the selection'],
     ],
   },
   {
