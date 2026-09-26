@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/montytorr/cairn/actions/workflows/ci.yml/badge.svg)](https://github.com/montytorr/cairn/actions/workflows/ci.yml)
 [![Licence: Sustainable Use](https://img.shields.io/badge/licence-Sustainable%20Use-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.1-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/release/montytorr/cairn?label=version)](./CHANGELOG.md)
 
 **The tracker your agents read before they start, and write to as they work.**
 
@@ -13,21 +13,24 @@ asks the same question and gets the answer instead of repeating the work.
 Self-hosted. A cairn is a stack of stones travellers leave to mark a path for whoever
 comes next: a different agent, a different model, you in six weeks.
 
-Three hooks make it happen without anyone being reminded — a briefing when a session
-starts, what is known about a file when one is opened, and the session written down when
-it ends.
+Two hooks make it happen without anyone being reminded: a briefing when a session starts,
+and the session written down when it ends.
 
 > **One shared workspace.** Every active user and agent can work across the same projects,
 > tasks and memory. Administrators manage membership, roles and agent keys; owner columns
 > remain attribution metadata rather than visibility boundaries.
+>
+> Separate data — a personal and a work Cairn, say — means separate instances, and one
+> machine can use several ([below](#several-instances-on-one-machine)).
 >
 > **Pre-1.0.** Stable in practice and running in production, but a minor version may still
 > change the schema or the API. Anything that breaks an existing install is called out in
 > the [changelog](./CHANGELOG.md).
 
 **Jump to:** [Self-hosting](#self-hosting) · [Agent setup](#agent-setup) · [The CLI](#the-cli) ·
-[API](#api) · [Scheduled maintenance](#scheduled-maintenance--optional) ·
-[Architecture](#architecture) · [Contributing](#contributing)
+[Several instances](#several-instances-on-one-machine) · [API](#api) ·
+[Scheduled maintenance](#scheduled-maintenance--optional) · [Architecture](#architecture) ·
+[Contributing](#contributing)
 
 It holds **four stores**, and one verb — `cairn check` — searches all four in a single
 pass:
@@ -52,39 +55,29 @@ $ cairn check "migrations time out under parallel workers"
 nothing found — this subject looks new
 ```
 
-Nothing. So file it. `add` probes for near-duplicates before it creates anything, ORing
-the distinctive words rather than ANDing the phrase, so it surfaces things `check` rightly
-did not:
+Nothing. So file it, with a body — a bug or a spike without one is refused. `add` probes
+for near-duplicates before it creates anything, ORing the distinctive words rather than
+ANDing the phrase, so it surfaces things `check` rightly did not. From an agent it also
+claims the task, so a second agent on the same backlog picks something else:
 
 ```console
-$ cairn add "Migrations time out when workers run in parallel" --project ACME --type bug
+$ cairn add "Migrations time out when workers run in parallel" --project ACME --type bug --body -
 similar existing work:
   ACME-12 [done] Make the migration runner idempotent
+claimed ACME-57 (agents' adds start the work; --no-start to only file it)
 id	9f3c1a04-2b77-4a0e-8d51-6e0c2f1b9a44
 number	57
 title	Migrations time out when workers run in parallel
 type	bug
-status	backlog
+status	doing
 priority	medium
 created_at	2026-08-14T14:51:09.223Z
 ref	ACME-57
-```
-
-Take it, so a second agent on the same backlog picks something else:
-
-```console
-$ cairn claim ACME-57
-id	9f3c1a04-2b77-4a0e-8d51-6e0c2f1b9a44
-number	57
-status	doing
 claimed_by	claude-code · Alice
-claimed_at	2026-08-14T14:52:40.102Z
-heartbeat_at	2026-08-14T14:52:40.102Z
-attempt	1
 ```
 
-`claim` is one conditional UPDATE. If somebody else holds it, it exits **9** and says who,
-rather than guessing:
+A claim is one conditional UPDATE. If somebody else holds it, `claim` exits **9** and says
+who, rather than guessing:
 
 ```console
 $ cairn claim ACME-57
@@ -212,13 +205,11 @@ This is the part that makes the rest hold. Installed by `node scripts/install-ho
 | When | What happens |
 |---|---|
 | session start | the briefing is injected — what you hold, what is in flight, where the last session in this directory stopped, what is known here |
-| session end | the session is recorded, and any task still held is checkpointed |
+| session end | the session is recorded, and a task it worked on and still holds is checkpointed — never over a checkpoint the agent wrote |
 
-There used to be a third, on every file read. It had no cache and no debounce, so each
-`Read` cost a node process and a fresh HTTPS request, and on Codex, which has no `Read`
-tool, it never matched at all. It was removed by hand (CCS-40), and the installer now
-removes its own entry wherever it finds one rather than writing it back. The hook script
-still answers `PreToolUse` if you wire it yourself.
+A third hook, on every file read, cost a process and a request per `Read` and never matched
+on Codex, so the installer now removes it wherever it finds it. The hook script still
+answers `PreToolUse` if you wire it yourself.
 
 An integration can persist progress without ending a session:
 
@@ -262,17 +253,12 @@ problem.
   the distinctive terms of the question; the wide arm returns everything matching any of
   them; a row found by both appears once, in the precise head. Each row says which arm
   found it, because twenty loose word-overlaps silently read as prior work.
-- That is not how it started. For years the wide arm ran *only when the precise one came
-  back thin* — and the precise arm ANDed every content word of the question, so three long
-  descriptions that happened to contain all of them switched off the arm that answers it.
-  Demonstrated on a live store: a question missed its answer entirely, and appending one
-  nonsense word — which emptied the precise arm — brought the answer back at rank 7. Same
-  corpus, same question. Across a 22-query evaluation set English recall@20 went from
-  **0.43 to 0.86** and the share of answers found by the precise arm from 3 to 15 — the
-  second figure is all this change, the first is partly a store that grew between the two
-  measurements, which is why the baseline now records what it was measured against. See [`055`](./migrations/055_search_stop_suppressing_the_fallback.sql) for
-  `search_all` and [`056`](./migrations/056_search_tasks_stop_suppressing_the_fallback.sql)
-  for `search_tasks`, the task-only path the web UI and `cairn check --tasks` take.
+- The wide arm used to run only when the precise one came back thin, so a few long rows
+  containing every word of a question could switch off the arm that answered it. Running
+  both lifted English recall@20 on the evaluation set from **0.43 to 0.86**
+  ([`055`](./migrations/055_search_stop_suppressing_the_fallback.sql) for `search_all`,
+  [`056`](./migrations/056_search_tasks_stop_suppressing_the_fallback.sql) for
+  `search_tasks`, the task-only path the web UI and `cairn check --tasks` take).
 - Ranking happens in the database, by `ts_rank`. Closed work is included on purpose, and a
   row carrying a recorded answer outranks one that merely mentions the subject. Every rule
   here came out of measurement rather than taste, and so did the rejections: ranking by
@@ -282,11 +268,10 @@ problem.
   [`016_search_all.sql`](./migrations/016_search_all.sql).
 - The evaluation set is [`tests/fixtures/search-eval.json`](./tests/fixtures/search-eval.json):
   22 paraphrased questions with their known-good answers, each pinning the invocation it is
-  scored under, because `--project` and `--kinds` reorder the same store and a case that
-  does not say which it used has several correct answers. `node scripts/score-search-eval.mjs`
-  scores it and records what the numbers were measured against — the server build, the CLI
-  version, the size of the store — since the same file once recorded 0.73 and gave 0.82 on
-  a re-run the same day, with no code change, because the store had grown.
+  scored under, because `--project` and `--kinds` reorder the same store.
+  `node scripts/score-search-eval.mjs` scores it and records what the numbers were measured
+  against — the server build, the CLI version, the size of the store — because a growing
+  store moves the score with no code change.
 - Results are an **index**, never bodies: each row advertises a `~tokens` cost, so an agent
   budgets what it opens instead of pulling text it will never read.
 - **Knowledge is scoped narrowest-first**, to one of three widths:
@@ -324,8 +309,18 @@ problem.
   *nothing*. Here that was a quarter of the entries, nineteen separate islands, and dozens
   of references pointing at entries nobody ever wrote — none of it visible anywhere before,
   because a list shows what is there.
-- **A file index** answers the question nobody asks: opening a file surfaces the tasks and
-  knowledge that concern it, with no query to write.
+- **A file index** answers the question nobody asks: `cairn context --file <path>` returns
+  the tasks and knowledge that concern a file, with no query to write. `learn --files`
+  names the files a fact is about beyond those its body mentions.
+- **Knowledge has a history.** Every correction keeps the version it replaced
+  (`cairn know <slug> --history`), and `cairn know --unused` finds facts no search or read
+  has returned lately.
+- **Refs link themselves.** A task ref written in a note, comment, description or
+  resolution shows up on that task's `show` under `mentionedIn`, decisions and findings
+  first.
+- **Credentials are refused on the way in.** A write carrying a secret-shaped string — an
+  API key, a token, a password assignment — is rejected with `secret_detected`, because
+  everything written here is read back into agents' contexts.
 
 **Coordination**
 
@@ -347,9 +342,7 @@ problem.
 ## Agent access
 
 Three interfaces over **one** implementation, so behaviour cannot diverge between them —
-the CLI is that implementation, and the other two shell out to it. Coverage can still
-differ: the MCP server exposes the verbs worth calling as typed tools rather than all of
-them, so `context`, `next`, `history` and the session verbs stay CLI-only.
+the CLI is that implementation, and the other two shell out to it.
 
 | Interface | For |
 |---|---|
@@ -381,46 +374,55 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 
 | | |
 |---|---|
+| **Find and read** | |
 | `cairn check "<subject>"` | **Start here.** Prior work across all four stores, with a `~tokens` cost per row |
 | `cairn context [--scope project\|all] [--project K]` | The briefing: what you hold, what is in flight, where the last session here stopped. `--scope project` limits held work, stale claims, and the last session to the resolved project; the default `all` keeps cross-project awareness. An unresolved project is an error in project scope; an unknown explicit key returns 404. |
 | `cairn next` | **What to pick up, and why.** Finishing beats starting, so work you hold ranks above work dropped with a checkpoint, which ranks above anything not begun. Blocked, waiting, or actively held by another agent is never offered |
 | `cairn show <ref>` · `cairn list --project K` · `cairn projects` | Read one, many, or the project index |
-| `cairn add "<title>" --project K` | File work. Warns if something similar already exists. From an agent runtime it also claims the task, unless similar open work exists or you already hold a task in that project (it says which); `--no-start` only files it |
-| `cairn update <ref> --status S --priority P` | Change fields; `--project` moves it, `--also-project` widens it |
-| `cairn done <ref> --resolution "…"` | Close. The resolution is required. `--kind verified` when you closed it because somebody else's fix was already there — `fixed` would claim their work |
-| `cairn update <ref> --status in-review` | Written but not landed: merged and undeployed, or done and unmerged |
+| `cairn log <ref>` · `cairn history <ref>` | The work log, and what changed when and by whom |
+| `cairn recall <ref>` | Picking a task up: the decisions, findings and knowledge that bear on it, each with why it was picked. `claim` prints the top of it |
+| **File and change** | |
+| `cairn add "<title>" --project K --body -` | File work; a bug or spike needs a body of 40 characters or more (`--force-empty` when the title really is the whole story). Warns if something similar already exists. From an agent runtime it also claims the task, unless similar open work exists or you already hold a task in that project (it says which); `--no-start` only files it |
+| `cairn add ... --start` | File it and claim it, always — for a person, or to override the agent default's hold-backs |
+| `cairn update <ref> --status S --priority P` | Change fields; `--project` moves it, `--also-project` widens it. `--status in-review` is written but not landed: unmerged, or merged and undeployed |
+| `cairn done <ref> --resolution "…"` | Close. The resolution is required; `--duplicate-of <ref>` closes it as a copy of another. `--kind verified` when you closed it because somebody else's fix was already there — `fixed` would claim their work |
 | `cairn cancel <ref> --resolution "…"` | Drop it, and say why |
+| `cairn children <ref>` · `cairn add … --parent <ref>` | Sub-tasks |
+| `cairn deps <ref>` · `cairn blockedby <ref> <other>` · `cairn unblockedby <ref> <other>` | Dependencies |
+| `cairn labels [rename\|remove]` | Every label in use; renaming onto an existing label merges them |
+| `cairn block <ref> --reason "…"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
+| `cairn task delete <ref> --confirm <ref>` | For junk that should never have existed. Refused if the task has children or dependencies, or notes or comments from anyone but you — cancel keeps the record |
+| **Work log and evidence** | |
 | `cairn note <ref> "…" --kind attempt` | Append to the work log — `note · attempt · finding · decision · handoff` |
 | `cairn commit <ref> <sha>` · `cairn push <ref> <sha>` | Record delivery evidence in the task history |
 | `cairn run <ref> "<command>" --status passed\|failed\|skipped` | Record a command result in the task history |
-| `cairn log <ref>` · `cairn history <ref>` | The work log, and what changed when and by whom |
 | `cairn comment <ref> "…"` | Leave something for the human |
 | `cairn attach <ref> <file>` · `cairn files <ref>` | Attachments |
-| `cairn children <ref>` · `cairn add … --parent <ref>` | Sub-tasks |
-| `cairn deps <ref>` · `cairn blockedby <ref> <other>` · `cairn unblockedby` | Dependencies |
-| `cairn labels [rename\|remove]` | Every label in use; renaming onto an existing label merges them |
+| **Claims** | |
 | `cairn claim <ref>` | Take it. **Exit code 9** means another agent holds it |
-| `cairn beat <ref>` · `cairn release <ref>` | Keep a claim alive, or drop it |
+| `cairn beat <ref>` · `cairn release <ref> [--force]` | Keep a claim alive, or drop it |
 | `cairn checkpoint <ref> --summary "…"` | Where work stopped, for whoever resumes |
-| `cairn block <ref> --reason "…"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
+| **Knowledge** | |
 | `cairn learn "<title>" --body -` | Record what we now know. Scoped to this directory's project unless `--project`, `--entity` or `--global`, and refused where there is no project to infer — global is a claim about every project you have, so it is chosen rather than arrived at |
-| `cairn add ... --start` | File it and claim it, always — for a person, or to override the agent default's hold-backs |
-| `cairn verify <slug>` | This fact is still true. Clears the stale mark without rewriting it |
-| `cairn task delete <ref> --confirm <ref>` | For junk that should never have existed. Refused if the task has children, notes, comments or dependencies — cancel keeps the record |
-| `cairn know [<slug>\|<query>]` | Read it back, or list what applies here |
+| `cairn know [<slug>\|<query>]` | Read it back, or list what applies here. `--sweep` (or `CAIRN_SWEEP=1`) keeps a scripted read out of the recall counts |
+| `cairn know <slug> --history [--full]` · `cairn know --unused [--days N]` | Every version and who changed it; facts nothing has returned lately |
 | `cairn know --gaps` · `--orphans` · `--dangling` | Where the memory has holes: entries joined to nothing, and references pointing at entries nobody wrote |
-| `cairn relearn <slug>` · `cairn unlearn <slug> --superseded-by <slug>` | Correct it, or mark it replaced |
-| `cairn relearn <slug> --project K` · `--entity E` · `--global` | Re-scope a fact filed too narrowly. `--global` clears both and refuses to be combined with either |
+| `cairn relearn <slug> [--reason "…"]` · `cairn unlearn <slug> --superseded-by <slug>` | Correct it, or mark it replaced |
+| `cairn relearn <slug> --project K` · `--entity E` · `--global` | Re-scope it. Each flag replaces its own side, and `none` clears one: `--entity E --project none` moves a fact from a project to an entity. `--global` clears both and refuses to be combined with either |
+| `cairn verify <slug>` | This fact is still true. Clears the stale mark without rewriting it |
 | `--allow-dangling` (on `learn` and `relearn`) | Keep a `[[reference]]` the store cannot resolve. A write is otherwise refused when a reference names nothing and a near-named entry exists; the refusal names that slug, so retrying with it is the usual answer, and this flag is for when it gets that wrong |
-| `cairn entities` · `cairn entities assign <key> --project A,B` | Groupings a fact can be true of |
-| `cairn session list` · `cairn session end --id <id>` | The episodic record |
-| `cairn reconcile` | Release claims that went quiet for two hours: your own, or the whole workspace under the `maintenance` key (the scheduled job) |
-| `cairn vitals [--all]` | Is the memory still being written — counts against the week before, and what looks wrong. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and `asked for, not held: <slug>` for each recent miss. It also shows claims with no genuine activity for more than 2h and 24h (by the reaper's own rule: a session-end "still held" checkpoint does not count), whether the reaper has released anything in 7 days, sessions and summarised share per runtime and host (`macos` for `/Users/…`, `linux` for `/home/…` or `/root`), and how much current knowledge has never been verified. The summariser's own runs are not counted as sessions |
-| `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
-| `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
-| `cairn replay` | Send writes put aside while the server was unreachable. Rarely needed by hand — any successful write drains the queue |
+| `cairn entities` · `cairn entities assign\|unassign <key> --project A,B` · `cairn entities rename <key>` | Groupings a fact can be true of |
+| **Sessions and upkeep** | |
+| `cairn session list` · `cairn session checkpoint\|end --id <id>` | The episodic record; `checkpoint` records progress without ending it |
+| `cairn reconcile` | Release claims that went quiet for two hours (`doing` goes back to `todo`): your own, or the whole workspace under the `maintenance` key (the scheduled job) |
+| `cairn vitals [--all]` | Is the memory still being written, against the week before, and what looks wrong: claims with no genuine activity past 2h and 24h, whether the reaper released anything in 7 days, sessions and their summarised share per runtime and host, knowledge never verified. `--all` adds whether it is being *read*: searches, how many widened or came back empty, tasks filed without checking first, and each recent `asked for, not held: <slug>` |
+| `cairn replay` | Send writes put aside while the server was unreachable. Rarely needed by hand — any successful write drains the queue; a write another runtime queued waits for that runtime |
+| **Projects** | |
 | `cairn map <KEY>` | Tell Cairn which project this checkout is. Validates the key, and claims the repository so every other clone and worktree resolves too. `cairn map none` releases both |
-| `cairn instance [list]` · `cairn instance add <name> --url U [--default] [--adopt]` · `cairn instance policy ask\|default <name>` | Several Cairn instances on one machine: which one a command uses, adding one, and what a directory with no route does ([below](#agent-setup)) |
+| `cairn project create <KEY> "<title>"` · `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
+| `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
+| **Several instances** | |
+| `cairn instance [list]` · `cairn instance add <name> --url U [--default] [--adopt]` · `cairn instance policy ask\|default <name>` | Several Cairn instances on one machine: which one a command uses, adding one, and what a directory with no route does ([more](#several-instances-on-one-machine)) |
 | `cairn route` · `cairn route add <instance> [--folder\|--session]` · `cairn route list\|pending\|remove` | Which instance this directory belongs to, saving the answer, and the sessions waiting for one |
 | `--instance <name>` (any command) · `--all-instances` (`reconcile`, `vitals`) | Send this one command to that instance, or run the job once per instance |
 
@@ -435,26 +437,30 @@ schemas the routes validate against, so it cannot drift. Browsable at `/api-docs
 /health                         unauthenticated probe; reports the commit it was built from
 /vitals?hours=24                whether the memory is still being written and read, and what looks wrong
 /search                         the read half of Cairn-as-memory
-/projects  /projects/{id}       list, create, read, rename, delete
+/context  /next                 the briefing a session opens with; what to pick up
+/activity                       recent activity across the workspace
+/projects  /projects/{id}       list, create, read, rename, rekey, delete
 /projects/{id}/tasks            list and create within a project
-/tasks/{ref}                    read, update, close
-/tasks/{ref}/notes              the work log
+/projects/{id}/repos            the repositories a project claims
+/tasks/{ref}                    read, update, close, delete
+/tasks/{ref}/notes  /notes/{id} the work log
 /tasks/{ref}/comments           for the human
 /tasks/{ref}/activity           read history; POST git/run delivery evidence
+/tasks/{ref}/mentions  /recall  where it is named; what bears on it
 /tasks/{ref}/children           sub-tasks
 /tasks/{ref}/attachments        upload; /attachments/{id} to fetch
 /tasks/{ref}/dependencies       blocked-by / blocks
 /tasks/{ref}/claim  /beat  /release  /checkpoint  /block
 /knowledge  /knowledge/{slug}   what we know, and correcting it
+/knowledge/{slug}/history       every version of an entry
+/knowledge/gaps                 entries joined to nothing, and references to entries nobody wrote
 /entities                       groupings a fact can be true of
 /labels                         every label in use; rename and remove
 /sessions                       the episodic record
-/context                        the briefing a session opens with
 /reconcile                      release claims that went quiet
 /events                         change stream (SSE)
-/keys  /keys/{id}               issue and revoke agent keys
-/users  /users/{id}             administrator-only membership and role management
-/users/{id}/keys                administrator-only agent identity management
+/users  /users/{id}             administrator-only membership, roles, /password and /restore
+/users/{id}/keys  /keys/{keyId} administrator-only agent keys: issue and revoke
 ```
 
 A test walks `src/app/api/v1` and asserts every route on disk appears in the spec, so the
@@ -509,9 +515,9 @@ diagnostic, never an authorization input.
 | `⌘K` | Search and jump |
 | `C` | New task |
 | `/` | Focus the list filter |
-| `1` `2` `3` `4` | Active · Backlog · All · Recent |
+| `1` … `7` | Doing · Todo · Active · Backlog · All · Recent · Closed |
 | `?` | Every shortcut |
-| `Esc` | Close, or leave a field |
+| `Esc` | Close, leave a field, or clear the selection |
 
 ## Self-hosting
 
@@ -579,6 +585,8 @@ chmod 600 ~/.cairn/env
 install -m 755 cli/cairn.mjs /usr/local/bin/cairn
 ```
 
+### Keys and identity
+
 **One key per runtime, where a machine runs more than one.** The key *is* the identity —
 `actor_id` comes from the key, never from what the caller claims — so a single key shared
 by Claude Code, Codex, OpenClaw and Hermes Agent by Nous Research files all of their work
@@ -605,12 +613,10 @@ It works out which runtime it is in from the environment, in this order, and
 every Codex marker; testing for Codex first would file all of OpenClaw's work as Codex —
 the same misattribution, pointing the other way.
 
-Detection used to rest on `CODEX_HOME` alone, which Codex reads but does not export, so
-[`scripts/codex-wrapper.sh`](./scripts/codex-wrapper.sh) was installed to set it. A live
-session was then found running with the wrapper bypassed and no `CODEX_HOME` at all:
-detection returned nothing, the CLI fell back to the machine's default key, and every
-Codex write was filed as whichever agent owned that key. Hence the `CODEX_MANAGED_*`
-markers, which Codex does export. The wrapper still helps; nothing depends on it.
+`CODEX_HOME` alone is not enough — Codex reads it but does not export it — which is why the
+`CODEX_MANAGED_*` markers, which it does export, are on the list.
+[`scripts/codex-wrapper.sh`](./scripts/codex-wrapper.sh) sets `CODEX_HOME` too; nothing
+depends on it.
 
 **Nesting is settled by the process tree, not the environment.** A Codex started from a
 Claude Code shell inherits `CLAUDECODE=1`, so by environment alone every write it made was
@@ -621,70 +627,7 @@ cannot answer, the old order stands. Nothing is spawned when the environment is 
 The CLI is deliberately dependency-free — Node 22's built-in `fetch` is enough — so it can
 be dropped onto a box and run with no install step.
 
-**Several instances on one machine** — a personal Cairn and a work one, say. Nothing in a
-task ref, a project key or a directory name says which server a command is for, so the
-choice is made explicitly or not at all:
-
-```bash
-cairn instance add personal --url https://cairn.example.com --adopt   # this machine's existing setup
-cairn instance add work --url https://cairn.work.example              # then its keys in
-                                                                      # ~/.cairn/instances/work/env
-cairn instance list
-cairn note ACME-42 "…" --instance work                                # or CAIRN_INSTANCE=work
-```
-
-- `~/.cairn/instances.json` names the instances and what happens in a directory with no
-  route: `"unclassified": {"mode": "default", "instance": "personal"}` uses that one, and
-  `{"mode": "ask"}` (the default) stops before any request with **exit 10**, so an agent asks
-  the user instead of guessing. Adding the second instance at a terminal asks which you want;
-  `--default` on `instance add`, or `cairn instance policy ask | default <name>` at any time,
-  answers it directly.
-- Each instance keeps its own state in `~/.cairn/instances/<name>/`: `env` (the same per-runtime
-  keys as above), the outbox, ownership and `projects.json`. `--adopt` moves the files at the
-  top of `~/.cairn` into the instance, and refuses if they were used with a different server
-  (`CAIRN_BASE_URL`, then `~/.cairn/env`, then localhost). Interrupted, it finishes on a re-run.
-- `CAIRN_API_KEY` in the environment is refused once instances are configured — it cannot say
-  which instance issued it — and so is a `CAIRN_BASE_URL` that disagrees with the chosen one.
-- Without `instances.json` nothing changes.
-
-**Which instance a command goes to**, when it does not say, is decided in this order, and
-nothing is ever guessed from a project name, a remote or a directory name:
-
-1. `--instance` or `CAIRN_INSTANCE`;
-2. a saved route for the directory: an **exact** route names one repository — its main
-   checkout, so every worktree and subdirectory follows — or one plain directory; a
-   **folder** route covers everything under it. Exact beats folder, folder routes never
-   overlap, and none may cover `~` or `/`;
-3. the command's ref (`note WORK-12 …`, never a flag's value), when exactly one instance is
-   known to have its project — each instance's keys are cached from its own responses, at
-   most six hours old. A route still wins over it, with a hint to add `--instance`;
-4. an answer saved for this session only;
-5. the default instance, if `unclassified` names one.
-
-Otherwise the command stops with exit 10 before any request and prints what to ask and the
-command that saves the answer; at a terminal it asks you instead.
-
-```bash
-cairn route                                # this directory's instance, and why
-cairn route add work                       # this repository (or directory)
-cairn route add work --folder              # ~/clients and everything under it
-cairn route add personal --session         # just this session
-cairn route list | pending | remove [--folder]
-```
-
-The session-start briefing passes that instruction to the agent, so it asks the first time
-it needs Cairn. A session that ends before anyone answered is not guessed at or dropped: the
-session-end hook parks it in `~/.cairn/unrouted/`, and `route add` sends it (without
-checkpointing, since it may be days old).
-
-**Maintenance** is about an instance, not a directory, and runs from a scheduler at `/`, so
-`reconcile` and `vitals` take `--all-instances`: one run per instance, each with that
-instance's own `CAIRN_API_KEY_MAINTENANCE`, exiting non-zero if any failed; with one instance
-it changes nothing. `install-cron` schedules it once the installed CLI knows the flag, so
-re-run `node scripts/install-cron.mjs` after adding instances. Name the task each instance reports
-to: `CAIRN_NOTIFY_VITALS=personal:CAIRN-107,work:OPS-3`, and `CAIRN_NOTIFY_FILES=personal:CAIRN-107`
-for the agent-files sync. A bare ref is refused there, since it exists on only one instance.
-The MCP server routes by the directory it was started in, like any other command.
+### Skill and hooks
 
 **Skill** (Claude Code, Codex and OpenClaw all read skill folders):
 
@@ -699,7 +642,7 @@ cp -r skills/cairn "$CLAWD_HOME"/skills/ # OpenClaw — its own tree, not a dotf
 ```bash
 node scripts/install-hooks.mjs        # --dry-run to see what it would write
 # Hermes only, for an external router instead of the `cairn` on PATH (choosing between
-# several instances is built in; see above):
+# several instances is built in; see "Several instances on one machine"):
 CAIRN_HOOK_CLI=/absolute/path/to/cairn-router node scripts/install-hooks.mjs
 ```
 
@@ -721,6 +664,9 @@ It only says so. Removing another tool's hook is that tool's decision.
 On OpenClaw the installer copies `hooks/openclaw/cairn-briefing` to
 `~/.cairn/hooks/openclaw/cairn-briefing` and runs `openclaw hooks install --link <that dir>
 --force` (`--dry-run` prints the command instead); the gateway needs a restart to load it.
+It links only for an account whose OpenClaw config (`OPENCLAW_CONFIG_PATH`, or
+`~/.openclaw/openclaw.json`) configures a gateway, because another account may hold a
+client-only config; `--openclaw` links anyway.
 OpenClaw discovers hooks only in the current workspace's `hooks/`, `~/.openclaw/hooks`,
 `hooks.internal.load.extraDirs`, plugins and its bundle — `hooks.path` is the webhook URL
 path, not a hook directory. [`docs/openclaw.md`](./docs/openclaw.md) has the recommended
@@ -746,7 +692,9 @@ happen to a session too long to end, because it is what happens *instead* of end
 Codex hook entries must also be trusted in `~/.codex/config.toml` before they run; the
 installer prints what to add.
 
-**How a session gets written up.** The session-end hook records what a session touched by
+### How a session gets written up
+
+The session-end hook records what a session touched by
 itself, but the prose on a session row — what was asked, what was learned, what landed,
 what is next — is written by a model. The hook pipes up to 24 KB of transcript to
 `claude -p` and parses the JSON that comes back. So a session row has prose only where
@@ -811,24 +759,11 @@ node ~/.cairn/hooks/cairn-session-end.mjs --dry-run <transcript>   # parse it, w
 would be written from one transcript, which separates "the hook never ran" from "the hook
 ran and understood nothing".
 
-**What the CLI keeps on disk.** All under `~/.cairn/`, none of it precious except `env`:
+### MCP — optional
 
-| | |
-|---|---|
-| `env` | credentials, `0600` |
-| `acted.jsonl` | a breadcrumb per accepted write, which is how a session knows which tasks it touched on a runtime whose session names the CLI cannot see |
-| `outbox.jsonl` | notes, comments and checkpoints made while the server was unreachable, replayed later; `outbox.jsonl.rejected` keeps what the server refused rather than discarding it |
-| `projects.json` | directory → project key, from `cairn map` |
-| `ownership/` | which tasks this machine holds |
-| `recorded-rollouts` | which swept transcripts have already been turned into sessions, so a sweep on a timer is idempotent |
-| `hooks/`, `maintenance/` | where the installers put the copies they manage |
-| `instances.json` | only on a machine with several instances: each one's URL, the saved routes, and what an unrouted directory does |
-| `instances/<name>/` | that instance's own `env`, outbox, `ownership/`, `projects.json` and `project-keys.json` (its project keys, for routing a ref); on such a machine the files above with those names are not read |
-| `session-routes/`, `unrouted/` | answers given for one session only, and sessions that ended before anyone said which instance they belong to |
-
-**MCP** (optional — native tool-calling for Claude Code and Codex; OpenClaw reaches it
-through `mcporter`). The server lives in [`mcp/`](./mcp), holds no logic of its own, and
-exposes 20 of the CLI's verbs as typed tools — `context`, `next`, `history` and the session
+Native tool-calling for Claude Code and Codex; OpenClaw reaches it through `mcporter`. The
+server lives in [`mcp/`](./mcp), holds no logic of its own, and
+exposes 21 of the CLI's verbs as typed tools — `context`, `next`, `history` and the session
 verbs stay CLI-only.
 
 Unlike the CLI it is not dependency-free: it imports the MCP SDK and needs a `node_modules`
@@ -865,7 +800,9 @@ tool_timeout_sec = 60
 Codex rejects a literal `bearer_token`; for an HTTP transport it wants
 `bearer_token_env_var`.
 
-**Existing memory.** If you already keep curated agent memory as one markdown file per
+### Existing memory
+
+If you already keep curated agent memory as one markdown file per
 fact, `node scripts/import-memory-files.mjs --dry-run` shows what it would bring in as
 knowledge. It reads `~/.claude/projects/*/memory/` unless `--root` says otherwise, and
 needs `--map <file>` — JSON of `{ "<directory>": "KEY" | null }` — to know which project
@@ -873,20 +810,100 @@ each directory belongs to. Anything unmapped is refused rather than filed global
 knowledge in the wrong scope is read by every project that should not see it; `--global`
 says you meant it.
 
+### What the CLI keeps on disk
+
+All under `~/.cairn/`, none of it precious except `env`:
+
+| | |
+|---|---|
+| `env` | credentials, `0600` |
+| `acted.jsonl` | a breadcrumb per accepted write, which is how a session knows which tasks it touched on a runtime whose session names the CLI cannot see |
+| `outbox.jsonl` | notes, comments and checkpoints made while the server was unreachable, replayed later; `outbox.jsonl.rejected` keeps what the server refused rather than discarding it |
+| `projects.json` | directory → project key, from `cairn map` |
+| `ownership/` | which tasks this machine holds |
+| `recorded-rollouts` | which swept transcripts have already been turned into sessions, so a sweep on a timer is idempotent |
+| `summaries.json`, `unsummarised.json`, `summariser.log` | the session summariser's reuse stamps, its retry queue, and every failure it hit |
+| `hooks/`, `maintenance/` | where the installers put the copies they manage |
+| `instances.json` | only on a machine with several instances: each one's URL, the saved routes, and what an unrouted directory does |
+| `instances/<name>/` | that instance's own `env`, outbox, `ownership/`, `projects.json` and `project-keys.json` (its project keys, for routing a ref); on such a machine the files above with those names are not read |
+| `session-routes/`, `unrouted/` | answers given for one session only, and sessions that ended before anyone said which instance they belong to |
+
+### Several instances on one machine
+
+A personal Cairn and a work one, say. Nothing in a
+task ref, a project key or a directory name says which server a command is for, so the
+choice is made explicitly or not at all:
+
+```bash
+cairn instance add personal --url https://cairn.example.com --adopt   # this machine's existing setup
+cairn instance add work --url https://cairn.work.example              # then its keys in
+                                                                      # ~/.cairn/instances/work/env
+cairn instance list
+cairn note ACME-42 "…" --instance work                                # or CAIRN_INSTANCE=work
+```
+
+- `~/.cairn/instances.json` names the instances and what happens in a directory with no
+  route: `"unclassified": {"mode": "default", "instance": "personal"}` uses that one, and
+  `{"mode": "ask"}` (the default) stops before any request with **exit 10**, so an agent asks
+  the user instead of guessing. Adding the second instance at a terminal asks which you want;
+  `--default` on `instance add`, or `cairn instance policy ask | default <name>` at any time,
+  answers it directly.
+- Each instance keeps its own state in `~/.cairn/instances/<name>/`: `env` (the same per-runtime
+  keys as [above](#keys-and-identity)), the outbox, ownership and `projects.json`. `--adopt` moves the files at the
+  top of `~/.cairn` into the instance, and refuses if they were used with a different server
+  (`CAIRN_BASE_URL`, then `~/.cairn/env`, then localhost). Interrupted, it finishes on a re-run.
+- `CAIRN_API_KEY` in the environment is refused once instances are configured — it cannot say
+  which instance issued it — and so is a `CAIRN_BASE_URL` that disagrees with the chosen one.
+- Without `instances.json` nothing changes.
+
+**Which instance a command goes to**, when it does not say, is decided in this order, and
+nothing is ever guessed from a project name, a remote or a directory name:
+
+1. `--instance` or `CAIRN_INSTANCE`;
+2. a saved route for the directory: an **exact** route names one repository — its main
+   checkout, so every worktree and subdirectory follows — or one plain directory; a
+   **folder** route covers everything under it. Exact beats folder, folder routes never
+   overlap, and none may cover `~` or `/`;
+3. the command's ref (`note WORK-12 …`, never a flag's value), when exactly one instance is
+   known to have its project — each instance's keys are cached from its own responses, at
+   most six hours old. A route still wins over it, with a hint to add `--instance`;
+4. an answer saved for this session only;
+5. the default instance, if `unclassified` names one.
+
+Otherwise the command stops with exit 10 before any request and prints what to ask and the
+command that saves the answer; at a terminal it asks you instead.
+
+```bash
+cairn route                                # this directory's instance, and why
+cairn route add work                       # this repository (or directory)
+cairn route add work --folder              # ~/clients and everything under it
+cairn route add personal --session         # just this session
+cairn route list | pending | remove [--folder]
+```
+
+The session-start briefing passes that instruction to the agent, so it asks the first time
+it needs Cairn. A session that ends before anyone answered is not guessed at or dropped: the
+session-end hook parks it in `~/.cairn/unrouted/`, and `route add` sends it (without
+checkpointing, since it may be days old).
+
+**Maintenance** is about an instance, not a directory, so `reconcile` and `vitals` take
+`--all-instances` — one run per instance under its own maintenance key — and the reports
+name their instance: `CAIRN_NOTIFY_VITALS=personal:CAIRN-107,work:OPS-3`. See
+[Scheduled maintenance](#scheduled-maintenance--optional); re-run its installer after adding
+instances. The MCP server routes by the directory it was started in, like any other command.
+
 ### Integrating a runtime that is not listed above
 
-The three above are the ones this is used with. Nothing here is specific to them, and a
-fourth runtime is mostly a question of which of these it gives you.
+The runtimes above are the ones this is used with. Nothing here is specific to them, and
+another runtime is mostly a question of which of these it gives you.
 
 **A skill folder and a CLI on PATH is the whole minimum.** Every interface here shells out
 to the same binary, so a runtime that can run a shell command and read a markdown file is
 already integrated. The hooks, the MCP facade and the rest are how it gets better, not how
 it starts.
 
-**One key per runtime, always.** `actor_id` comes from the key, never from what the caller
-claims to be, so a key shared between two runtimes files their work under one name and
-neither can be held to its own behaviour. This is the only item on this list that is not
-optional.
+**One key per runtime, always** ([why](#keys-and-identity)). This is the only item on this
+list that is not optional.
 
 **Test for the wrapping runtime before the wrapped one.** A runtime built on top of
 another sets everything the inner one sets. Detection that checks the inner first
@@ -906,9 +923,8 @@ neither leaves a trace in any hooks file — so an audit that looks only for hoo
 report an integration that works as absent.
 
 **Whatever writes the session prose may not be able to run as the account doing the
-sweep.** Transcripts under a `0700` home have to be read by root; a summariser CLI is
-usually logged in as somebody else. Point `CAIRN_SUMMARY_CLI` at a wrapper that drops
-privilege rather than moving the transcripts.
+sweep** — point `CAIRN_SUMMARY_CLI` at a wrapper that drops privilege, as in
+[How a session gets written up](#how-a-session-gets-written-up).
 
 **A copy in a directory nothing reads is worse than no copy.** Agent-facing files live in
 a directory per runtime and drift silently. Repair copies where a runtime already lives;
@@ -946,10 +962,8 @@ broken, and `--install` places the maintenance script itself if it is not there 
 A laptop has no deploy to trigger its sync, and it sleeps through slots, so under launchd
 `agent-files` runs every 15 minutes and at load. launchd runs a slot that was missed during
 sleep as soon as the machine wakes, which is usually before the network is up, so the sync
-retries a network failure for about a minute and a half before it gives up. The job runs as
-`CAIRN_AGENT=maintenance`, and that identity refuses to fall back to another runtime's key:
-give the machine a `CAIRN_API_KEY_MAINTENANCE`, or its reports are refused. The sync warns
-about a missing key on every run.
+retries a network failure for about a minute and a half before it gives up. It needs a
+maintenance key (below), and warns about a missing one on every run.
 
 Install only what that machine is for. A laptop beside a server usually wants
 `--only agent-files`: `reconcile` and `vitals` are about the instance rather than the
@@ -970,18 +984,22 @@ in this repository: `CAIRN_CLI_PATH`, `CAIRN_NODE_PATH`, `CAIRN_LOG_DIR`,
 machine rather than one host: on macOS the CLI is looked for in `~/.local/bin`, logs go to
 `~/Library/Logs`, and node is the one running the installer. `CAIRN_NOTIFY_VITALS` and
 `CAIRN_NOTIFY_FILES` name a task to report into; leave them unset and the jobs stay quiet. On
-a machine with several instances, write them `<instance>:<ref>` (vitals takes a comma list,
-one per instance).
+a machine with several instances, `reconcile` and `vitals` run once per instance
+(`--all-instances`) and exit non-zero if any run failed, and the targets name their
+instance: `CAIRN_NOTIFY_VITALS` is a comma list, one `<instance>:<ref>` per instance, and
+`CAIRN_NOTIFY_FILES` a single `<instance>:<ref>` — the sync warns about a bare ref, which
+exists on only one of them.
 
 Run the jobs under an identity of their own: `CAIRN_AGENT=maintenance` with a matching
-`CAIRN_API_KEY_MAINTENANCE` (in each instance's `env`, where there are several). On a machine
-whose `~/.cairn/env` holds per-runtime keys, the
-CLI refuses to send a maintenance write under the default key (exit 3), because that key
-belongs to some other agent and a scheduled job's warning is read by nobody.
+`CAIRN_API_KEY_MAINTENANCE` (in each instance's `env`, where there are several). Where the
+keys are split per runtime, the CLI refuses to send a maintenance write under the default
+key (exit 3), because that key belongs to some other agent and a scheduled job's warning is
+read by nobody.
 
 ### Keeping the copies honest
 
-The skill, the CLI and both hooks are read from a directory per runtime, so the same file
+The skill, the CLI, both hooks and the OpenClaw briefing are read from a directory per
+runtime, so the same file
 exists five or six times on a busy host. They drift silently. The two maintenance scripts
 are repaired too, including the one that installs the schedule: a repairer that cannot
 repair its own installer leaves exactly one file stale on a host where everything else
@@ -1103,16 +1121,16 @@ restarted, and restarting it would interrupt any job in flight.
   administrators alone manage users, roles, passwords and agent keys. PostgreSQL is
   reachable only from the private application network.
 
-**The data model**, in five groups: `projects` / `tasks` / `task_notes` / `task_comments`
-/ `task_attachments` / `task_deps` / `task_activity_events` for the tracker;
-`knowledge` + `knowledge_projects` + `knowledge_entities` for what we know; `sessions` and
-`file_touches` for what happened and where; `entities` + `project_entities` for the
-groupings that sit between one project and everything; and `search_events` +
-`knowledge_reads` for whether any of it is read back. Those last two are the only record of
-*recall* rather than volume: `search_events` keeps the query text, whether the search
-widened, and — since `returned_slugs` — which entries actually came back; `knowledge_reads`
-records every direct read by slug with a `hit` flag, and `false` is the row worth having,
-because it says the memory was asked for a named fact and did not have it.
+**The data model**, in six groups:
+
+| | |
+|---|---|
+| the tracker | `projects` (+ `project_repos`, `project_former_keys`), `tasks` (+ `task_projects` for extra projects), `task_notes`, `task_comments`, `task_attachments`, `task_deps`, `task_mentions`, `task_activity_events` |
+| what we know | `knowledge` + `knowledge_projects` / `knowledge_entities` / `knowledge_files`, and `knowledge_revisions` for every version it replaced |
+| what happened, and where | `sessions`, `file_touches` |
+| groupings | `entities` + `project_entities`, between one project and everything |
+| whether it is read back | `search_events` (the query, whether it widened, which entries came back), `knowledge_reads` (every read by slug, with a `hit` flag — `false` says a named fact was asked for and missing), and `knowledge_recall_state` derived from both |
+| who | `app_users`, `app_sessions`, `api_keys` |
 
 The migrations are the best description of it — each one is commented with *why*, not
 what. [`001_initial.sql`](./migrations/001_initial.sql) is the tracker;
@@ -1185,13 +1203,23 @@ Cairn is a personal tool, so every contribution from outside it is worth naming.
   and sent the fix ([#2](https://github.com/montytorr/cairn/issues/2),
   [#3](https://github.com/montytorr/cairn/pull/3)); that a key rename orphaned every task
   ref already written into commits and notes
-  ([#4](https://github.com/montytorr/cairn/issues/4)); and that `next dev` was quietly
+  ([#4](https://github.com/montytorr/cairn/issues/4)); that `next dev` was quietly
   eating the agent guide's byte budget
-  ([#1](https://github.com/montytorr/cairn/issues/1)).
+  ([#1](https://github.com/montytorr/cairn/issues/1)); and that the browser UI could not
+  write behind a TLS-terminating proxy, with the fix
+  ([#42](https://github.com/montytorr/cairn/issues/42),
+  [#43](https://github.com/montytorr/cairn/pull/43)).
+- **[@jgiffard](https://github.com/jgiffard)** — the shared multi-user workspace
+  ([#5](https://github.com/montytorr/cairn/pull/5)), a configurable backup role
+  ([#55](https://github.com/montytorr/cairn/pull/55)), Hermes Agent support
+  ([#61](https://github.com/montytorr/cairn/pull/61)), session checkpoints without closing
+  ([#67](https://github.com/montytorr/cairn/pull/67)), the project-scoped briefing
+  ([#68](https://github.com/montytorr/cairn/pull/68)), and the proposal that became
+  several instances on one machine.
 
 A report that leads to a fix is credited here the same way a patch is. Finding the problem
-is most of the work — all three of the above were invisible from the inside, because the
-machine that wrote the code had already been set up in a way that hid them.
+is most of the work — much of the above was invisible from the inside, because the machine
+that wrote the code had already been set up in a way that hid it.
 
 ## Licence
 
