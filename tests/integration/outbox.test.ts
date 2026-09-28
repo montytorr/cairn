@@ -343,6 +343,18 @@ describe('durable CLI outbox', () => {
     expect(existsSync(join(home, '.cairn', 'outbox.jsonl.replay.lock'))).toBe(false)
   })
 
+  it('recovers a legacy pid-token lease held by an unrelated live process', async () => {
+    await run(home, base, ['comment', 'CAIRN-163', 'recover legacy lease'])
+    const lock = join(home, '.cairn', 'outbox.jsonl.replay.lock')
+    await writeFile(lock, `${process.pid}-abandoned-owner`)
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'])
+    expect(replay.code).toBe(0)
+    expect(received).toHaveLength(1)
+    expect(existsSync(lock)).toBe(false)
+  })
+
   it('does not send a newer shard while an older worker is in flight and then fails transiently', async () => {
     const outboxDir = join(home, '.cairn')
     await mkdir(outboxDir, { recursive: true })

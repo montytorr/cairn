@@ -1230,6 +1230,19 @@ const processStartIdentity = (pid) => {
   return null
 }
 
+/** Legacy pid-token leases have no start identity. Reclaim only when the live
+ * PID is demonstrably not a Cairn CLI process; an unreadable command is unknown. */
+const isUnrelatedToCairn = (pid) => {
+  try {
+    const command = process.platform === 'linux'
+      ? readFileSync(`/proc/${pid}/cmdline`, 'utf8').replaceAll('\0', ' ')
+      : process.platform === 'darwin'
+        ? execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' })
+        : ''
+    return Boolean(command.trim()) && !/(?:^|[\s/])cairn(?:\.mjs)?(?:\s|$)/.test(command)
+  } catch { return false }
+}
+
 /** One worker drains the shared queue at a time, including its network sends. */
 const withReplayLock = async (run) => {
   mkdirSync(dirname(OUTBOX_PATH), { recursive: true })
@@ -1259,7 +1272,9 @@ const withReplayLock = async (run) => {
               // A live, unrelated process may have reused this PID. If its
               // start identity differs, the original lease owner is gone.
               const actualStart = processStartIdentity(pid)
-              dead = Boolean(lease.start && actualStart && lease.start !== actualStart)
+              dead = lease.start
+                ? Boolean(actualStart && lease.start !== actualStart)
+                : isUnrelatedToCairn(pid)
             } catch (checkError) { dead = checkError?.code === 'ESRCH' }
           } else {
             // A crash between exclusive creation and writing the owner leaves
@@ -1272,7 +1287,9 @@ const withReplayLock = async (run) => {
       }
     })
     if (handle === undefined) {
-      if (Date.now() >= deadline) throw new Error('timed out waiting for the outbox replay lock')
+      if (Date.now() >= deadline) throw new Error(
+        `timed out waiting for the outbox replay lock; inspect its PID owner before manually removing ${OUTBOX_REPLAY_LOCK_PATH}`,
+      )
       await sleep(20)
     }
   }
