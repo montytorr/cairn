@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -324,6 +325,22 @@ describe('durable CLI outbox', () => {
     expect(results.every((result) => result.code === 0)).toBe(true)
     expect(received).toHaveLength(12)
     expect(new Set(received.map((request) => request.id)).size).toBe(12)
+  })
+
+  it.each([
+    ['a reused live PID', () => process.pid],
+    ['a dead PID', () => 2147483647],
+  ])('recovers an abandoned replay lease with %s', async (_case, pid) => {
+    await run(home, base, ['comment', 'CAIRN-163', 'recover after PID reuse'])
+    await writeFile(join(home, '.cairn', 'outbox.jsonl.replay.lock'), JSON.stringify({
+      pid: pid(), start: 'previous-process-incarnation', token: 'abandoned',
+    }))
+    mode = 'success'
+
+    const replay = await run(home, base, ['replay'])
+    expect(replay.code).toBe(0)
+    expect(received).toHaveLength(1)
+    expect(existsSync(join(home, '.cairn', 'outbox.jsonl.replay.lock'))).toBe(false)
   })
 
   it('does not send a newer shard while an older worker is in flight and then fails transiently', async () => {

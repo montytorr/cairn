@@ -343,7 +343,10 @@ const resolveRoute = ({ config, dir, session, ref }) => {
   // With no owner and ask mode, preserve the normal routing question instead
   // of inventing a stale-cache error. A positive owner or default, however,
   // must not become a write target while another instance is unknown.
-  if (ref && hasStaleProjectKeys(instances) && (owners.length > 0 || (!bySession && unclassified.mode === 'default'))) {
+  // The configured default still handles an unclassified ref when no cache
+  // claims it. A positive owner is not trustworthy while another cache is
+  // unknown: the project may have moved to that instance.
+  if (ref && owners.length > 0 && hasStaleProjectKeys(instances)) {
     return {
       name: null,
       error: `cairn: project ownership data is stale; refresh it with an explicit --instance, then retry ${ref}`,
@@ -1210,11 +1213,28 @@ const withOutboxLock = async (run) => {
   }
 }
 
+/** PID alone is reusable; include the OS process incarnation in a replay lease. */
+const processStartIdentity = (pid) => {
+  try {
+    if (process.platform === 'linux') {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      const fields = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)
+      const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()
+      if (!boot || !/^\d+$/.test(fields[19] ?? '')) return null
+      return `${boot}:${fields[19]}` // /proc stat field 22: starttime
+    }
+    if (process.platform === 'darwin') {
+      return execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' }).trim() || null
+    }
+  } catch { /* inaccessible or no longer running */ }
+  return null
+}
+
 /** One worker drains the shared queue at a time, including its network sends. */
 const withReplayLock = async (run) => {
   mkdirSync(dirname(OUTBOX_PATH), { recursive: true })
   const deadline = Date.now() + Math.max(DEADLINE_MS * 2, 5_000)
-  const owner = `${process.pid}-${randomUUID()}`
+  const owner = JSON.stringify({ pid: process.pid, start: processStartIdentity(process.pid), token: randomUUID() })
   let handle
   while (handle === undefined) {
     // The short append lock serializes contenders recovering and replacing a
@@ -1229,10 +1249,18 @@ const withReplayLock = async (run) => {
         if (error?.code !== 'EEXIST') throw error
         try {
           const current = readFileSync(OUTBOX_REPLAY_LOCK_PATH, 'utf8')
-          const pid = Number(current.split('-')[0])
+          let lease
+          try { lease = JSON.parse(current) } catch { lease = { pid: Number(current.split('-')[0]) } }
+          const pid = lease.pid
           let dead = false
           if (Number.isSafeInteger(pid) && pid > 0) {
-            try { process.kill(pid, 0) } catch (checkError) { dead = checkError?.code === 'ESRCH' }
+            try {
+              process.kill(pid, 0)
+              // A live, unrelated process may have reused this PID. If its
+              // start identity differs, the original lease owner is gone.
+              const actualStart = processStartIdentity(pid)
+              dead = Boolean(lease.start && actualStart && lease.start !== actualStart)
+            } catch (checkError) { dead = checkError?.code === 'ESRCH' }
           } else {
             // A crash between exclusive creation and writing the owner leaves
             // an empty file. Never reclaim a freshly created one.
