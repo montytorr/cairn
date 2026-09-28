@@ -258,6 +258,7 @@ const instanceDir = (name) => join(CAIRN_DIR, 'instances', name)
  * a question and without asking a server that may not be the one it is for.
  */
 const PROJECT_KEYS_FILE = 'project-keys.json'
+const PROJECT_KEYS_TTL_MS = 6 * 60 * 60 * 1000
 const instancesWithKey = (key, instances) =>
   Object.keys(instances).filter((name) => {
     try {
@@ -266,6 +267,18 @@ const instancesWithKey = (key, instances) =>
       return false
     }
   })
+
+const hasStaleProjectKeys = (instances) => Object.keys(instances).some((name) => {
+  const path = join(instanceDir(name), PROJECT_KEYS_FILE)
+  try {
+    const cached = JSON.parse(readFileSync(path, 'utf8'))
+    const at = Date.parse(cached.at ?? '')
+    const age = Number.isFinite(at) ? Date.now() - at : Date.now() - statSync(path).mtimeMs
+    return age >= PROJECT_KEYS_TTL_MS
+  } catch {
+    return false
+  }
+})
 
 /** `session end --id` speaks for a session the hook is not running inside. */
 const routeSession = () => {
@@ -318,6 +331,18 @@ const resolveRoute = ({ config, dir, session, ref }) => {
       why: `${route.match === 'folder' ? 'folder ' : ''}route ${tilde(route.path)}`,
       ...(elsewhere ? { hint: `cairn: ${ref} is a project on ${owners[0]}, and this directory is routed to ${route.instance}; add --instance ${owners[0]} if it is meant for ${owners[0]}` } : {}),
     }
+  }
+  // A ref-shaped command must not fall through to a session/default when the
+  // ownership cache may have changed. An explicit --instance or saved route
+  // remains available, and the next request to that instance refreshes keys.
+  if (ref && hasStaleProjectKeys(instances)) {
+    return {
+      name: null,
+      error: `cairn: project ownership data is stale; refresh it with an explicit --instance, then retry ${ref}`,
+    }
+  }
+  if (owners.length > 1) {
+    return { name: null, error: `cairn: ${ref} is claimed by multiple Cairn instances (${owners.join(', ')}); use --instance <name>` }
   }
   if (owners.length === 1) return { name: owners[0], why: `${ref} is a project there` }
   const bySession = sessionRoute(session, instances)
@@ -484,9 +509,13 @@ const selectInstance = async () => {
   }
   // Help reads nothing and sends nothing; it should not wait on git to say so.
   if (JUST_HELP) return { undecided: 'cairn: no instance chosen' }
-  const ref = REF_ARG.exec(earlyPositional[1] ?? '')?.[1]
+  const refWord = EARLY_COMMAND === 'task' && earlyPositional[1] === 'delete'
+    ? earlyPositional[2]
+    : earlyPositional[1]
+  const ref = REF_ARG.exec(refWord ?? '')?.[1]
   const route = resolveRoute({ config: INSTANCES, dir: ROUTE_DIR, session: ROUTE_SESSION, ref })
   if (route.hint) process.stderr.write(`${route.hint}\n`)
+  if (route.error) return { undecided: route.error }
   if (route.name) return at(route.name, route.why)
   if (INTERACTIVE) {
     const picked = await askInTerminal(INSTANCES, route, ROUTE_SESSION)
@@ -1339,12 +1368,27 @@ const flushOutbox = async () => {
     rejected += 1
   }
 
-  for (const processingPath of claimed) {
+  // Use the enqueue timestamp rather than directory order or the shard mtime:
+  // a failed older shard is compacted back into the live outbox, changing mtime.
+  const queuedAt = (path) => {
+    try {
+      const first = readFileSync(path, 'utf8').split('\n').find(Boolean)
+      const at = first ? Date.parse(JSON.parse(first).t ?? '') : NaN
+      if (Number.isFinite(at)) return at
+    } catch { /* fall back to the shard's filesystem timestamp */ }
+    try { return statSync(path).mtimeMs } catch { return Infinity }
+  }
+  const orderedClaimed = [...claimed].sort((a, b) => {
+    return queuedAt(a) - queuedAt(b) || a.localeCompare(b)
+  })
+  let haltDrain = false
+  for (const processingPath of orderedClaimed) {
     let lines
     try {
       lines = readFileSync(processingPath, 'utf8').split('\n').filter(Boolean)
     } catch {
-      continue
+      haltDrain = true
+      break
     }
     const kept = []
     let index = 0
@@ -1356,6 +1400,7 @@ const flushOutbox = async () => {
       try {
         reject({ rejectedAt: new Date().toISOString(), reason: 'invalid JSON', raw: lines[index] })
       } catch {
+        haltDrain = true
         break
       }
       continue
@@ -1370,6 +1415,7 @@ const flushOutbox = async () => {
       try {
         reject({ rejectedAt: new Date().toISOString(), reason: `replay context mismatch: ${context}`, item })
       } catch {
+        haltDrain = true
         break
       }
       continue
@@ -1386,9 +1432,13 @@ const flushOutbox = async () => {
         body: item.body === undefined ? undefined : JSON.stringify(item.body),
       })
     } catch {
+      haltDrain = true
       break // still unreachable
     }
-    if (TRANSIENT.has(res.status)) break
+    if (TRANSIENT.has(res.status)) {
+      haltDrain = true
+      break
+    }
     let response = ''
     try {
       response = await res.text()
@@ -1407,6 +1457,7 @@ const flushOutbox = async () => {
       try {
         reject({ rejectedAt: new Date().toISOString(), status: res.status, response: response.slice(0, 2_000), item })
       } catch {
+        haltDrain = true
         break
       }
     }
@@ -1443,10 +1494,12 @@ const flushOutbox = async () => {
           renameSync(temp, OUTBOX_PATH)
         })
       } catch {
-        continue
+        haltDrain = true
+        break
       }
     }
     rmSync(processingPath, { force: true })
+    if (haltDrain) break
   }
 
   let left = 0
@@ -1472,7 +1525,6 @@ let mutated = false
  * after it has already answered; at most every six hours, or at once after a
  * project was created or rekeyed. A failure keeps the old list.
  */
-const PROJECT_KEYS_TTL_MS = 6 * 60 * 60 * 1000
 let refreshingKeys = false
 const refreshProjectKeys = async (force) => {
   if (!INSTANCE.name || refreshingKeys) return

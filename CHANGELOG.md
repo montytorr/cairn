@@ -17,6 +17,13 @@ out under **Breaking** with what to do about it.
   cannot be written, that refresh did not land, and the banner kept "No session recorded" long
   after the database said otherwise. It is now a per-process memo that re-reads before answering
   once it is a minute old.
+
+- **Nested task deletion routes to the owning instance** (CAIRN-305). `task delete <ref>` has
+  its ref after the subcommand, so it was not included in early routing and could hit the
+  configured default. The router now extracts it before making either the confirmation read or
+  delete request, refuses stale/ambiguous project ownership even when a default exists, and
+  drains oldest outbox shards first, stopping at the first transient failure.
+
 - **A stale session cookie no longer loops between `/` and `/login`.** After a password change,
   an expiry or a revoked session the browser still sends the cookie; the app layout found it
   invalid and redirected to `/login`, and the middleware — which only checks that a cookie is

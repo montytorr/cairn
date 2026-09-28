@@ -243,4 +243,5 @@ TSV by default (`#count`, a header, rows); `--json` to parse, `--pretty` for a h
 
 Requires `cairn` on PATH and a key per runtime (`~/.cairn/env`): the key is who wrote a thing.
 **Exit 10: several Cairn instances, none known here.** Ask the user which, run the `cairn
-route add …` it prints, retry. Never pick one yourself.
+route add …` it prints, retry. Never pick one yourself. Stale/ambiguous project keys exit 10;
+use `--instance` only when certain.

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const cli = join(process.cwd(), 'cli', 'cairn.mjs')
@@ -43,6 +44,8 @@ describe('durable CLI outbox', () => {
   let server: Server
   let base: string
   let mode: 'fail' | 'success' = 'fail'
+  let transientPath: string | null = null
+  const requestPaths: string[] = []
   const received: { id: string | undefined; body: string }[] = []
   const attempts: string[] = []
   const seen = new Map<string, number>()
@@ -51,13 +54,16 @@ describe('durable CLI outbox', () => {
     home = await mkdtemp(join(tmpdir(), 'cairn-outbox-'))
     received.length = 0
     attempts.length = 0
+    requestPaths.length = 0
+    transientPath = null
     seen.clear()
     mode = 'fail'
     server = createServer((req, res) => {
       let body = ''
       req.on('data', (chunk) => { body += chunk })
       req.on('end', () => {
-        if (mode === 'fail') {
+        requestPaths.push(req.url ?? '')
+        if (mode === 'fail' || req.url === transientPath) {
           res.writeHead(503, { 'content-type': 'application/json' })
           res.end(JSON.stringify({ success: false, error: 'offline' }))
           return
@@ -117,6 +123,41 @@ describe('durable CLI outbox', () => {
     expect(replay.stdout).toContain('sent 12, rejected 0, still queued 0')
     expect(received).toHaveLength(12)
     expect(new Set(received.map((request) => request.id)).size).toBe(12)
+  })
+
+  it('stops the whole drain at the oldest transient failure and leaves newer shards queued', async () => {
+    const outboxDir = join(home, '.cairn')
+    await mkdir(outboxDir, { recursive: true })
+    const key = 'crn_integration_key'
+    const makeItem = (id: string, queuedAt: string) => ({
+      id,
+      t: queuedAt,
+      method: 'POST',
+      path: `/api/v1/tasks/${id}`,
+      body: { id },
+      agent: 'integration-agent',
+      base,
+      keyId: createHash('sha256').update(key).digest('hex').slice(0, 24),
+    })
+    const older = join(outboxDir, 'outbox.jsonl.pending-older')
+    const newer = join(outboxDir, 'outbox.jsonl.pending-newer')
+    await writeFile(older, `${JSON.stringify(makeItem('older', '2026-09-28T08:00:00.000Z'))}\n`)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await writeFile(newer, `${JSON.stringify(makeItem('newer', '2026-09-28T08:01:00.000Z'))}\n`)
+    mode = 'success'
+    transientPath = '/api/v1/tasks/older'
+
+    const replay = await run(home, base, ['replay'], key)
+
+    expect(replay.code).toBe(0)
+    expect(requestPaths).toEqual(['/api/v1/tasks/older'])
+    expect(replay.stdout).toContain('still queued 2')
+
+    transientPath = null
+    const recovered = await run(home, base, ['replay'], key)
+    expect(recovered.code).toBe(0)
+    expect(requestPaths).toEqual(['/api/v1/tasks/older', '/api/v1/tasks/older', '/api/v1/tasks/newer'])
+    expect(recovered.stdout).toContain('still queued 0')
   })
 
   it('quarantines records when the runtime key identity changes', async () => {

@@ -27,6 +27,10 @@ const serve = (seen: Seen, projects: string[] = []) =>
           return
         }
         seen.push({ auth: req.headers.authorization, path: req.url, body })
+        if (req.method === 'GET' && req.url === '/api/v1/tasks/WORK-3') {
+          res.end(JSON.stringify({ success: true, data: { project: { key: 'WORK' }, number: 3, title: 'work item' } }))
+          return
+        }
         res.end(JSON.stringify({ success: true, data: { id: 1, results: [], count: 0 } }))
       })
     })
@@ -208,6 +212,37 @@ describe('routing a command to its instance', () => {
     const result = await run(home, ['note', 'SHARED-1', 'x'])
     expect(result.code).toBe(10)
     expect(where()).toEqual({ personal: 0, work: 0 })
+  })
+
+  it('refuses ambiguous project ownership even when a default is configured', async () => {
+    await configure({ unclassified: { mode: 'default', instance: 'personal' } })
+    for (const name of ['personal', 'work']) {
+      await writeFile(join(home, '.cairn', 'instances', name, 'project-keys.json'), JSON.stringify({ at: new Date().toISOString(), keys: ['SHARED'] }))
+    }
+    const result = await run(home, ['note', 'SHARED-1', 'x'])
+    expect(result.code).toBe(10)
+    expect(result.stderr).toContain('claimed by multiple Cairn instances')
+    expect(where()).toEqual({ personal: 0, work: 0 })
+  })
+
+  it('refuses stale project ownership instead of falling through to the default', async () => {
+    await configure({ unclassified: { mode: 'default', instance: 'personal' } })
+    await writeFile(join(home, '.cairn', 'instances', 'work', 'project-keys.json'), JSON.stringify({
+      at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), keys: ['WORK'],
+    }))
+    const result = await run(home, ['note', 'WORK-3', 'x'])
+    expect(result.code).toBe(10)
+    expect(result.stderr).toContain('project ownership data is stale')
+    expect(where()).toEqual({ personal: 0, work: 0 })
+  })
+
+  it('routes nested task delete by its ref before making either request', async () => {
+    await configure({ unclassified: { mode: 'default', instance: 'personal' } })
+    await learnKeys()
+    const result = await run(home, ['task', 'delete', 'WORK-3', '--confirm', 'WORK-3'])
+    expect(result.code).toBe(0)
+    expect(where()).toEqual({ personal: 0, work: 2 })
+    expect(seenB.map((item) => item.path)).toEqual(['/api/v1/tasks/WORK-3', '/api/v1/tasks/WORK-3?confirm=WORK-3'])
   })
 
   it('remembers a per-session answer for that session only', async () => {
