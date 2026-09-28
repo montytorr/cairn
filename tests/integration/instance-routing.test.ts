@@ -236,6 +236,22 @@ describe('routing a command to its instance', () => {
     expect(where()).toEqual({ personal: 0, work: 0 })
   })
 
+  it('refuses a former owner when another instance has no readable ownership cache', async () => {
+    await configure({ unclassified: { mode: 'default', instance: 'personal' } })
+    await writeFile(join(home, '.cairn', 'instances', 'personal', 'project-keys.json'), JSON.stringify({
+      at: new Date().toISOString(), keys: ['WORK'],
+    }))
+    for (const cache of [undefined, '{invalid json']) {
+      if (cache !== undefined) {
+        await writeFile(join(home, '.cairn', 'instances', 'work', 'project-keys.json'), cache)
+      }
+      const result = await run(home, ['note', 'WORK-3', 'x'])
+      expect(result.code).toBe(10)
+      expect(result.stderr).toContain('project ownership data is stale')
+      expect(where()).toEqual({ personal: 0, work: 0 })
+    }
+  })
+
   it('routes nested task delete by its ref before making either request', async () => {
     await configure({ unclassified: { mode: 'default', instance: 'personal' } })
     await learnKeys()

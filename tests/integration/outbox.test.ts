@@ -45,6 +45,9 @@ describe('durable CLI outbox', () => {
   let base: string
   let mode: 'fail' | 'success' = 'fail'
   let transientPath: string | null = null
+  let heldPath: string | null = null
+  let heldResponse: import('node:http').ServerResponse | null = null
+  let signalHeld: (() => void) | null = null
   const requestPaths: string[] = []
   const received: { id: string | undefined; body: string }[] = []
   const attempts: string[] = []
@@ -56,6 +59,9 @@ describe('durable CLI outbox', () => {
     attempts.length = 0
     requestPaths.length = 0
     transientPath = null
+    heldPath = null
+    heldResponse = null
+    signalHeld = null
     seen.clear()
     mode = 'fail'
     server = createServer((req, res) => {
@@ -63,6 +69,11 @@ describe('durable CLI outbox', () => {
       req.on('data', (chunk) => { body += chunk })
       req.on('end', () => {
         requestPaths.push(req.url ?? '')
+        if (req.url === heldPath && heldResponse === null) {
+          heldResponse = res
+          signalHeld?.()
+          return
+        }
         if (mode === 'fail' || req.url === transientPath) {
           res.writeHead(503, { 'content-type': 'application/json' })
           res.end(JSON.stringify({ success: false, error: 'offline' }))
@@ -313,6 +324,35 @@ describe('durable CLI outbox', () => {
     expect(results.every((result) => result.code === 0)).toBe(true)
     expect(received).toHaveLength(12)
     expect(new Set(received.map((request) => request.id)).size).toBe(12)
+  })
+
+  it('does not send a newer shard while an older worker is in flight and then fails transiently', async () => {
+    const outboxDir = join(home, '.cairn')
+    await mkdir(outboxDir, { recursive: true })
+    const makeItem = (id: string, t: string) => ({
+      id, t, method: 'POST', path: `/api/v1/tasks/${id}`, body: { id },
+      agent: 'integration-agent', base,
+      keyId: createHash('sha256').update('crn_integration_key').digest('hex').slice(0, 24),
+    })
+    await writeFile(join(outboxDir, 'outbox.jsonl.pending-older'),
+      `${JSON.stringify(makeItem('older', '2026-09-28T08:00:00.000Z'))}\n`)
+    mode = 'success'
+    transientPath = '/api/v1/tasks/older'
+    heldPath = transientPath
+    const held = new Promise<void>((resolve) => { signalHeld = resolve })
+    const workerA = run(home, base, ['replay'])
+    await held
+    await writeFile(join(outboxDir, 'outbox.jsonl.pending-newer'),
+      `${JSON.stringify(makeItem('newer', '2026-09-28T08:01:00.000Z'))}\n`)
+    const workerB = run(home, base, ['replay'])
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(requestPaths).toEqual(['/api/v1/tasks/older'])
+    heldResponse!.writeHead(503, { 'content-type': 'application/json' })
+    heldResponse!.end(JSON.stringify({ success: false, error: 'offline' }))
+    const results = await Promise.all([workerA, workerB])
+    expect(results.every((result) => result.code === 0)).toBe(true)
+    expect(requestPaths).toEqual(['/api/v1/tasks/older', '/api/v1/tasks/older'])
+    expect(requestPaths).not.toContain('/api/v1/tasks/newer')
   })
 
   it('reserves monotonic checkpoint sequences under concurrent offline writes', async () => {

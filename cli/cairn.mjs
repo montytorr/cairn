@@ -272,11 +272,14 @@ const hasStaleProjectKeys = (instances) => Object.keys(instances).some((name) =>
   const path = join(instanceDir(name), PROJECT_KEYS_FILE)
   try {
     const cached = JSON.parse(readFileSync(path, 'utf8'))
+    if (!Array.isArray(cached.keys)) return true
     const at = Date.parse(cached.at ?? '')
     const age = Number.isFinite(at) ? Date.now() - at : Date.now() - statSync(path).mtimeMs
     return age >= PROJECT_KEYS_TTL_MS
   } catch {
-    return false
+    // Missing or unreadable is unknown ownership, never evidence that this
+    // instance does not own a project key.
+    return true
   }
 })
 
@@ -335,7 +338,12 @@ const resolveRoute = ({ config, dir, session, ref }) => {
   // A ref-shaped command must not fall through to a session/default when the
   // ownership cache may have changed. An explicit --instance or saved route
   // remains available, and the next request to that instance refreshes keys.
-  if (ref && hasStaleProjectKeys(instances)) {
+  const bySession = sessionRoute(session, instances)
+  // A session answer is explicit user routing when no cache claims the ref.
+  // With no owner and ask mode, preserve the normal routing question instead
+  // of inventing a stale-cache error. A positive owner or default, however,
+  // must not become a write target while another instance is unknown.
+  if (ref && hasStaleProjectKeys(instances) && (owners.length > 0 || (!bySession && unclassified.mode === 'default'))) {
     return {
       name: null,
       error: `cairn: project ownership data is stale; refresh it with an explicit --instance, then retry ${ref}`,
@@ -345,7 +353,6 @@ const resolveRoute = ({ config, dir, session, ref }) => {
     return { name: null, error: `cairn: ${ref} is claimed by multiple Cairn instances (${owners.join(', ')}); use --instance <name>` }
   }
   if (owners.length === 1) return { name: owners[0], why: `${ref} is a project there` }
-  const bySession = sessionRoute(session, instances)
   if (bySession) return { name: bySession, why: 'chosen for this session' }
   if (unclassified.mode === 'default') return { name: unclassified.instance, why: 'default instance' }
   return { name: null, key, repo }
@@ -1161,6 +1168,7 @@ let FLUSHING = false
 const OUTBOX_PATH = join(STATE_DIR, 'outbox.jsonl')
 const REJECTED_OUTBOX_PATH = `${OUTBOX_PATH}.rejected`
 const OUTBOX_LOCK_PATH = `${OUTBOX_PATH}.lock`
+const OUTBOX_REPLAY_LOCK_PATH = `${OUTBOX_PATH}.replay.lock`
 const OUTBOX_PREFIX = 'outbox.jsonl.'
 const QUEUEABLE = /\/(notes|comments|beat|checkpoint)$/
 const KEY_ID = KEY ? createHash('sha256').update(KEY).digest('hex').slice(0, 24) : ''
@@ -1199,6 +1207,56 @@ const withOutboxLock = async (run) => {
   } finally {
     closeSync(handle)
     try { unlinkSync(OUTBOX_LOCK_PATH) } catch { /* stale recovery may already have removed it */ }
+  }
+}
+
+/** One worker drains the shared queue at a time, including its network sends. */
+const withReplayLock = async (run) => {
+  mkdirSync(dirname(OUTBOX_PATH), { recursive: true })
+  const deadline = Date.now() + Math.max(DEADLINE_MS * 2, 5_000)
+  const owner = `${process.pid}-${randomUUID()}`
+  let handle
+  while (handle === undefined) {
+    // The short append lock serializes contenders recovering and replacing a
+    // dead lease. It is released before any network request, so enqueues keep
+    // flowing while one worker drains.
+    handle = await withOutboxLock(() => {
+      try {
+        const opened = openSync(OUTBOX_REPLAY_LOCK_PATH, 'wx', 0o600)
+        try { writeFileSync(opened, owner) } catch (error) { closeSync(opened); throw error }
+        return opened
+      } catch (error) {
+        if (error?.code !== 'EEXIST') throw error
+        try {
+          const current = readFileSync(OUTBOX_REPLAY_LOCK_PATH, 'utf8')
+          const pid = Number(current.split('-')[0])
+          let dead = false
+          if (Number.isSafeInteger(pid) && pid > 0) {
+            try { process.kill(pid, 0) } catch (checkError) { dead = checkError?.code === 'ESRCH' }
+          } else {
+            // A crash between exclusive creation and writing the owner leaves
+            // an empty file. Never reclaim a freshly created one.
+            dead = Date.now() - statSync(OUTBOX_REPLAY_LOCK_PATH).mtimeMs > Math.max(DEADLINE_MS * 4, 60_000)
+          }
+          if (dead) unlinkSync(OUTBOX_REPLAY_LOCK_PATH)
+        } catch { /* another worker may have released the lease */ }
+        return undefined
+      }
+    })
+    if (handle === undefined) {
+      if (Date.now() >= deadline) throw new Error('timed out waiting for the outbox replay lock')
+      await sleep(20)
+    }
+  }
+  try {
+    return await run()
+  } finally {
+    closeSync(handle)
+    try {
+      await withOutboxLock(() => {
+        if (readFileSync(OUTBOX_REPLAY_LOCK_PATH, 'utf8') === owner) unlinkSync(OUTBOX_REPLAY_LOCK_PATH)
+      })
+    } catch { /* the lease was already recovered */ }
   }
 }
 
@@ -1310,7 +1368,7 @@ const hasReplayableOutbox = () => {
  * for the same reason it was written. A write the server actively rejects is
  * moved to a rejected sidecar with the response, never silently discarded.
  */
-const flushOutbox = async () => {
+const flushOutbox = async () => withReplayLock(async () => {
   requireKey()
   let sent = 0
   let rejected = 0
@@ -1508,7 +1566,7 @@ const flushOutbox = async () => {
     try { left += readFileSync(path, 'utf8').split('\n').filter(Boolean).length } catch { /* retry later */ }
   }
   return { sent, rejected, left, waiting }
-}
+})
 
 /**
  * Set by the first non-GET request. Read only by the ignored-flag report,
@@ -3823,7 +3881,8 @@ const commands = {
     const dir = join(CAIRN_DIR, 'instances', name)
     const legacy = ['env', 'projects.json', 'ownership'].filter((f) => existsSync(join(CAIRN_DIR, f)))
     const queued = existsSync(CAIRN_DIR) && readdirSync(CAIRN_DIR).some((f) =>
-      (f === 'outbox.jsonl' || f.startsWith(OUTBOX_PREFIX)) && f !== basename(OUTBOX_LOCK_PATH))
+      (f === 'outbox.jsonl' || f.startsWith(OUTBOX_PREFIX)) &&
+      f !== basename(OUTBOX_LOCK_PATH) && f !== basename(OUTBOX_REPLAY_LOCK_PATH))
     const moved = []
     if (flags.adopt && (legacy.length || queued)) {
       // The files at the top of ~/.cairn belong to the server they were used
@@ -3855,7 +3914,7 @@ const commands = {
       await withOutboxLock(() => {
         for (const file of readdirSync(CAIRN_DIR)) {
           if (file !== 'outbox.jsonl' && !file.startsWith(OUTBOX_PREFIX)) continue
-          if (file === basename(OUTBOX_LOCK_PATH)) continue
+          if (file === basename(OUTBOX_LOCK_PATH) || file === basename(OUTBOX_REPLAY_LOCK_PATH)) continue
           const from = join(CAIRN_DIR, file)
           const to = join(dir, file)
           if (existsSync(to)) {
