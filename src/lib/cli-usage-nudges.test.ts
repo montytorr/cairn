@@ -345,7 +345,7 @@ describe('the assignee (CAIRN-310)', () => {
     expect(seen.find((s) => s.method === 'PATCH')?.body?.assignee).toBe('me')
     expect(seen.some((s) => s.method === 'GET' && s.path.includes('assignee=me'))).toBe(true)
     const [, header, row] = stdout.trim().split('\n')
-    expect(header).toBe('ref\tstatus\ttype\tpriority\tassignee\theld\tanswered\ttitle')
+    expect(header).toBe('ref\tstatus\ttype\tpriority\tassignee\theld\tanswered\ttitle\turl')
     expect(row).toContain('Alice\tcodex · Bob')
   })
 

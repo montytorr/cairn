@@ -2581,6 +2581,17 @@ const named = (task) => {
   return { ...rest, assignee: assignee.name }
 }
 
+/** The task's page on the server the request went to; BASE is the chosen instance. */
+const taskUrl = (ref) => {
+  const m = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/.exec(ref ?? '')
+  return m ? `${BASE}/projects/${m[1].toUpperCase()}/tasks/${m[2]}` : null
+}
+
+const withUrl = (task) => {
+  const url = task && typeof task === 'object' ? taskUrl(task.ref) : null
+  return url ? { ...task, url } : task
+}
+
 /**
  * How far to trust a fact, in one word. `stale` is evidence: sessions reworked
  * the files it names. `unverified Nd` is only age, for a fact that names no
@@ -3165,7 +3176,8 @@ const commands = {
     for (const r of data.results ?? []) {
       if (r.renamedFrom) tellRename(r.requestedRef, r.renamedFrom, r.ref)
     }
-    emit(data, {
+    const shown = { ...data, results: (data.results ?? []).map((r) => ((r.kind ?? 'task') === 'task' ? withUrl(r) : r)) }
+    emit(shown, {
       rows: (d) =>
         d.results.map((r) => ({
           kind: r.kind ?? 'task',
@@ -3178,8 +3190,9 @@ const commands = {
           answered: r.resolved ? 'yes' : '',
           tokens: `~${r.tokens}`,
           title: truncate(r.title, 70),
+          url: r.url ?? '',
         })),
-      columns: ['kind', 'ref', 'status', 'type', 'answered', 'tokens', 'title'],
+      columns: ['kind', 'ref', 'status', 'type', 'answered', 'tokens', 'title', 'url'],
     })
     if (FORMAT !== 'tsv') return
 
@@ -3216,10 +3229,11 @@ const commands = {
     // the server of whichever instance answers.
     if (flags.assignee) params.set('assignee', flags.assignee)
     const data = await request('GET', `/api/v1/projects/${project}/tasks?${params}`)
-    emit(data, {
+    const listed = { ...data, tasks: data.tasks.map((t) => withUrl({ ...t, ref: t.ref ?? `${t.project?.key ?? project}-${t.number}` })) }
+    emit(listed, {
       rows: (d) =>
         d.tasks.map((t) => ({
-          ref: `${t.project?.key ?? project}-${t.number}`,
+          ref: t.ref,
           status: t.status,
           type: t.type,
           priority: t.priority,
@@ -3227,8 +3241,9 @@ const commands = {
           held: t.claimed_by ?? '',
           answered: t.resolution ? 'yes' : '',
           title: truncate(t.title, 70),
+          url: t.url ?? '',
         })),
-      columns: ['ref', 'status', 'type', 'priority', 'assignee', 'held', 'answered', 'title'],
+      columns: ['ref', 'status', 'type', 'priority', 'assignee', 'held', 'answered', 'title', 'url'],
     })
   },
 
@@ -3238,7 +3253,7 @@ const commands = {
     // clipped body, and a note of what was withheld. `--full` for everything.
     const suffix = flags.full ? '' : '?view=digest'
     const data = await request('GET', `/api/v1/tasks/${ref}${suffix}`)
-    emit(named(data))
+    emit(withUrl(named(data)))
     if (FORMAT === 'tsv' && data.omitted) {
       const { descriptionBytes, attemptsAndNotes, tokensToFetchFull } = data.omitted
       if (descriptionBytes || attemptsAndNotes) {
@@ -3377,7 +3392,7 @@ const commands = {
     if (flags.parent) body.parentRef = flags.parent
     // Omitted, the server assigns it to the human behind this key.
     if (flags.assignee) body.assignee = flags.assignee
-    const created = named(await request('POST', `/api/v1/projects/${project}/tasks`, body))
+    const created = withUrl(named(await request('POST', `/api/v1/projects/${project}/tasks`, body)))
 
     // File-and-work-it-now is the pattern that skips claiming: the agent that
     // files a task and finishes it in the same session never perceives a
@@ -4379,7 +4394,12 @@ const commands = {
     const project = flags.project ?? projectForDir(process.cwd())
     if (project) params.set('project', project)
     if (flags.assignee) params.set('assignee', flags.assignee)
-    const data = await request('GET', `/api/v1/next?${params}`)
+    const raw = await request('GET', `/api/v1/next?${params}`)
+    const data = {
+      ...raw,
+      ...(raw.pick ? { pick: withUrl(raw.pick) } : {}),
+      ...(raw.then ? { then: raw.then.map(withUrl) } : {}),
+    }
 
     if (FORMAT === 'json') return emit(data)
     if (!data.pick) {
@@ -4392,7 +4412,7 @@ const commands = {
 
     // The assignee rides on every line: an agent choosing from "then" should
     // not have to open a task to learn it is somebody else's.
-    const line = (t) => `${t.ref}  ${t.title}${t.assignee ? `  · ${t.assignee}` : ''}`
+    const line = (t) => `${t.ref}  ${t.title}${t.assignee ? `  · ${t.assignee}` : ''}${t.url ? `  ${t.url}` : ''}`
     process.stdout.write(
       `${line(data.pick)}\n  ${data.pick.reason}\n  ${data.pick.priority} · ${data.pick.status}` +
         `\n\n  cairn claim ${data.pick.ref}\n` +

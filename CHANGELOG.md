@@ -23,6 +23,9 @@ out under **Breaking** with what to do about it.
 - **`install-cron.mjs` carries the summariser settings into the OpenClaw sweep**:
   `CAIRN_SUMMARY_BACKEND`, `CAIRN_SUMMARY_MODEL`, `CAIRN_SUMMARY_CODEX_MODEL` and
   `CAIRN_SUMMARY_LANGUAGE`, when set. Before, the sweep could only use claude's default.
+- **Task web links in the CLI.** `show`, `add`, `list`, `next` and the task rows of `check`
+  carry a `url` (last column in TSV) pointing at the task's page on the instance that
+  answered, and the skill tells agents to cite tasks to the human as `[KEY-N](url)`.
 - **The account menu shows the running version, and a changelog page.** A "Changelog" row
   with the version opens `/changelog`, which renders this file as the instance shipped it:
   one section per release, the running one marked, and anything merged since the release

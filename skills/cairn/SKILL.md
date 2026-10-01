@@ -92,8 +92,8 @@ cairn run    ACME-42 "npm test" --status passed --exit-code 0
 They record; none executes anything. "I fixed it" cannot be checked; `run_result failed
 exit 1` can. Repeats dedupe, so retrying is safe. Name another task's ref in a
 `decision` or `finding` note when your work constrains it — it shows under that task's
-`mentionedIn`; the ref in prose is the link. `cairn comment` addresses the human, not the
-next agent.
+`mentionedIn`; there the bare ref is the link. To the human in chat, cite
+`[ACME-42](url)` with the `url` a command returned. `cairn comment` addresses the human.
 
 ## Filing, and the body
 
@@ -102,7 +102,6 @@ cairn add "title" --project ACME --type bug --body - --assignee bob@acme.io   # 
 ```
 
 `--type feature|bug|improvement|chore|spike|docs` · `--priority urgent|high|medium|low`.
-`add` lists similar existing work — read it before continuing.
 
 The title says which task; the body says what it is. **The server refuses a bug or spike
 whose body is under 40 characters**; `--force-empty` is for the rare title that is the
