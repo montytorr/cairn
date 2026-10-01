@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { GraphFlat } from './graph-flat'
 import { spotlightOptions, type Spotlight } from '@/lib/graph-spotlight'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
+import type { Grouping } from './graph-scene'
 
 /**
  * The map, and the choice of how to draw it.
@@ -46,6 +47,24 @@ const SEGMENT_OFF = 'text-fg-subtle hover:text-fg'
 type Mode = 'scene' | 'flat'
 
 const STORAGE = 'cairn:knowledge-map-mode'
+
+/**
+ * What the scene's named glows are drawn around, remembered per browser.
+ *
+ * By project unless somebody chose otherwise: an instance with one entity
+ * got one glow around the whole corpus (CAIRN-340). Read straight from
+ * storage — it only matters once the scene is drawn, which never happens
+ * during the server render or hydration, so the two cannot disagree.
+ */
+const GROUPING_STORAGE = 'cairn:knowledge-map-grouping'
+const readGrouping = (): Grouping => {
+  if (typeof window === 'undefined') return 'project'
+  try {
+    return window.localStorage.getItem(GROUPING_STORAGE) === 'entity' ? 'entity' : 'project'
+  } catch {
+    return 'project'
+  }
+}
 
 /**
  * Whether this browser can actually do it.
@@ -104,7 +123,26 @@ const noSubscribe = () => () => {}
 const onServer = (): { able: boolean; mode: Mode } => SERVER_STATE
 const SERVER_STATE: { able: boolean; mode: Mode } = { able: false, mode: 'flat' }
 
-export const GraphView = ({ graph }: Props) => {
+/**
+ * The same graph as last time, as the same object, until its content changes.
+ *
+ * LiveUpdates refreshes the page on every poll, and every refresh hands down
+ * a freshly built object with identical content. The scene is built in one
+ * effect keyed on it, so each poll tore the scene down and rebuilt it, and
+ * the camera replayed its arrival: the map zoomed out and back in every few
+ * seconds while nothing had changed. Compared by value, the render-time state
+ * pattern the boards use for their props.
+ */
+export const useStableGraph = (graph: Props['graph']) => {
+  // Once per refresh, not once per hover: the prop only changes on a poll.
+  const key = useMemo(() => JSON.stringify(graph), [graph])
+  const [kept, setKept] = useState({ key, graph })
+  if (kept.key !== key) setKept({ key, graph })
+  return kept.key === key ? kept.graph : graph
+}
+
+export const GraphView = ({ graph: incoming }: Props) => {
+  const graph = useStableGraph(incoming)
   const [focused, setFocused] = useState<string | null>(null)
   /** One project or one world, lit against everything else. */
   const [spotlight, setSpotlight] = useState<Spotlight>(null)
@@ -113,6 +151,24 @@ export const GraphView = ({ graph }: Props) => {
   /** What the toggle was last set to, which outranks the remembered answer. */
   const [chosen, setChosen] = useState<Mode | null>(null)
   const mode = able ? (chosen ?? preferred) : 'flat'
+
+  const [groupingChoice, setGroupingChoice] = useState<Grouping>(readGrouping)
+  // With fewer than two entities, grouping by entity is one glow or none, so
+  // the choice is not offered at all.
+  const entityCount = useMemo(
+    () => new Set(graph.nodes.map((n) => n.entity).filter(Boolean)).size,
+    [graph.nodes],
+  )
+  const canGroupByEntity = entityCount >= 2
+  const grouping: Grouping = canGroupByEntity ? groupingChoice : 'project'
+  const chooseGrouping = useCallback((next: Grouping) => {
+    setGroupingChoice(next)
+    try {
+      window.localStorage.setItem(GROUPING_STORAGE, next)
+    } catch {
+      // Remembering is a convenience, not a requirement.
+    }
+  }, [])
 
   const choose = useCallback((next: Mode) => {
     setChosen(next)
@@ -142,7 +198,13 @@ export const GraphView = ({ graph }: Props) => {
   return (
     <div className="relative h-full w-full overflow-hidden">
       {mode === 'scene' && able ? (
-        <GraphScene graph={graph} focused={focused} onHover={setFocused} spotlight={spotlight} />
+        <GraphScene
+          graph={graph}
+          focused={focused}
+          onHover={setFocused}
+          spotlight={spotlight}
+          grouping={grouping}
+        />
       ) : (
         <GraphFlat
           graph={graph}
@@ -253,31 +315,55 @@ export const GraphView = ({ graph }: Props) => {
           unavailable — a toggle to something that cannot be drawn is worse
           than no toggle. */}
       {able ? (
-        <div
-          role="group"
-          aria-label="How to draw the map"
-          className={cn(CHROME, 'absolute top-2 right-2 flex items-center gap-0.5 rounded-full p-0.5')}
-        >
-          <button
-            type="button"
-            aria-pressed={mode === 'scene'}
-            onClick={() => choose('scene')}
-            title="Spatial — drag to orbit"
-            className={cn(SEGMENT, mode === 'scene' ? SEGMENT_ON : SEGMENT_OFF)}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+          <div
+            role="group"
+            aria-label="How to draw the map"
+            className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
           >
-            <Box size={12} aria-hidden />
-            Spatial
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === 'flat'}
-            onClick={() => choose('flat')}
-            title="Flat — every entry visible at once"
-            className={cn(SEGMENT, mode === 'flat' ? SEGMENT_ON : SEGMENT_OFF)}
-          >
-            <MapIcon size={12} aria-hidden />
-            Flat
-          </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'scene'}
+              onClick={() => choose('scene')}
+              title="Spatial — drag to orbit"
+              className={cn(SEGMENT, mode === 'scene' ? SEGMENT_ON : SEGMENT_OFF)}
+            >
+              <Box size={12} aria-hidden />
+              Spatial
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'flat'}
+              onClick={() => choose('flat')}
+              title="Flat — every entry visible at once"
+              className={cn(SEGMENT, mode === 'flat' ? SEGMENT_ON : SEGMENT_OFF)}
+            >
+              <MapIcon size={12} aria-hidden />
+              Flat
+            </button>
+          </div>
+          {/* Only where it changes something: the glows are the scene's, and
+              with one entity there is nothing to choose between. */}
+          {mode === 'scene' && canGroupByEntity ? (
+            <div
+              role="group"
+              aria-label="What the glows group"
+              className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
+            >
+              {(['project', 'entity'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  aria-pressed={grouping === g}
+                  onClick={() => chooseGrouping(g)}
+                  title={g === 'project' ? 'A glow around each project' : 'A glow around each entity'}
+                  className={cn(SEGMENT, grouping === g ? SEGMENT_ON : SEGMENT_OFF)}
+                >
+                  {g === 'project' ? 'Projects' : 'Entities'}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -339,7 +425,11 @@ export const GraphView = ({ graph }: Props) => {
               </defs>
               <circle cx="13" cy="5" r="9" fill="url(#legend-world)" />
             </svg>
-            <dd>a named glow — one entity, the world a project belongs to</dd>
+            <dd>
+              {grouping === 'project'
+                ? 'a named glow — one project, where its entries settled'
+                : 'a named glow — one entity, the world a project belongs to'}
+            </dd>
           </div>
         ) : null}
       </dl>
