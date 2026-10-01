@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layout3D } from './graph-3d'
+import { groupsOf, layout3D } from './graph-3d'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 
 /**
@@ -334,5 +334,38 @@ describe('the map in three dimensions', () => {
 
     // A couple of stragglers out of twenty-six must not double the scale.
     expect(withStraggler.radius).toBeLessThan(tight.radius * 1.6)
+  })
+})
+
+describe('the named glows, grouped by project (CAIRN-340)', () => {
+  const withProjects = (): KnowledgeGraph => {
+    const g = graph()
+    const projectOf: Record<string, string | null> = { alpha: 'CAIRN', beta: 'CAIRN', gamma: 'TRIG', delta: null }
+    return { ...g, nodes: g.nodes.map((n) => ({ ...n, project: projectOf[n.slug] ?? null })) }
+  }
+
+  it('puts one glow at the centre of each project, over the layout positions', () => {
+    const g = withProjects()
+    const place = layout3D(g)
+    const [cairn] = groupsOf(place, g.nodes, (n) => n.project)
+    const a = place.at.get('alpha')
+    const b = place.at.get('beta')
+    expect(cairn?.key).toBe('CAIRN')
+    expect(cairn?.count).toBe(2)
+    expect(cairn?.x).toBeCloseTo(((a?.x ?? 0) + (b?.x ?? 0)) / 2)
+    expect(cairn?.z).toBeCloseTo(((a?.z ?? 0) + (b?.z ?? 0)) / 2)
+  })
+
+  it('gives a project of one entry no glow, and an entry with no project none either', () => {
+    const g = withProjects()
+    const keys = groupsOf(layout3D(g), g.nodes, (n) => n.project).map((w) => w.key)
+    expect(keys).toEqual(['CAIRN'])
+  })
+
+  it('leaves the positions alone: grouping changes where the light goes, nothing else', () => {
+    const g = withProjects()
+    const before = JSON.stringify([...layout3D(g).at])
+    groupsOf(layout3D(g), g.nodes, (n) => n.project)
+    expect(JSON.stringify([...layout3D(g).at])).toBe(before)
   })
 })

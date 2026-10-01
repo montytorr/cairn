@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { entityColor, projectColor } from '@/components/icons'
-import { layout3D } from '@/lib/graph-3d'
+import { groupsOf, layout3D } from '@/lib/graph-3d'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 
@@ -42,7 +42,11 @@ type Props = {
   focused: string | null
   /** One project or world lit against the rest, or null for all of it. */
   spotlight: Spotlight
+  /** What the named glows are drawn around: each project, or each entity. */
+  grouping: Grouping
 }
+
+export type Grouping = 'project' | 'entity'
 
 /** A radius that makes a hub look like one, in world units. */
 const radiusOf = (degree: number): number =>
@@ -189,7 +193,7 @@ const spriteMaterial = (map: THREE.Texture, additive: boolean, opacity: number) 
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   })
 
-export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
+export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Props) => {
   const host = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -212,6 +216,27 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
   }, [onHover])
 
   const place = useMemo(() => layout3D(graph), [graph])
+  /** The layout's own worlds are its entities; a project grouping is worked out over the same positions. */
+  const groups = useMemo(
+    () => (grouping === 'entity' ? place.worlds : groupsOf(place, graph.nodes, (n) => n.project)),
+    [grouping, place, graph.nodes],
+  )
+
+  /**
+   * Where the reader left the camera, kept across rebuilds of the scene.
+   *
+   * The scene is rebuilt when the corpus really changes — an agent writes an
+   * entry while you look — and a rebuild started from scratch: the camera
+   * went back out and replayed its arrival, so the map lurched every time the
+   * knowledge moved. Saved on teardown, restored on the next build, with the
+   * arrival skipped. Only a fresh mount (opening the page, switching from the
+   * flat map) arrives.
+   */
+  const kept = useRef<{
+    position: THREE.Vector3
+    target: THREE.Vector3
+    touched: boolean
+  } | null>(null)
 
   /** Who each entry touches, so looking at one can dim everything it does not. */
   const neighbours = useMemo(() => {
@@ -302,9 +327,11 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
     /** Off-axis, because straight-on hides the depth this view exists for. */
     const HOME = new THREE.Vector3(0.42, 0.34, 0.84).normalize().multiplyScalar(reach)
     camera.position.copy(TARGET).add(HOME)
+    const resumed = kept.current
+    if (resumed) camera.position.copy(resumed.position)
 
     const controls = new OrbitControls(camera, canvas)
-    controls.target.copy(TARGET)
+    controls.target.copy(resumed?.target ?? TARGET)
     controls.enableDamping = true
     const DAMPING = 0.075
     controls.dampingFactor = DAMPING
@@ -352,7 +379,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
     controls.zoomToCursor = true
 
     /** Set the moment the reader touches the controls, so nothing moves under them. */
-    let touched = false
+    let touched = resumed?.touched ?? false
     controls.addEventListener('start', () => {
       touched = true
     })
@@ -486,7 +513,9 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
      * depend on iteration order.
      */
     const worldHue = new Map<string, string>()
-    for (const w of place.worlds) {
+    // A project's glow is simply the project's own colour.
+    if (grouping === 'project') for (const g of groups) worldHue.set(g.key, projectColor(g.key))
+    for (const w of grouping === 'entity' ? groups : []) {
       const tally = new Map<string, number>()
       for (const n of linked) {
         if (n.entity !== w.key || !n.project) continue
@@ -500,10 +529,10 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
 
     const haze = softDot(0.95)
     const worldGeometry = new THREE.BufferGeometry()
-    const worldPos = new Float32Array(place.worlds.length * 3)
-    const worldCol = new Float32Array(place.worlds.length * 3)
-    const worldSize = new Float32Array(place.worlds.length)
-    place.worlds.forEach((w, i) => {
+    const worldPos = new Float32Array(groups.length * 3)
+    const worldCol = new Float32Array(groups.length * 3)
+    const worldSize = new Float32Array(groups.length)
+    groups.forEach((w, i) => {
       worldPos.set([w.x, w.y, w.z], i * 3)
       const c = new THREE.Color(worldHue.get(w.key) ?? entityColor(w.key))
       worldCol.set([c.r, c.g, c.b], i * 3)
@@ -971,7 +1000,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
      * coloured regions are a mood rather than a fact.
      */
     const drawWorlds = (w: number, h: number) => {
-      place.worlds.forEach((world, i) => {
+      groups.forEach((world, i) => {
         projected.set(world.x, world.y, world.z).project(camera)
         let span = worldPool[i]
         if (!span) {
@@ -995,7 +1024,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
         const spot = spotRef.current
         const dimmed =
           Boolean(focusedRef.current) ||
-          Boolean(spot && !(spot.kind === 'entity' && spot.key === world.key))
+          Boolean(spot && !(spot.kind === grouping && spot.key === world.key))
         span.style.opacity = dimmed ? '0.25' : '0.72'
         span.style.transform = `translate3d(${Math.round((projected.x * 0.5 + 0.5) * w)}px, ${Math.round((-projected.y * 0.5 + 0.5) * h)}px, 0) translate(-50%, -50%)`
         span.style.display = ''
@@ -1121,7 +1150,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
      * tells the reader the thing has depth before they touch it, and it is
      * skipped entirely under prefers-reduced-motion.
      */
-    const INTRO = motion.matches ? 0 : 1400
+    const INTRO = motion.matches || resumed ? 0 : 1400
 
     const tick = () => {
       if (!alive) return
@@ -1232,6 +1261,11 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
     tick()
 
     return () => {
+      kept.current = {
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+        touched,
+      }
       alive = false
       cancelAnimationFrame(raf)
       observer.disconnect()
@@ -1261,7 +1295,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight }: Props) => {
       renderer.dispose()
       canvas.remove()
     }
-  }, [graph, place, neighbours, open])
+  }, [graph, place, groups, grouping, neighbours, open])
 
   return (
     <div className="absolute inset-0">

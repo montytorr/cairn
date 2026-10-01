@@ -394,3 +394,39 @@ export const layout3D = (graph: KnowledgeGraph): Layout3D => {
 
   return { at, radius, shell, worlds }
 }
+
+/**
+ * The named glows, for any way of grouping the entries.
+ *
+ * The scene drew one per entity, and an instance with one entity — Dispofi,
+ * where it covers 25 of 33 projects — got a single glow around everything,
+ * which says nothing (CAIRN-340). Grouped by project, each project's entries
+ * get their own. Positions are the layout's, untouched: only where the light
+ * goes changes. A group of one is not a region, so it gets no glow.
+ */
+export const groupsOf = (
+  place: Layout3D,
+  nodes: KnowledgeGraph['nodes'],
+  keyOf: (node: KnowledgeGraph['nodes'][number]) => string | null,
+  minimum = 2,
+): Layout3D['worlds'] => {
+  const members = new Map<string, { x: number; y: number; z: number }[]>()
+  for (const node of nodes) {
+    const key = keyOf(node)
+    const p = place.at.get(node.slug)
+    if (!key || !p) continue
+    const list = members.get(key) ?? []
+    list.push(p)
+    members.set(key, list)
+  }
+  return [...members.entries()]
+    .filter(([, ps]) => ps.length >= minimum)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, ps]) => {
+      const cx = ps.reduce((s, p) => s + p.x, 0) / ps.length
+      const cy = ps.reduce((s, p) => s + p.y, 0) / ps.length
+      const cz = ps.reduce((s, p) => s + p.z, 0) / ps.length
+      const d = ps.reduce((s, p) => s + Math.hypot(p.x - cx, p.y - cy, p.z - cz), 0) / ps.length
+      return { key, x: cx, y: cy, z: cz, spread: Math.max(SPREAD * 0.2, d), count: ps.length }
+    })
+}
