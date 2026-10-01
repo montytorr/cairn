@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-01
+
 ### Added
 
 - **Sub-tasks and dependencies show in the task lists and on the boards** (CAIRN-341). Both
@@ -1735,7 +1737,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/montytorr/cairn/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/montytorr/cairn/compare/v0.14.4...v0.15.0
 [0.14.4]: https://github.com/montytorr/cairn/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/montytorr/cairn/compare/v0.14.2...v0.14.3
