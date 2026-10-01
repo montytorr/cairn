@@ -2,6 +2,7 @@ import { admin } from '@/lib/db/client'
 import { byTitle } from '@/lib/utils'
 import { sessionUser } from '@/lib/auth/session'
 import { withAssignee, withAssignees, type Person } from '@/lib/api/people'
+import { withHierarchy, type Hierarchy } from '@/lib/task-hierarchy'
 import type { TaskPriority, TaskStatus, TaskType } from '@/schemas/task'
 
 export type Task = {
@@ -129,7 +130,7 @@ export const listFormerKeyRecords = async (): Promise<FormerKeyRecord[]> => {
  * task detail page, where it is actually shown.
  */
 const LIST_COLUMNS =
-  'id, number, title, type, status, priority, labels, due_date, position, ' +
+  'id, number, title, type, status, priority, labels, due_date, position, parent_id, ' +
   'assignee_user_id, claimed_by, heartbeat_at, blocked_reason, external_ref, updated_at, ' +
   'resolution_kind, has_resolution, checkpoint_summary, preview:description'
 
@@ -137,8 +138,8 @@ export type TaskListItem = Pick<
   Task,
   | 'id' | 'number' | 'title' | 'type' | 'status' | 'priority' | 'labels'
   | 'due_date' | 'position' | 'assignee_user_id' | 'assignee' | 'claimed_by'
-  | 'heartbeat_at' | 'blocked_reason' | 'updated_at'
-> & {
+  | 'heartbeat_at' | 'blocked_reason' | 'updated_at' | 'parent_id'
+> & Partial<Hierarchy> & {
   preview: string | null
   external_ref: string | null
   resolution_kind: string | null
@@ -259,8 +260,8 @@ export const listTasks = async (
   }))
 
   const [tasks, recentlyClosed] = await Promise.all([
-    withAssignees([...owned, ...guests]),
-    withAssignees((((closedRows as { data?: unknown }).data ?? []) as RawListItem[]).map(clip)),
+    withAssignees([...owned, ...guests]).then(withHierarchy),
+    withAssignees((((closedRows as { data?: unknown }).data ?? []) as RawListItem[]).map(clip)).then(withHierarchy),
   ])
 
   return {
@@ -504,7 +505,7 @@ export const listAllTasks = async (
   // Named in one query across both lists. Without it every row on the home
   // page drew its assignee as "?": the id came back, the person never did.
   const recent = (((closedRows as { data?: unknown }).data ?? []) as Row[]).map(withKey)
-  const named = await withAssignees([...tasks, ...recent])
+  const named = await withHierarchy(await withAssignees([...tasks, ...recent]))
 
   return {
     tasks: named.slice(0, tasks.length),

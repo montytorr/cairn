@@ -37,6 +37,7 @@ const task = (overrides: Partial<BoardTask> = {}): BoardTask => ({
   checkpoint_summary: null,
   project_key: 'CAI',
   project_keys: ['CAI'],
+  parent_id: null,
   ...overrides,
 })
 

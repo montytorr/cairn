@@ -1,6 +1,7 @@
 import { admin } from '@/lib/db/client'
 import { byTitle } from '@/lib/utils'
 import { withAssignees, type Person } from '@/lib/api/people'
+import { withHierarchy, type Hierarchy } from '@/lib/task-hierarchy'
 import type { TaskPriority, TaskStatus, TaskType } from '@/schemas/task'
 
 /**
@@ -43,12 +44,13 @@ export type BoardTask = {
    * happens to own the ref.
    */
   project_keys: string[]
-}
+  parent_id: string | null
+} & Partial<Hierarchy>
 
 export type BoardProject = { id: string; key: string; title: string }
 
 const BOARD_COLUMNS =
-  'id, number, title, type, status, priority, labels, due_date, position, ' +
+  'id, number, title, type, status, priority, labels, due_date, position, parent_id, ' +
   'assignee_user_id, claimed_by, heartbeat_at, blocked_reason, external_ref, updated_at, ' +
   'resolution_kind, has_resolution, checkpoint_summary, preview:description'
 
@@ -111,7 +113,7 @@ export const listBoardTasks = async (
         project_keys: [home, ...(guestKeys.get(t.id) ?? [])].filter(Boolean),
       }
     }),
-  )
+  ).then(withHierarchy)
 
   return {
     tasks,

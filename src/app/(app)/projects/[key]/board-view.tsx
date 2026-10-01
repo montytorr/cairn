@@ -15,6 +15,7 @@ import { useMutate } from '@/lib/api/use-mutate'
 import { cn } from '@/lib/utils'
 import { TASK_STATUSES, isTerminal, type ResolutionKind, type TaskStatus } from '@/schemas/task'
 import type { TaskListItem } from '@/lib/data'
+import { TaskRelations } from '@/components/task-relations'
 
 const COLUMN_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
@@ -84,6 +85,14 @@ export const Card = ({
       >
         {task.title}
       </Link>
+
+      {/* Whose child, how far its children have got, what it waits on. Kept
+          off the card's own click, like the ref and the title. */}
+      {task.parent_ref || task.children || task.waiting_on?.length ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1" onClick={(e) => e.stopPropagation()}>
+          <TaskRelations task={task} />
+        </div>
+      ) : null}
 
       {task.preview ? (
         <div className="mt-1.5">

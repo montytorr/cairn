@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Clock, Plus } from 'lucide-react'
+import { ChevronRight, Clock, Plus } from 'lucide-react'
+import { TaskRelations } from '@/components/task-relations'
+import { nestTasks } from '@/lib/nest-tasks'
 import { Avatar, LabelPill, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '@/components/empty-state'
@@ -145,6 +147,10 @@ const Row = ({
   onToggle,
   knownLabels,
   projects,
+  depth = 0,
+  nested = 0,
+  childrenHidden = false,
+  onToggleChildren,
 }: {
   task: TaskListItem & { project_key?: string; guest?: boolean }
   projectKey: string
@@ -154,6 +160,12 @@ const Row = ({
   onToggle: (id: string, shiftKey: boolean) => void
   knownLabels: string[]
   projects: { key: string; title: string }[]
+  /** How far under a parent shown above it this row is drawn. */
+  depth?: number
+  /** Sub-tasks of this row present in the same group. */
+  nested?: number
+  childrenHidden?: boolean
+  onToggleChildren?: (id: string) => void
 }) => {
   const stale = useRenderedClaimStale(task.heartbeat_at)
   const { people } = usePeople()
@@ -268,6 +280,11 @@ const Row = ({
       </button>
 
       <div className="pointer-events-none flex h-[2.25rem] min-w-0 flex-1 items-center gap-2 pl-1.5 pr-3 md:pr-4">
+        {/* A sub-task drawn under its parent is indented, capped so a deep
+            chain cannot push the title off a phone. */}
+        {depth > 0 ? (
+          <span aria-hidden className="shrink-0" style={{ width: `${Math.min(depth, 3) * 1.125}rem` }} />
+        ) : null}
         <QuickSelect
           value={priority}
           options={TASK_PRIORITIES}
@@ -317,7 +334,29 @@ const Row = ({
 
         {/* The brightest thing on the row: everything around it is a grey or
             a tint, so the eye lands on the title and reads across. */}
+        {nested > 0 ? (
+          <button
+            type="button"
+            onClick={() => onToggleChildren?.(task.id)}
+            aria-expanded={!childrenHidden}
+            aria-label={`${childrenHidden ? 'Show' : 'Hide'} ${nested} sub-task${nested === 1 ? '' : 's'}`}
+            title={`${childrenHidden ? 'Show' : 'Hide'} ${nested} sub-task${nested === 1 ? '' : 's'}`}
+            className="text-fg-subtle hover:text-fg pointer-events-auto relative z-10 -mx-0.5 grid size-[1.125rem] shrink-0 place-items-center rounded transition-colors"
+          >
+            <ChevronRight
+              size={12}
+              className={cn('transition-transform duration-[var(--dur-1)]', !childrenHidden && 'rotate-90')}
+              aria-hidden
+            />
+          </button>
+        ) : null}
         <span className="text-fg min-w-0 flex-1 truncate text-[0.8125rem]">{task.title}</span>
+
+        {/* Whose child, how far its own children have got, what it waits on.
+            The parent is not repeated on a row drawn directly under it. */}
+        <span className="hidden shrink-0 items-center gap-2 sm:flex">
+          <TaskRelations task={task} showParent={depth === 0} />
+        </span>
 
         {/* Filed in another project and linked here. Without saying so, a row
             reading CAIRN-83 in the HM list reads as a bug rather than as work
@@ -480,6 +519,15 @@ export const ListView = ({
   const [tab, setTab] = useState<Tab>('doing')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  /** Parents whose sub-tasks are folded away; open by default. */
+  const [folded, setFolded] = useState<Set<string>>(new Set())
+  const toggleFolded = (id: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [knownLabels, setKnownLabels] = useState<string[]>([])
 
@@ -583,8 +631,21 @@ export const ListView = ({
     )
   }, [filtered, source, tab])
 
+  // Children under their parents within each group, except where the order
+  // is the point: Recent is by time, and a finished child belongs where it
+  // finished.
+  const flat = tab === 'recent' || tab === 'closed'
+  const rows = useMemo(
+    () =>
+      groups.map((g) => ({
+        ...g,
+        rows: flat ? g.items.map((task) => ({ task, depth: 0, nested: 0 })) : nestTasks(g.items, folded),
+      })),
+    [groups, flat, folded],
+  )
+
   // The rows in display order, which is what a shift-click range means.
-  const ordered = useMemo(() => groups.flatMap((g) => g.items.map((t) => t.id)), [groups])
+  const ordered = useMemo(() => rows.flatMap((g) => g.rows.map((r) => r.task.id)), [rows])
 
   const onToggle = (id: string, shiftKey: boolean) => {
     // Read the anchor BEFORE moving it. A state updater runs when React
@@ -717,7 +778,7 @@ export const ListView = ({
           <EmptyState title="Nothing here." />
         ))}
 
-      {groups.map((group) => {
+      {rows.map((group) => {
         const isCollapsed = collapsed.has(group.status)
         return (
           <section key={group.status}>
@@ -767,7 +828,7 @@ export const ListView = ({
 
             {!isCollapsed && (
               <ul className={cn('divide-border divide-y', STAGGER)}>
-                {group.items.map((task) => (
+                {group.rows.map(({ task, depth, nested }) => (
                   <li key={task.id}>
                     <Row
                       task={task}
@@ -778,6 +839,10 @@ export const ListView = ({
                       onToggle={onToggle}
                       knownLabels={knownLabels}
                       projects={projects}
+                      depth={depth}
+                      nested={nested}
+                      childrenHidden={folded.has(task.id)}
+                      onToggleChildren={toggleFolded}
                     />
                   </li>
                 ))}
