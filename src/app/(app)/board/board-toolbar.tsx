@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Select } from '@/components/ui/control'
-import { EmptyState } from '@/components/empty-state'
-import { cn } from '@/lib/utils'
+import { FilterMenu } from '@/components/filter-menu'
+import { usePeople } from '@/components/people-context'
 import { TASK_PRIORITIES, TASK_TYPES } from '@/schemas/task'
 import {
   GROUP_BY_VALUES,
@@ -33,94 +33,6 @@ const SWIMLANE_LABEL: Record<Swimlane, string> = {
   assignee: 'Assignee',
 }
 
-/**
- * A multi-select popover. The same outside-click/Escape pattern as
- * `label-editor.tsx` and `bulk-bar.tsx`'s `Action` menu — one look for every
- * menu in the app.
- */
-const FilterMenu = ({
-  label,
-  options,
-  selected,
-  onChange,
-}: {
-  label: string
-  options: { value: string; label: string }[]
-  selected: string[]
-  onChange: (next: string[]) => void
-}) => {
-  const [open, setOpen] = useState(false)
-  const wrap = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const toggle = (value: string) =>
-    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value])
-
-  return (
-    <div ref={wrap} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={`Filter by ${label}`}
-        className={cn(
-          'flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[0.75rem]',
-          'transition-[color,background-color,border-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
-          selected.length > 0
-            ? 'border-accent/70 text-accent bg-accent-subtle'
-            : 'border-border text-fg-muted hover:bg-surface-hover hover:text-fg hover:border-border-strong',
-        )}
-      >
-        {label}
-        {selected.length > 0 && <span className="tabular">{selected.length}</span>}
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="border-border bg-surface pop absolute top-[2rem] left-0 z-50 max-h-[15rem] w-[12.5rem] overflow-y-auto rounded-lg border py-1 raised"
-          style={{ '--origin': 'top left' } as React.CSSProperties}
-        >
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={selected.includes(o.value)}
-              onClick={() => toggle(o.value)}
-              className="hover:bg-surface-hover flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)]"
-            >
-              <input
-                type="checkbox"
-                readOnly
-                tabIndex={-1}
-                checked={selected.includes(o.value)}
-                className="accent-accent size-[0.75rem]"
-              />
-              <span className="text-fg-muted min-w-0 truncate text-[0.75rem]">{o.label}</span>
-            </button>
-          ))}
-          {options.length === 0 && <EmptyState compact title="Nothing to filter by yet." />}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export const BoardToolbar = ({
   filters,
   onChange,
@@ -135,6 +47,7 @@ export const BoardToolbar = ({
   assigneeOptions: { value: string; label: string }[]
 }) => {
   const [knownLabels, setKnownLabels] = useState<string[]>([])
+  const { currentUserId } = usePeople()
 
   // Same one-shot fetch list-view.tsx uses: offering labels already in use is
   // what keeps the filter useful instead of a blank text box.
@@ -219,11 +132,20 @@ export const BoardToolbar = ({
         selected={filters.agents}
         onChange={(v) => onChange({ ...filters, agents: v })}
       />
+      {/* Mine by default, like the task lists; empty is "Everyone", a choice. */}
       <FilterMenu
         label="Assignee"
+        summary={
+          filters.assignees.length === 0
+            ? 'Everyone'
+            : filters.assignees.length === 1 && filters.assignees[0] === currentUserId
+              ? 'Mine'
+              : undefined
+        }
         options={assigneeOptions}
         selected={filters.assignees}
         onChange={(v) => onChange({ ...filters, assignees: v })}
+        reset="Everyone"
       />
     </div>
   )

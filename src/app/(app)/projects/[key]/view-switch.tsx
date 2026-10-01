@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Columns3, List } from 'lucide-react'
 import { BoardView } from './board-view'
 import { ListView, PILL_CLASS, useSlidingPill } from './list-view'
 import { cn } from '@/lib/utils'
+import { AssigneeFilter, useAssigneeFilter } from '@/components/assignee-filter'
+import { matchesAssignees } from '@/lib/assignee-filter'
 import type { TaskListItem } from '@/lib/data'
 import { viewCookieName, type ProjectView } from '@/lib/project-view'
 
@@ -79,13 +81,22 @@ export const ViewSwitch = ({
   recentlyClosed,
   projectKey,
   initialView,
+  initialAssignee,
 }: {
   tasks: TaskListItem[]
   recentlyClosed: TaskListItem[]
   projectKey: string
   /** From the view cookie; null when this viewer never picked one here. */
   initialView: ProjectView | null
+  initialAssignee?: string | null
 }) => {
+  // One choice for both views: switching to the board should not quietly go
+  // back to showing somebody else's work.
+  const assignees = useAssigneeFilter(initialAssignee)
+  const boardTasks = useMemo(
+    () => tasks.filter((t) => matchesAssignees(t, assignees.selected)),
+    [tasks, assignees.selected],
+  )
   const [view, setView] = useState<ProjectView>(initialView ?? 'list')
   const [from, setFrom] = useState<ProjectView | null>(null)
 
@@ -122,9 +133,13 @@ export const ViewSwitch = ({
   // document and scrolls as one.
   return view === 'board' ? (
     <div className="flex h-full flex-col">
-      <div className="border-border flex shrink-0 items-center gap-1 border-b px-3 py-2">{toggle}</div>
+      <div className="border-border flex shrink-0 items-center gap-1.5 border-b px-3 py-2">
+        {toggle}
+        <span className="bg-border mx-0.5 h-[1rem] w-px shrink-0" aria-hidden />
+        <AssigneeFilter filter={assignees} tasks={tasks} />
+      </div>
       <div className="min-h-0 flex-1">
-        <BoardView tasks={tasks} projectKey={projectKey} />
+        <BoardView tasks={boardTasks} projectKey={projectKey} />
       </div>
     </div>
   ) : (
@@ -134,6 +149,7 @@ export const ViewSwitch = ({
         recentlyClosed={recentlyClosed}
         projectKey={projectKey}
         toolbarExtra={toggle}
+        assigneeFilter={assignees}
       />
     </div>
   )

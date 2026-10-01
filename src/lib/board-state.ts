@@ -7,6 +7,7 @@ import {
   type TaskType,
 } from '@/schemas/task'
 import type { BoardProject, BoardTask } from '@/lib/board-data'
+import { ASSIGNEE_PARAM, parseAssignees, serializeAssignees } from '@/lib/assignee-filter'
 
 /**
  * Pure grouping, filtering and URL-encoding logic for `/board` (CAIRN-72).
@@ -65,7 +66,12 @@ const listParam = (params: URLSearchParams, key: string): string[] => {
 /** Reads the shareable-link query string into board state. Anything absent
  * or unrecognised falls back to the default rather than throwing — a stale
  * or hand-edited link should degrade gracefully, not break the page. */
-export const parseFilters = (search: string): BoardFilters => {
+/**
+ * `me` is the viewer: with it, no `assignee` param means their own tasks, as
+ * on every task list (CAIRN-339). Without it — the tests, a caller that does
+ * not know who is looking — the param reads as it always has.
+ */
+export const parseFilters = (search: string, me = ''): BoardFilters => {
   const params = new URLSearchParams(search)
   const groupBy = params.get('groupBy') ?? ''
   const swimlane = params.get('swimlane') ?? ''
@@ -77,13 +83,13 @@ export const parseFilters = (search: string): BoardFilters => {
     priorities: listParam(params, 'priority'),
     labels: listParam(params, 'label'),
     agents: listParam(params, 'agent'),
-    assignees: listParam(params, 'assignee'),
+    assignees: me ? parseAssignees(params.get(ASSIGNEE_PARAM), me) : listParam(params, 'assignee'),
   }
 }
 
 /** The inverse of `parseFilters`, omitting anything at its default so a plain
  * `/board` link stays plain. */
-export const serializeFilters = (filters: BoardFilters): string => {
+export const serializeFilters = (filters: BoardFilters, me = ''): string => {
   const params = new URLSearchParams()
   if (filters.groupBy !== DEFAULT_FILTERS.groupBy) params.set('groupBy', filters.groupBy)
   if (filters.swimlane !== DEFAULT_FILTERS.swimlane) params.set('swimlane', filters.swimlane)
@@ -92,7 +98,10 @@ export const serializeFilters = (filters: BoardFilters): string => {
   if (filters.priorities.length > 0) params.set('priority', filters.priorities.join(','))
   if (filters.labels.length > 0) params.set('label', filters.labels.join(','))
   if (filters.agents.length > 0) params.set('agent', filters.agents.join(','))
-  if (filters.assignees.length > 0) params.set('assignee', filters.assignees.join(','))
+  if (me) {
+    const assignee = serializeAssignees(filters.assignees, me)
+    if (assignee !== null) params.set(ASSIGNEE_PARAM, assignee)
+  } else if (filters.assignees.length > 0) params.set('assignee', filters.assignees.join(','))
   return params.toString()
 }
 
@@ -103,9 +112,9 @@ export const serializeFilters = (filters: BoardFilters): string => {
  * client-side filter — so it is read out of the CURRENT query string and
  * carried over rather than dropped.
  */
-export const buildBoardUrl = (pathname: string, filters: BoardFilters, currentSearch: string): string => {
+export const buildBoardUrl = (pathname: string, filters: BoardFilters, currentSearch: string, me = ''): string => {
   const current = new URLSearchParams(currentSearch)
-  const next = new URLSearchParams(serializeFilters(filters))
+  const next = new URLSearchParams(serializeFilters(filters, me))
   const closed = current.get('closed')
   if (closed) next.set('closed', closed)
   const qs = next.toString()
