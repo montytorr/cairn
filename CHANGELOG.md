@@ -11,6 +11,12 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **An assignee filter on every task list and board, mine by default** (CAIRN-339). The home
+  list, the project list, the project board and `/board` open on your own tasks, with
+  everyone, or anyone, one click away. The choice is in the URL: no parameter is you,
+  `?assignee=all` is everyone, `?assignee=me` is whoever opens the link. The list's "Mine"
+  tab is gone — it ignored status, so "mine, in progress" could not be shown — and an empty
+  list says when it is only empty of yours. The project board had no filters at all.
 - **A machine with only Codex gets session prose** (CAIRN-337, S-15). The summariser was
   always `claude -p`, so a Codex-only machine recorded every session without its four prose
   fields, and OpenClaw's GPT sessions on clawdius were written up by Claude as another
@@ -30,6 +36,12 @@ out under **Breaking** with what to do about it.
   with the version opens `/changelog`, which renders this file as the instance shipped it:
   one section per release, the running one marked, and anything merged since the release
   shown as "On main".
+
+### Fixed
+
+- **"Show closed" undid the filters you had just chosen** on `/board`, and would have on the
+  task lists: the link was built on the server with the filters the page first loaded with.
+  It now reads the address bar as it is.
 
 ### Changed
 
