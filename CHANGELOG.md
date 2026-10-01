@@ -11,6 +11,10 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **The knowledge map's named glows are per project by default** (CAIRN-340). They were per
+  entity, so an instance with one entity — Dispofi — drew a single glow around everything.
+  Positions are unchanged; a Projects / Entities switch appears when there are at least two
+  entities, and the choice is remembered in the browser.
 - **An assignee filter on every task list and board, mine by default** (CAIRN-339). The home
   list, the project list, the project board and `/board` open on your own tasks, with
   everyone, or anyone, one click away. The choice is in the URL: no parameter is you,
@@ -39,6 +43,10 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **The knowledge map zoomed out and back in on every refresh** (CAIRN-340). Each live
+  update handed the map a fresh copy of the same graph, the 3D scene rebuilt itself on every
+  one, and the camera replayed its arrival. It now keeps the graph until its content
+  changes, and when it does change the camera stays where you left it.
 - **"Show closed" undid the filters you had just chosen** on `/board`, and would have on the
   task lists: the link was built on the server with the filters the page first loaded with.
   It now reads the address bar as it is.
