@@ -9,6 +9,15 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-tasks and dependencies show in the task lists and on the boards** (CAIRN-341). Both
+  existed, and `cairn next` already refused a task with open dependencies, but the lists drew
+  neither. A child is now drawn under its parent in each status group, indented and
+  foldable; a child whose parent is elsewhere keeps a "↳ parent" link. Rows and cards carry
+  "closed/total" for a parent's sub-tasks and "waiting on REF" while a dependency is open —
+  the red "blocked" pill remains the hand-written reason it always was.
+
 ## [0.15.0] — 2026-10-01
 
 ### Added
