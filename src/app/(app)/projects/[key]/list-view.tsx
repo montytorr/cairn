@@ -20,6 +20,8 @@ import {
 import type { TaskListItem } from '@/lib/data'
 import { NewTaskButton } from '@/components/task-creation'
 import { usePeople } from '@/components/people-context'
+import { AssigneeFilter, useAssigneeFilter, type AssigneeFilterState } from '@/components/assignee-filter'
+import { matchesAssignees } from '@/lib/assignee-filter'
 import { BulkBar } from './bulk-bar'
 import { ResolutionDialog } from './resolution-dialog'
 import { applySelection } from '@/lib/selection'
@@ -39,7 +41,7 @@ const GROUP_LABEL: Record<GroupKey, string> = {
   cancelled: 'Cancelled',
 }
 
-type Tab = 'doing' | 'todo' | 'active' | 'backlog' | 'all' | 'recent' | 'mine' | 'held' | 'closed'
+type Tab = 'doing' | 'todo' | 'active' | 'backlog' | 'all' | 'recent' | 'held' | 'closed'
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   backlog: 'Backlog',
@@ -452,6 +454,8 @@ export const ListView = ({
   showProject,
   projects = [],
   toolbarExtra,
+  initialAssignee,
+  assigneeFilter,
 }: {
   tasks: (TaskListItem & { project_key?: string })[]
   /**
@@ -466,8 +470,13 @@ export const ListView = ({
   projects?: { key: string; title: string }[]
   /** The view toggle, so it does not need a band of its own above the list. */
   toolbarExtra?: React.ReactNode
+  /** The page's `assignee` param, so the first render already shows the right people. */
+  initialAssignee?: string | null
+  /** Shared with a sibling view (the project board) so switching keeps the choice. */
+  assigneeFilter?: AssigneeFilterState
 }) => {
-  const { currentUserId } = usePeople()
+  const ownAssignees = useAssigneeFilter(initialAssignee)
+  const assignees = assigneeFilter ?? ownAssignees
   const [tab, setTab] = useState<Tab>('doing')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -524,7 +533,14 @@ export const ListView = ({
   // The closed tab reads from its own list. Every other tab is a view of the
   // open work, and mixing finished tasks into "All" would change what that has
   // always meant.
-  const source = tab === 'closed' ? recentlyClosed : tasks
+  //
+  // Whose tasks comes first, so every tab and count is about the same people:
+  // "Mine" used to be a tab of its own, which could not say "mine, in progress".
+  const pool = tab === 'closed' ? recentlyClosed : tasks
+  const source = useMemo(
+    () => pool.filter((t) => matchesAssignees(t, assignees.selected)),
+    [pool, assignees.selected],
+  )
 
   const filtered = useMemo(() => {
     const byTab = source.filter((t) => {
@@ -534,7 +550,6 @@ export const ListView = ({
       if (tab === 'active')
         return t.status === 'doing' || t.status === 'in-review' || t.status === 'todo'
       if (tab === 'backlog') return t.status === 'backlog'
-      if (tab === 'mine') return t.assignee_user_id === currentUserId
       if (tab === 'held') return Boolean(t.claimed_by)
       return true
     })
@@ -545,7 +560,7 @@ export const ListView = ({
         .toLowerCase()
         .includes(q),
     )
-  }, [source, tab, query, currentUserId])
+  }, [source, tab, query])
 
   const groups = useMemo(() => {
     if (tab === 'recent') {
@@ -627,14 +642,16 @@ export const ListView = ({
             {tabButton('active', 'Active')}
             {tabButton('backlog', 'Backlog')}
             {tabButton('all', 'All')}
-            {tabButton('mine', 'Mine')}
             {tabButton('recent', 'Recent')}
             {recentlyClosed.length > 0 && tabButton('closed', 'Recently closed')}
             {tasks.some((t) => t.claimed_by) && tabButton('held', 'Held')}
           </div>
         </div>
 
+        {/* Outside the scrolling tab strip on purpose: a popover inside an
+            overflow container is clipped (src/lib/overflow-guard.test.ts). */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <AssigneeFilter filter={assignees} tasks={tasks} />
           <input
             ref={filterRef}
             value={query}
@@ -658,6 +675,25 @@ export const ListView = ({
          */
         (query ? (
           <EmptyState title={`Nothing matches “${query}”.`} />
+        ) : assignees.selected.length > 0 && source.length === 0 && pool.length > 0 ? (
+          // The default shows only your own work, so on a team instance an
+          // empty list usually means "nothing of yours", not "nothing".
+          <EmptyState
+            title={
+              assignees.selected.length === 1 && assignees.selected[0] === assignees.me
+                ? 'Nothing here is assigned to you.'
+                : 'Nothing here is assigned to them.'
+            }
+            action={
+              <button
+                type="button"
+                onClick={() => assignees.setSelected([])}
+                className="text-accent text-[0.8125rem] hover:underline"
+              >
+                Show everyone’s
+              </button>
+            }
+          />
         ) : tab === 'doing' ? (
           <EmptyState
             title="Nothing is in progress."

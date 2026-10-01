@@ -4,29 +4,12 @@ import { currentUser } from '@/lib/data'
 import { listBoardTasks } from '@/lib/board-data'
 import { CrossProjectBoard } from './cross-project-board'
 import { MobileNavButton } from '@/components/mobile-nav-context'
-import { PendingLink } from '@/components/pending-link'
+import { ClosedToggle } from '@/components/closed-toggle'
 import { LiveUpdates } from '@/components/live-updates'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = { title: 'Board' }
-
-/**
- * Preserves every other query param (groupBy, swimlane, the filters) when
- * flipping `closed` — that one alone changes what the server loads, so it is
- * the one part of the view still driven by a real navigation rather than
- * client-side history.replaceState.
- */
-const closedToggleHref = (params: Record<string, string | undefined>, includeClosed: boolean) => {
-  const next = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (key === 'closed' || value === undefined) continue
-    next.set(key, value)
-  }
-  if (!includeClosed) next.set('closed', '1')
-  const qs = next.toString()
-  return qs ? `/board?${qs}` : '/board'
-}
 
 const BoardPage = async ({
   searchParams,
@@ -53,12 +36,12 @@ const BoardPage = async ({
           {tasks.length} across {projects.length} projects
         </span>
 
-        <PendingLink
-          href={closedToggleHref(params, includeClosed)}
+        <ClosedToggle
+          path="/board"
+          includeClosed={includeClosed}
+          hidden={closedHidden}
           className="text-fg-subtle hover:text-fg ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[0.75rem] transition-colors"
-        >
-          {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-        </PendingLink>
+        />
       </header>
 
       {/* page-scroll-guard: fills the viewport on purpose. The board scrolls

@@ -119,6 +119,31 @@ describe('matchesFilters', () => {
   })
 })
 
+describe('the assignee filter, for a known viewer (CAIRN-339)', () => {
+  it('shows the viewer their own tasks when the link names nobody', () => {
+    expect(parseFilters('', 'u-me').assignees).toEqual(['u-me'])
+    expect(parseFilters('?groupBy=project', 'u-me').assignees).toEqual(['u-me'])
+  })
+
+  it('reads all as everyone, and me as whoever opens it', () => {
+    expect(parseFilters('?assignee=all', 'u-me').assignees).toEqual([])
+    expect(parseFilters('?assignee=me,u2', 'u-me').assignees).toEqual(['u-me', 'u2'])
+  })
+
+  it('keeps the default link plain, and says all when it means everyone', () => {
+    expect(serializeFilters({ ...noFilters, assignees: ['u-me'] }, 'u-me')).toBe('')
+    expect(serializeFilters({ ...noFilters, assignees: [] }, 'u-me')).toBe('assignee=all')
+    expect(buildBoardUrl('/board', { ...noFilters, assignees: [] }, '?closed=1', 'u-me')).toBe('/board?assignee=all&closed=1')
+  })
+
+  it('round-trips through the URL for the same viewer', () => {
+    for (const assignees of [['u-me'], [], ['u2'], ['u-me', 'u2']]) {
+      const filters = { ...noFilters, assignees }
+      expect(parseFilters(serializeFilters(filters, 'u-me'), 'u-me')).toEqual(filters)
+    }
+  })
+})
+
 describe('groupValue / applyGroupValue', () => {
   it('round-trips a project move', () => {
     const t = task({ project_key: 'CAI' })

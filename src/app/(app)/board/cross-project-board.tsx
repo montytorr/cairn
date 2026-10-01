@@ -13,6 +13,8 @@ import { useMutate } from '@/lib/api/use-mutate'
 import { BoardToolbar } from './board-toolbar'
 import { COLUMN_PANEL, COLUMN_WIDTH, ColumnCount, DragPreview, DropList, laneTone } from '@/components/board-columns'
 import { EmptyState } from '@/components/empty-state'
+import { usePeople } from '@/components/people-context'
+import { useAssigneeOptions } from '@/components/assignee-filter'
 import { cn } from '@/lib/utils'
 import { Avatar, PriorityIcon, ProjectIcon, StatusIcon, TypePill, projectColor } from '@/components/icons'
 import { isTerminal, type ResolutionKind, type TaskPriority, type TaskStatus, type TaskType } from '@/schemas/task'
@@ -241,7 +243,8 @@ export const CrossProjectBoard = ({
     setTasks(initial)
   }
 
-  const [filters, setFiltersState] = useState<BoardFilters>(() => parseFilters(initialQuery))
+  const { currentUserId } = usePeople()
+  const [filters, setFiltersState] = useState<BoardFilters>(() => parseFilters(initialQuery, currentUserId))
   const [dragging, setDragging] = useState<BoardTask | null>(null)
   const [pendingClose, setPendingClose] = useState<{ task: BoardTask; value: string } | null>(null)
 
@@ -251,7 +254,7 @@ export const CrossProjectBoard = ({
       window.history.replaceState(
         null,
         '',
-        buildBoardUrl(window.location.pathname, next, window.location.search),
+        buildBoardUrl(window.location.pathname, next, window.location.search, currentUserId),
       )
     }
   }
@@ -279,13 +282,7 @@ export const CrossProjectBoard = ({
     () => [...new Set(tasks.map((t) => t.claimed_by).filter((a): a is string => Boolean(a)))].sort(),
     [tasks],
   )
-  const assigneeOptions = useMemo(() => {
-    const seen = new Map<string, string>()
-    for (const t of tasks) seen.set(t.assignee_user_id, t.assignee?.name ?? t.assignee_user_id)
-    return [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [tasks])
+  const assigneeOptions = useAssigneeOptions(tasks)
 
   const persist = async (
     task: BoardTask,
@@ -388,7 +385,7 @@ export const CrossProjectBoard = ({
                 <button
                   type="button"
                   onClick={() =>
-                    setFilters({ ...parseFilters(''), groupBy: filters.groupBy, swimlane: filters.swimlane })
+                    setFilters({ ...parseFilters('?assignee=all', currentUserId), groupBy: filters.groupBy, swimlane: filters.swimlane })
                   }
                   className="text-accent text-[0.75rem] hover:underline"
                 >

@@ -35,6 +35,8 @@ describe('the board toolbar is not a scroll container', () => {
     // assertion has now broken twice on details it never meant to pin — first
     // a drop shadow, then the switch to rem — and a guard that cries wolf is
     // one somebody eventually deletes.
-    expect(source).toMatch(/absolute top-\[[\d.]+(px|rem)\]/)
+    const menu = readFileSync(join(process.cwd(), 'src/components/filter-menu.tsx'), 'utf8')
+    expect(source).toContain("from '@/components/filter-menu'")
+    expect(menu).toMatch(/absolute top-\[[\d.]+(px|rem)\]/)
   })
 })

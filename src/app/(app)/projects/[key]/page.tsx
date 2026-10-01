@@ -17,7 +17,7 @@ import { LiveUpdates } from '@/components/live-updates'
 import { BrandName } from '@/components/brand'
 import { ProjectMenu } from './project-menu'
 import { MobileNavButton } from '@/components/mobile-nav-context'
-import { PendingLink } from '@/components/pending-link'
+import { ClosedToggle } from '@/components/closed-toggle'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,10 +41,10 @@ const ProjectPage = async ({
   searchParams,
 }: {
   params: Promise<{ key: string }>
-  searchParams: Promise<{ closed?: string; from?: string }>
+  searchParams: Promise<{ closed?: string; from?: string; assignee?: string }>
 }) => {
   const { key } = await params
-  const { closed, from } = await searchParams
+  const { closed, from, assignee } = await searchParams
   const user = await currentUser()
   if (!user) redirect('/login')
 
@@ -60,6 +60,7 @@ const ProjectPage = async ({
     if (!retired) notFound()
     const query = new URLSearchParams({ from: retired.key })
     if (closed === '1') query.set('closed', '1')
+    if (assignee !== undefined) query.set('assignee', assignee)
     redirect(`/projects/${retired.current}?${query}`)
   }
 
@@ -130,12 +131,12 @@ const ProjectPage = async ({
 
         <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
           {closedHidden > 0 || includeClosed ? (
-            <PendingLink
-              href={includeClosed ? `/projects/${project.key}` : `/projects/${project.key}?closed=1`}
+            <ClosedToggle
+              path={`/projects/${project.key}`}
+              includeClosed={includeClosed}
+              hidden={closedHidden}
               className="text-fg-subtle hover:text-fg flex items-center gap-1.5 whitespace-nowrap text-[0.75rem] transition-colors"
-            >
-              {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-            </PendingLink>
+            />
           ) : null}
           <ProjectMenu
             projectId={project.id}
@@ -159,6 +160,7 @@ const ProjectPage = async ({
           recentlyClosed={recentlyClosed}
           projectKey={project.key}
           initialView={initialView}
+          initialAssignee={assignee}
         />
       </div>
       <LiveUpdates projectKey={project.key} />

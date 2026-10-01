@@ -7,7 +7,7 @@ import { ListView } from './projects/[key]/list-view'
 import { LiveUpdates } from '@/components/live-updates'
 import { ProjectIcon } from '@/components/icons'
 import { MobileNavButton } from '@/components/mobile-nav-context'
-import { PendingLink } from '@/components/pending-link'
+import { ClosedToggle } from '@/components/closed-toggle'
 import { EmptyState } from '@/components/empty-state'
 
 export const dynamic = 'force-dynamic'
@@ -20,8 +20,8 @@ const Stat = ({ label, value }: { label: string; value: number | string }) => (
   </span>
 )
 
-const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string }> }) => {
-  const { closed } = await searchParams
+const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string; assignee?: string }> }) => {
+  const { closed, assignee } = await searchParams
   const user = await currentUser()
   if (!user) redirect('/login')
 
@@ -67,12 +67,12 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
           {held > 0 ? <Stat label="held by an agent" value={held} /> : null}
         </span>
 
-        <PendingLink
-          href={includeClosed ? '/' : '/?closed=1'}
+        <ClosedToggle
+          path="/"
+          includeClosed={includeClosed}
+          hidden={closedHidden}
           className="text-fg-subtle hover:text-fg ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[0.75rem] transition-colors"
-        >
-          {includeClosed ? 'Hide closed' : `Show ${closedHidden} closed`}
-        </PendingLink>
+        />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -84,6 +84,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string 
           projectKey=""
           showProject
           projects={projects.map((p) => ({ key: p.key, title: p.title }))}
+          initialAssignee={assignee}
         />
 
         <section className="border-border mt-6 border-t px-4 py-4">
