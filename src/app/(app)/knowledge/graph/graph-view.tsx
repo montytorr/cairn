@@ -1,12 +1,22 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { Box, Map as MapIcon } from 'lucide-react'
 import { Select } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 import { GraphFlat } from './graph-flat'
 import { spotlightOptions, type Spotlight } from '@/lib/graph-spotlight'
+import { hoverAnnouncement, hoverCardFor, placeCard } from '@/lib/graph-hover'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 import type { Grouping } from './graph-scene'
 
@@ -17,7 +27,7 @@ import type { Grouping } from './graph-scene'
  * still the honest answer to "how much of this corpus is joined to nothing",
  * and a WebGL scene you can orbit. The shell owns the things that belong to
  * neither — what is under the pointer, the legend, the toggle — so that the
- * title bar reads the same whichever is mounted and hovering a node means the
+ * hover card reads the same whichever is mounted and hovering a node means the
  * same thing in both.
  *
  * three.js is a large dependency and it is only ever needed here, so the scene
@@ -192,11 +202,113 @@ export const GraphView = ({ graph: incoming }: Props) => {
         (o) => o.key === spotlight.key,
       )?.count ?? 0)
     : 0
-  const hovered = focused ? at.get(focused) : null
-  const hoveredMissing = focused ? graph.missing.find((m) => m.slug === focused) : null
+  const card = useMemo(
+    () => hoverCardFor(focused, at, graph.missing, titles),
+    [focused, at, graph.missing, titles],
+  )
+
+  /**
+   * Where the pointer last was, and the card that follows it (CAIRN-349).
+   *
+   * Kept in refs and written straight to the card's transform, for the reason
+   * the scene writes its titles straight to the DOM: a React render per
+   * pointermove is a render of both renderers' parents on every frame of
+   * every hover. React renders when what is hovered changes; where it is
+   * hovered is the DOM's business. Listened for here, on the container,
+   * rather than threaded out of each renderer — both of them bubble, and
+   * neither needs to know a card exists.
+   */
+  const frameRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const anchor = useRef<{ x: number; y: number } | null>(null)
+  const pressed = useRef<{ x: number; y: number } | null>(null)
+  const pending = useRef(0)
+
+  const place = useCallback(() => {
+    pending.current = 0
+    const frame = frameRef.current
+    const el = cardRef.current
+    if (!frame || !el) return
+    const point = anchor.current
+    // Nowhere to put it yet: a focus that arrived before any pointer position
+    // is better shown nowhere than in the corner it used to live in.
+    if (!point) {
+      el.style.visibility = 'hidden'
+      return
+    }
+    // Every read before the write, so placing the card never forces a second
+    // layout in the same frame.
+    const rect = frame.getBoundingClientRect()
+    const { left, top } = placeCard({
+      x: point.x - rect.left,
+      y: point.y - rect.top,
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+      boundsWidth: frame.clientWidth,
+      boundsHeight: frame.clientHeight,
+    })
+    el.style.transform = `translate3d(${left}px, ${top}px, 0)`
+    el.style.visibility = ''
+  }, [])
+
+  /** At most once a frame, however fast the pointer reports. */
+  const schedule = useCallback(() => {
+    if (!pending.current) pending.current = requestAnimationFrame(place)
+  }, [place])
+
+  useEffect(() => () => cancelAnimationFrame(pending.current), [])
+
+  // New content is a new size, so the flip has to be worked out again. Before
+  // paint, so a card never shows for a frame where the last one fitted.
+  useLayoutEffect(() => {
+    if (card) place()
+  }, [card, place])
+
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent) => {
+      // A finger dragging to orbit or pan is not pointing at anything, and a
+      // card chasing it would cover what the drag is moving.
+      if (event.pointerType === 'touch') return
+      anchor.current = { x: event.clientX, y: event.clientY }
+      schedule()
+    },
+    [schedule],
+  )
+  const onPointerDown = useCallback(
+    (event: ReactPointerEvent) => {
+      pressed.current = { x: event.clientX, y: event.clientY }
+      if (event.pointerType === 'touch') return
+      anchor.current = { x: event.clientX, y: event.clientY }
+      schedule()
+    },
+    [schedule],
+  )
+  /**
+   * There is no hover on a touch screen: the first tap is what focuses a node
+   * in both renderers, so a tap is what anchors the card. Only a tap — a drag
+   * that started over the focused node should leave the card where it was
+   * read, not where the drag began.
+   */
+  const onPointerUp = useCallback(
+    (event: ReactPointerEvent) => {
+      const from = pressed.current
+      pressed.current = null
+      if (event.pointerType !== 'touch' || !from) return
+      if (Math.hypot(event.clientX - from.x, event.clientY - from.y) > 8) return
+      anchor.current = { x: event.clientX, y: event.clientY }
+      schedule()
+    },
+    [schedule],
+  )
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div
+      ref={frameRef}
+      className="relative h-full w-full overflow-hidden"
+      onPointerMove={onPointerMove}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+    >
       {mode === 'scene' && able ? (
         <GraphScene
           graph={graph}
@@ -214,41 +326,66 @@ export const GraphView = ({ graph: incoming }: Props) => {
         />
       )}
 
-      {/* What is under the pointer. One bar, written once, over either
-          renderer — hovering a node has to mean the same thing in both or the
-          toggle stops being a change of view and becomes a change of page. */}
-      <div className={cn(CHROME, 'text-fg-subtle pointer-events-none absolute top-2 left-2 max-w-[min(42rem,calc(100%-1rem))] truncate rounded-lg px-2.5 py-1.5 text-[0.7rem]')}>
-        {hovered ? (
+      {/* What is under the pointer, at the pointer. One card, written once,
+          over either renderer — hovering a node has to mean the same thing in
+          both or the toggle stops being a change of view and becomes a change
+          of page. It used to be the corner bar, which on a large screen sat so
+          far from the node that hovering looked like it did nothing
+          (CAIRN-349). No transition on the transform: it follows the pointer
+          exactly or not at all, which is also what reduced motion asks for. */}
+      <div
+        ref={cardRef}
+        data-hover-card
+        aria-hidden
+        style={{ visibility: 'hidden' }}
+        className={cn(
+          CHROME,
+          'pointer-events-none absolute top-0 left-0 z-10 w-max max-w-[min(18rem,calc(100%-1rem))] rounded-lg px-2.5 py-2 text-[0.7rem] leading-snug',
+          !card && 'hidden',
+        )}
+      >
+        {card?.kind === 'entry' ? (
+          <>
+            <p className="text-fg line-clamp-2 font-medium">{card.title}</p>
+            {/* The world it belongs to is what the coloured regions in the
+                scene are, so it is named here — but only when it is not the
+                project key said twice. */}
+            <p className="text-fg-subtle mt-0.5">{card.meta}</p>
+            {card.excerpt ? <p className="text-fg-muted mt-1.5">{card.excerpt}</p> : null}
+          </>
+        ) : card?.kind === 'missing' ? (
+          <>
+            <p className="text-danger line-clamp-2 font-medium break-all">{card.slug}</p>
+            <p className="text-fg-subtle mt-0.5">{card.detail}</p>
+          </>
+        ) : null}
+      </div>
+      {/* The card is drawn for the eye and hidden from assistive tech; this is
+          what the corner bar used to give a screen reader. */}
+      <p className="sr-only" aria-live="polite">
+        {hoverAnnouncement(card)}
+      </p>
+
+      {/* How to use it, and what the spotlight has lit. Written for whatever is
+          actually being used: on a phone the flat map's bar read "Hover a node
+          · scroll to zoom", naming two gestures that do not exist there and
+          omitting the one that does.
+          Narrower than half the map less the picker, so a long line wraps
+          beside the spotlight instead of sliding under it; on a phone, where
+          there is no room beside it at all, it moves to the foot, which the
+          legend leaves free there. */}
+      <div
+        className={cn(
+          CHROME,
+          'text-fg-subtle pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-11rem)] rounded-lg px-2.5 py-1.5 text-[0.7rem] leading-snug sm:top-2 sm:bottom-auto sm:max-w-[calc(50%-8.5rem)]',
+        )}
+      >
+        {spotlight ? (
           <span className="text-fg">
-            {hovered.title}
-            <span className="text-fg-subtle">
-              {' · '}
-              {hovered.degree === 0
-                ? 'joined to nothing'
-                : `${hovered.degree} link${hovered.degree === 1 ? '' : 's'}`}
-              {hovered.project ? ` · ${hovered.project}` : ' · global'}
-              {/* The world it belongs to, which is what the coloured regions
-                  in the scene are. Only when it adds something: repeating the
-                  project key back as its own entity would be noise. */}
-              {hovered.entity && hovered.entity !== hovered.project
-                ? ` · ${hovered.entity}`
-                : ''}
-            </span>
-          </span>
-        ) : hoveredMissing ? (
-          <span className="text-danger">
-            {hoveredMissing.slug} — never written, referenced by {hoveredMissing.from.length}
+            {litCount} {litCount === 1 ? 'entry' : 'entries'} in {spotlight.key}
+            <span className="text-fg-subtle"> · everything else dimmed</span>
           </span>
         ) : (
-          // Written for whatever is actually being used. On a phone the flat
-          // map's bar read "Hover a node · scroll to zoom", naming two
-          // gestures that do not exist there and omitting the one that does.
-          spotlight ? (
-            <span className="text-fg">
-              {litCount} {litCount === 1 ? 'entry' : 'entries'} in {spotlight.key}
-              <span className="text-fg-subtle"> · everything else dimmed</span>
-            </span>
-          ) : (
           <>
             <span className="hidden sm:inline">
               {mode === 'scene' && able
@@ -261,7 +398,6 @@ export const GraphView = ({ graph: incoming }: Props) => {
                 : 'Tap a node · drag to pan · pinch to zoom'}
             </span>
           </>
-          )
         )}
       </div>
 

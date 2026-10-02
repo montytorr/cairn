@@ -38,6 +38,12 @@ describe('the graph the map is built from', () => {
     const edited = graph('Alpha, edited')
     act(() => root.render(<Probe g={edited} />))
     expect(seen.at(-1)).toBe(edited)
+
+    // The hover card's excerpt is content too (CAIRN-349): a body edited
+    // without touching its title must still reach the card.
+    const reworded = { ...edited, nodes: edited.nodes.map((n) => ({ ...n, excerpt: 'Now says this.' })) }
+    act(() => root.render(<Probe g={reworded} />))
+    expect(seen.at(-1)).toBe(reworded)
     act(() => root.unmount())
   })
 })

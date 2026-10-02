@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { GraphView } from './graph-view'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
@@ -15,7 +17,17 @@ import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 
 const graph = (over: Partial<KnowledgeGraph> = {}): KnowledgeGraph => ({
   nodes: [
-    { slug: 'alpha', title: 'Alpha', project: 'CAIRN', entity: null, degree: 1, island: 0, x: 10, y: 10 },
+    {
+      slug: 'alpha',
+      title: 'Alpha',
+      project: 'CAIRN',
+      entity: null,
+      degree: 1,
+      excerpt: 'What alpha says first.',
+      island: 0,
+      x: 10,
+      y: 10,
+    },
     { slug: 'beta', title: 'Beta', project: null, entity: null, degree: 1, island: 0, x: 60, y: 30 },
     { slug: 'lonely', title: 'Lonely', project: null, entity: null, degree: 0, island: -1, x: 0, y: 200 },
   ],
@@ -68,6 +80,18 @@ describe('the map shell', () => {
 
     expect(html).not.toContain('How to draw the map')
     expect(html).not.toContain('Spatial')
+  })
+
+  it('keeps the corner bar for help, and draws no card until something is hovered', () => {
+    // CAIRN-349: the bar used to carry the hovered title as well, a long way
+    // from the pointer. Now it only says how to use the map; the card is in
+    // the markup but hidden, so there is one element to move rather than one
+    // to mount on every hover.
+    const html = renderToStaticMarkup(<GraphView graph={graph()} />)
+
+    expect(html).toMatch(/data-hover-card="true"[^>]*class="[^"]*\bhidden\b/)
+    expect(html).not.toContain('What alpha says first.')
+    expect(html).toContain('aria-live="polite"')
   })
 
   it('describes the gestures that exist on the device being used', () => {
@@ -139,5 +163,129 @@ describe('the map shell', () => {
     expect(html).toContain('BB')
     expect(html).toContain('Tribe')
     expect(html).not.toContain('Nowhere')
+  })
+})
+
+/**
+ * The card at the pointer (CAIRN-349), driven the way a mouse drives it: the
+ * container hears where the pointer is, a node hears that it is entered. No
+ * layout in jsdom, so the sizes the placement reads are stated outright.
+ */
+describe('the hover card', () => {
+  beforeAll(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    // The flat map sizes its titles from a ResizeObserver, which jsdom lacks.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+    // And a press captures the pointer so a pan can leave the map.
+    Object.assign(Element.prototype, {
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      hasPointerCapture: () => false,
+    })
+  })
+  afterAll(() => {
+    vi.unstubAllGlobals()
+    for (const name of ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture']) {
+      delete (Element.prototype as unknown as Record<string, unknown>)[name]
+    }
+  })
+
+  const mount = () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    act(() => root.render(<GraphView graph={graph()} />))
+    const frame = host.firstElementChild as HTMLDivElement
+    const card = host.querySelector('[data-hover-card]') as HTMLDivElement
+    Object.defineProperty(frame, 'clientWidth', { value: 400 })
+    Object.defineProperty(frame, 'clientHeight', { value: 300 })
+    Object.defineProperty(card, 'offsetWidth', { value: 200 })
+    Object.defineProperty(card, 'offsetHeight', { value: 60 })
+    const point = (type: string, target: Element, x: number, y: number) =>
+      act(() => {
+        target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }))
+      })
+    const unmount = () => {
+      act(() => root.unmount())
+      host.remove()
+    }
+    return { host, frame, card, point, unmount }
+  }
+
+  it('says what is hovered, next to the pointer, and tells a screen reader', () => {
+    const { host, frame, card, point, unmount } = mount()
+    const alpha = host.querySelector('a[href="/knowledge/alpha"] circle') as Element
+
+    point('pointermove', frame, 100, 80)
+    point('pointerover', alpha, 100, 80)
+
+    expect(card.className).not.toMatch(/\bhidden\b/)
+    expect(card.style.visibility).toBe('')
+    expect(card.textContent).toContain('Alpha')
+    expect(card.textContent).toContain('1 link · CAIRN')
+    expect(card.textContent).toContain('What alpha says first.')
+    expect(card.style.transform).toBe('translate3d(114px, 94px, 0)')
+    expect(host.querySelector('[aria-live="polite"]')?.textContent).toBe('Alpha · 1 link · CAIRN')
+    unmount()
+  })
+
+  it('flips to stay inside the map near its far corner', () => {
+    const { host, frame, card, point, unmount } = mount()
+    const alpha = host.querySelector('a[href="/knowledge/alpha"] circle') as Element
+
+    point('pointermove', frame, 390, 290)
+    point('pointerover', alpha, 390, 290)
+
+    expect(card.style.transform).toBe(`translate3d(${390 - 14 - 200}px, ${290 - 14 - 60}px, 0)`)
+    unmount()
+  })
+
+  it('anchors at a tap on a touch screen, and does not chase a dragging finger', () => {
+    // No hover on glass: the first tap focuses the node, so the tap is where
+    // the card goes. A finger dragging to pan is not pointing at anything.
+    const { host, frame, card, unmount } = mount()
+    const alpha = host.querySelector('a[href="/knowledge/alpha"] circle') as Element
+    const touch = (type: string, target: Element, x: number, y: number) =>
+      act(() => {
+        const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y })
+        Object.defineProperty(event, 'pointerType', { value: 'touch' })
+        target.dispatchEvent(event)
+      })
+
+    touch('pointerdown', alpha, 60, 40)
+    touch('pointerover', alpha, 60, 40)
+    touch('pointerup', alpha, 62, 41)
+    expect(card.textContent).toContain('Alpha')
+    // Where the tap lifted, placed on the next frame.
+    return new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        expect(card.style.transform).toBe('translate3d(76px, 55px, 0)')
+        touch('pointermove', frame, 300, 200)
+        requestAnimationFrame(() => {
+          expect(card.style.transform).toBe('translate3d(76px, 55px, 0)')
+          unmount()
+          resolve()
+        })
+      })
+    })
+  })
+
+  it('names a reference to nothing as never written', () => {
+    const { host, frame, card, point, unmount } = mount()
+    const gap = host.querySelector('circle[stroke-dasharray]') as Element
+
+    point('pointermove', frame, 50, 50)
+    point('pointerover', gap, 50, 50)
+
+    expect(card.textContent).toContain('never-written')
+    expect(card.textContent).toContain('never written, referenced by 1')
+    unmount()
   })
 })
