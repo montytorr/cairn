@@ -37,7 +37,7 @@ import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 
 type Props = {
   graph: KnowledgeGraph
-  /** Lifted, so the shell can draw one title bar over either renderer. */
+  /** Lifted, so the shell can draw one hover card over either renderer. */
   onHover: (slug: string | null) => void
   focused: string | null
   /** One project or world lit against the rest, or null for all of it. */
@@ -894,7 +894,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       // pointer across dozens of nodes on the way.
       //
       // And on a touch screen the gesture that reveals a node IS the gesture
-      // that opens it, so the first tap reads it into the bar at the top and
+      // that opens it, so the first tap reads it into the hover card and
       // only a second one follows the link. Same rule as the flat map, for
       // the same reason: there is no hover to separate the two.
       if (touch && focusedRef.current !== slug) {
@@ -1053,8 +1053,19 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
         return
       }
 
+      /**
+       * An entry joined to nothing is named too (CAIRN-349).
+       *
+       * Only the cloud was searched, so hovering one of the disc's entries —
+       * about half the corpus — lit it and named nothing beside it. It has no
+       * neighbours by definition, so it is the only title to place; its
+       * position comes from the same layout the disc's mesh was placed from,
+       * and projects the same way.
+       */
+      const held = byslug.get(slug)
+      const among = held && held.degree === 0 ? [held] : linked
       const candidates: { node: (typeof linked)[number]; x: number; y: number; z: number }[] = []
-      for (const n of linked) {
+      for (const n of among) {
         if (!(n.slug === slug || (near?.has(n.slug) ?? false))) continue
         const p = place.at.get(n.slug)
         if (!p) continue
@@ -1223,7 +1234,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
            * The auto-rotation is there to say the picture has depth before
            * anybody touches it. Once a node is under the cursor that job is
            * done, and the rotation becomes something actively working against
-           * the reader: the title bar names an entry, the neighbourhood is
+           * the reader: the hover card names an entry, the neighbourhood is
            * lit, and the whole thing is sliding out from under the pointer.
            */
           controls.autoRotate = slug === null && !motion.matches
