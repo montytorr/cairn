@@ -9,6 +9,19 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **`--related a,b` on `learn` and `relearn`, and `cairn link <slug> <other>…`** (CAIRN-350).
+  178 of 351 entries linked to nothing; of the 161 agents wrote after the import, two held a
+  `[[` at all, because linking meant spelling a slug inside a body and acting on `learn`'s
+  same-subject nudge meant a whole `relearn --body`. Both append to the body's trailing
+  `Related: [[a]], [[b]]` line (deduped against links already in it, case and underscores
+  normalised, self-links refused) and go through the existing reference check. `link` is a
+  versioned edit with a default reason and writes nothing when there is nothing to add. The
+  nudge after `learn` is now a `cairn link <new> <a> <b>` line to run; MCP gains
+  `cairn_link_knowledge` (`cairn_link` is the task-dependency tool) and `related` on
+  `cairn_learn`/`cairn_relearn`.
+
 ### Changed
 
 - **A bare `cairn unlearn` is refused while live entries reference the entry** (CAIRN-347).

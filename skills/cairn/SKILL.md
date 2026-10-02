@@ -142,19 +142,19 @@ surfaced on an unrelated project, it is knowledge; bound to one task and moment,
   checkout, pass a scope. Scope narrowly only when the fact is narrow; the narrower one
   is shown first ("true for this business, except here").
 - **A body is required** on `learn`, and a `relearn` body cannot be blank.
-- **Provenance is automatic:** the session is recorded with the fact, and so is the task
-  when this session holds exactly one (`--task <ref>` to name another).
+- **Provenance is automatic:** the session is recorded, and the task when this session
+  holds exactly one (`--task <ref>` to name another).
 - **Secrets are refused** on every write that is read back — knowledge, notes, comments,
   bodies, resolutions, checkpoints (`sk-…`, `ghp_…`, `AKIA…`, private keys, JWTs,
   `password: <value>`). Write where it lives instead: `$ENV_VAR`, a vault path.
 - **The title is the claim; the slug is the handle** — give a long claim a short `--slug`.
-- **`[[slug]]` in a body is a link**, followable in browser and terminal. A miss beside a
-  near-named entry is refused, naming the slug you meant — take it. Nothing close, or a
-  superseded target: accepted with a warning. `[[ACME-42]]` is refused: write task refs
-  bare. `--allow-dangling` overrides a wrong refusal, or a bare `unlearn` (delete)
-  refused while others link it.
-- **Correct rather than add.** Two contradictory claims, equally findable, is how every
-  memory store fails. When `learn` lists same-subject entries, supersede the wrong one.
+- **`[[slug]]` in a body is a link.** A miss beside a near-named entry is refused, naming
+  the slug you meant — take it. Nothing close, or a superseded target: a warning.
+  `[[ACME-42]]` is refused: write task refs bare. `--allow-dangling` overrides a wrong
+  refusal, or a bare `unlearn` refused while others link it.
+- **Name related entries:** `learn --related a,b`, or `cairn link <slug> a b` after.
+- **Correct rather than add.** Two contradictory claims, equally findable, is how memory
+  stores fail. When `learn` lists same-subject entries, link or supersede them.
 
 ```bash
 cairn relearn <slug> --body - --reason "why"    # it changed (old version kept)

@@ -59,6 +59,15 @@ const cairn = async (args) => {
   }
 }
 
+/**
+ * `related` is declared an array, and a model will still sometimes send
+ * "a,b". Either way the CLI gets one comma list (CAIRN-350).
+ */
+const slugList = (value) =>
+  (Array.isArray(value) ? value : value ? String(value).split(',') : [])
+    .map((slug) => String(slug).trim())
+    .filter(Boolean)
+
 const TOOLS = [
   {
     name: 'cairn_check',
@@ -211,6 +220,14 @@ const TOOLS = [
             'slug instead. This is for the case it gets wrong: a genuinely new fact whose ' +
             'name resembles an existing one.',
         },
+        related: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Slugs of existing entries this one relates to. Appended as a final ' +
+            '"Related: [[a]], [[b]]" line and checked like any [[reference]]. Name them ' +
+            'whenever you know them: an entry linked to nothing is one the map cannot place.',
+        },
       },
       required: ['title', 'body'],
     },
@@ -223,6 +240,7 @@ const TOOLS = [
       ...(a.task ? ['--task', a.task] : []),
       ...(a.files ? ['--files', a.files] : []),
       ...(a.allowDangling ? ['--allow-dangling'] : []),
+      ...(slugList(a.related).length ? ['--related', slugList(a.related).join(',')] : []),
     ],
   },
   {
@@ -261,6 +279,13 @@ const TOOLS = [
             'Comma-separated paths it is about. Replaces those named explicitly before; ' +
             'paths in the body are linked on their own.',
         },
+        related: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Slugs to add to its trailing "Related:" line — of the new body if one is ' +
+            'given, else of the stored one. Already-linked slugs are skipped.',
+        },
       },
       required: ['slug'],
     },
@@ -274,6 +299,37 @@ const TOOLS = [
       ...(a.allowDangling ? ['--allow-dangling'] : []),
       ...(a.reason ? ['--reason', a.reason] : []),
       ...(a.files ? ['--files', a.files] : []),
+      ...(slugList(a.related).length ? ['--related', slugList(a.related).join(',')] : []),
+    ],
+  },
+  {
+    // Not `cairn_link`: that name was already the task-dependency tool, and a
+    // second tool under it would shadow one or the other (CAIRN-350).
+    name: 'cairn_link_knowledge',
+    description:
+      'Relate a knowledge entry to others without rewriting it: adds them to its trailing ' +
+      '"Related: [[a]], [[b]]" line as a versioned edit. Use it when cairn_learn lists ' +
+      'same-subject entries that agree with the new one. Already-linked slugs are ' +
+      'skipped, and linking only those writes nothing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'The entry to add the links to.' },
+        related: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Slugs of the entries it relates to.',
+        },
+        reason: {
+          type: 'string',
+          description: 'Why they are related. Defaults to "linked to <slugs>".',
+        },
+      },
+      required: ['slug', 'related'],
+    },
+    run: (a) => [
+      'link', a.slug, ...slugList(a.related),
+      ...(a.reason ? ['--reason', a.reason] : []),
     ],
   },
   {
