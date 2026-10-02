@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-02
+
 ### Added
 
 - **`--related a,b` on `learn` and `relearn`, and `cairn link <slug> <other>…`** (CAIRN-350).
@@ -21,6 +23,11 @@ out under **Breaking** with what to do about it.
   nudge after `learn` is now a `cairn link <new> <a> <b>` line to run; MCP gains
   `cairn_link_knowledge` (`cairn_link` is the task-dependency tool) and `related` on
   `cairn_learn`/`cairn_relearn`.
+- **A hover card at the pointer on the knowledge map** (CAIRN-349), in both views: the title,
+  links, project and entity, and the entry's first line. What was under the pointer used to
+  be written only into a bar in the top-left corner, far enough from the node that hovering
+  looked like it did nothing. The spatial view now also titles a hovered entry that is joined
+  to nothing; the corner bar keeps the help text and the spotlight status.
 
 ### Changed
 
@@ -1774,7 +1781,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/montytorr/cairn/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/montytorr/cairn/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/montytorr/cairn/compare/v0.14.4...v0.15.0
 [0.14.4]: https://github.com/montytorr/cairn/compare/v0.14.3...v0.14.4
