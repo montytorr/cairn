@@ -81,6 +81,101 @@ export const wikiRefsIn = (body: string): WikiRef[] => {
 export const referencesIn = (body: string): string[] => wikiRefsIn(body).map((ref) => ref.slug)
 
 /**
+ * How much of an entry the map's hover card can say (CAIRN-349).
+ *
+ * A title alone does not tell you what an entry is about, and the body is the
+ * whole corpus — shipping that to draw a tooltip would make the map's payload
+ * the size of every page in the store. One sentence-ish of prose per node is a
+ * few tens of kilobytes over a corpus this size, and it is the part that
+ * answers "is this the one I meant".
+ */
+export const EXCERPT_CAP = 140
+
+const HEADING = /^\s{0,3}#{1,6}(?:\s|$)/
+const SETEXT = /^\s{0,3}(?:=+|-{2,})\s*$/
+const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+/
+
+/** A line that is structure rather than something said. */
+const notProse = (line: string): boolean =>
+  !line.trim() ||
+  HEADING.test(line) ||
+  RULE.test(line) ||
+  SETEXT.test(line) ||
+  line.trimStart().startsWith('|') ||
+  line.trimStart().startsWith('<!--')
+
+/**
+ * A line of markdown as the reader of the rendered page would read it.
+ *
+ * Code ticks go first so a `**` quoted inside a span is not taken for
+ * emphasis around the rest of the line. A `[[ref]]` keeps its slug: on the
+ * page it renders as a link whose text IS the slug, so dropping it would leave
+ * the sentence with a hole in it.
+ */
+const plainLine = (line: string): string =>
+  line
+    .replace(/^\s{0,3}(?:>\s?)+/, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, '')
+    .replace(/(`+)(.+?)\1/g, '$2')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<(https?:\/\/[^>\s]+)>/g, '$1')
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')
+    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, '$2')
+    .replace(/(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])/g, '$1')
+    .replace(/(?<!\w)_(?=\S)(.+?)(?<=\S)_(?!\w)/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** Cut at a word where there is one close enough, and say that it was cut. */
+const clip = (text: string, cap: number): string => {
+  if (text.length <= cap) return text
+  const cut = text.slice(0, cap - 1)
+  const space = cut.lastIndexOf(' ')
+  const head = space > cap * 0.6 ? cut.slice(0, space) : cut
+  return `${head.replace(/[\s,;:.\-–—]+$/, '')}…`
+}
+
+/**
+ * The first thing an entry actually says, as plain text, or '' if it says
+ * nothing outside headings, tables and code.
+ *
+ * The first paragraph rather than the first line, because most bodies here
+ * are hard-wrapped and the first line on its own stops mid-clause. A list
+ * item ends it: the next bullet is the next thought, not the rest of this one.
+ * A line that only repeats the title is skipped — the card already shows the
+ * title, and an excerpt that says it twice has said nothing.
+ */
+export const excerptOf = (body: string, title = '', cap = EXCERPT_CAP): string => {
+  const text = withoutFences(body.replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, ''))
+  const lines = text.split(/\r?\n/)
+  const named = title.trim().toLowerCase()
+  const parts: string[] = []
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] as string
+    const next = lines[i + 1] ?? ''
+    if (parts.length === 0) {
+      // A setext heading is a line whose underline comes after it.
+      if (notProse(line) || SETEXT.test(next)) continue
+      const said = plainLine(line)
+      if (!said || said.toLowerCase() === named) continue
+      parts.push(said)
+    } else {
+      if (notProse(line) || LIST_ITEM.test(line) || SETEXT.test(next)) break
+      const said = plainLine(line)
+      if (said) parts.push(said)
+    }
+    if (parts.join(' ').length >= cap) break
+  }
+
+  return clip(parts.join(' '), cap)
+}
+
+/**
  * `[[BB-192]]` is a task reference somebody put in the wrong brackets.
  *
  * Six of these are in the store. Nothing rejected them, and the normaliser
@@ -324,6 +419,12 @@ export type GraphNode = {
   entity: string | null
   /** How many entries this one is joined to, in either direction. */
   degree: number
+  /**
+   * The first thing the entry says, as plain text, for the hover card
+   * (CAIRN-349). Absent rather than empty when there is no prose to show, so
+   * an entry that is all headings and code costs the payload nothing.
+   */
+  excerpt?: string
   /** Index into `islands`; -1 for an entry joined to nothing. */
   island: number
   x: number
@@ -611,7 +712,11 @@ const corpusVersion = async (): Promise<string> => {
 
 const graphFor = unstable_cache(
   async (_version: string): Promise<KnowledgeGraph> => buildGraph(),
-  ['cairn-knowledge-graph'],
+  // Versioned with the node's shape: the cache outlives a deploy, and the
+  // version argument tracks the corpus, not the code, so a graph cached before
+  // nodes carried an excerpt would be served without one until the next write
+  // (CAIRN-349).
+  ['cairn-knowledge-graph-v2'],
   { revalidate: 3600 },
 )
 
@@ -643,6 +748,7 @@ const buildGraph = async (): Promise<KnowledgeGraph> => {
       // Its own scope first, then whatever world its project lives in.
       entity: entityKeyOf(row) ?? (key ? (worldOf.get(key) ?? null) : null),
       degree: degree.get(p.id) ?? 0,
+      excerpt: excerptOf(row.body ?? '', row.title) || undefined,
       island: islandOf.get(p.id) ?? -1,
       // One decimal. Nothing is drawn to a tenth of a unit, and full float
       // precision was shipping `87.6812408671319` per node twice over.
