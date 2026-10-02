@@ -268,8 +268,8 @@ export const KnowledgeDetail = ({
           <div className="min-w-0 flex-1">
             <p className="text-fg">Saved. Some references need a look:</p>
             <ul className="mt-1 flex flex-col gap-0.5 leading-relaxed break-words">
-              {warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
+              {warnings.map((warning, i) => (
+                <li key={i}>{warning}</li>
               ))}
             </ul>
           </div>

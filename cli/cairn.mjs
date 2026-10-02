@@ -2727,7 +2727,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    without a successor it deletes, and refuses while
                                    live entries [[reference]] it; --allow-dangling
                                    deletes anyway and leaves those references dangling
-    cairn session list            recent sessions
+    cairn session list             recent sessions
     cairn session checkpoint --id <id>  upsert ongoing session, do not checkpoint held tasks
     cairn session end --id <id>    write the episodic record, checkpoint what is held
     cairn reconcile                release your own claims that went quiet (2h)
