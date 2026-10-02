@@ -9,6 +9,30 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Changed
+
+- **A bare `cairn unlearn` is refused while live entries reference the entry** (CAIRN-347).
+  A hard delete turned every `[[slug]]` pointing at it into a reference to nothing, at once
+  and in silence. The 409 names the referrers (the first five, and a count) and points at
+  `--superseded-by`, which keeps them landing somewhere; `--allow-dangling` on `unlearn`
+  (`?allowUnresolvedRefs=true` on the DELETE, `allowDangling` on the MCP tool) deletes anyway.
+- **An edit is checked only for the references it adds** (CAIRN-347). PATCH re-checked the
+  whole body whenever one was sent, and the web editor always sends one, so fixing a typo
+  was refused over a reference the entry had carried since before the check existed.
+  References already in the stored body pass; a new one is checked exactly as a write is.
+
+### Fixed
+
+- **A new reference to a superseded entry now warns, naming the successor** (CAIRN-347),
+  on `learn` and `relearn` alike. It resolved, so it passed with nothing said.
+- **The knowledge editor shows what a save warned about**, beside the entry, and shows a
+  refused save beside the Save button instead of a full editor's height above it.
+- **A refused write's reference list printed `[[[object Object]]]`** in the CLI. It names
+  the references again.
+- **`scripts/import-memory-files.mjs` rewrites `[[file_stem]]` links** to the slugs the
+  files are written under, collision re-slugs included. It now decides every slug before
+  writing any, so `--dry-run` reads the store (it still writes nothing).
+
 ## [0.16.0] — 2026-10-01
 
 ### Added

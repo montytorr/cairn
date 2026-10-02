@@ -288,6 +288,13 @@ const TOOLS = [
         slug: { type: 'string' },
         supersededBy: { type: 'string', description: 'Slug of the entry that replaces it.' },
         reason: { type: 'string', description: 'Why it was superseded. Needs supersededBy.' },
+        allowDangling: {
+          type: 'boolean',
+          description:
+            'Without supersededBy this deletes the entry, and the delete is refused while ' +
+            'live entries [[reference]] it — the refusal names them. Prefer supersededBy, ' +
+            'or fix the referrers; this deletes anyway and leaves their references dangling.',
+        },
       },
       required: ['slug'],
     },
@@ -295,6 +302,9 @@ const TOOLS = [
       'unlearn', a.slug,
       ...(a.supersededBy ? ['--superseded-by', a.supersededBy] : []),
       ...(a.supersededBy && a.reason ? ['--reason', a.reason] : []),
+      // Only on the delete path: the CLI reads it nowhere else, and would
+      // refuse it as an ignored flag beside --superseded-by.
+      ...(!a.supersededBy && a.allowDangling ? ['--allow-dangling'] : []),
     ],
   },
   {

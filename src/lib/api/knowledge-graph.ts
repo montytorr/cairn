@@ -197,10 +197,43 @@ export type UnresolvedRef = {
   certain: boolean
 }
 
+/** A reference that lands, on an entry somebody has since replaced. */
+export type SupersededRef = WikiRef & {
+  /** The entry that replaced it — the end of the chain, if it was replaced twice. */
+  by: string
+}
+
 export type ReferenceReport = {
   /** `[[BB-192]]` and friends: task references in the wrong brackets. */
   taskShaped: WikiRef[]
   unresolved: UnresolvedRef[]
+  /**
+   * References that resolve, to an entry marked superseded (CAIRN-347).
+   *
+   * Not a defect of the reference — the page is still there, and the renderer
+   * links it — so never refused. But a NEW pointer at a claim the store has
+   * already corrected is a trail laid towards the wrong answer, and it passed
+   * in silence: the old entry exists, so nothing looked any further.
+   */
+  superseded: SupersededRef[]
+}
+
+/**
+ * Where a superseded slug's chain of replacements ends.
+ *
+ * Followed rather than read one hop, because "superseded by X" where X has
+ * itself been superseded sends the author to a second wrong answer. Bounded by
+ * a seen-set: a cycle is a data error, and this must still return.
+ */
+const successorOf = (slug: string, successors: ReadonlyMap<string, string>): string | null => {
+  let current = successors.get(slug)
+  if (!current) return null
+  const seen = new Set([slug, current])
+  for (let next = successors.get(current); next && !seen.has(next); next = successors.get(current)) {
+    seen.add(next)
+    current = next
+  }
+  return current
 }
 
 /**
@@ -214,20 +247,44 @@ export const checkReferences = ({
   body,
   slug,
   known,
+  previous,
+  successors,
 }: {
   body: string
   /** The slug being written, which resolves its own self-references. */
   slug?: string
   known: readonly string[]
+  /**
+   * The body as it is stored now, when this is an edit (CAIRN-347).
+   *
+   * Only what the edit ADDS is checked. A reference the entry already carried
+   * passes untouched — dangling, task-shaped, superseded, whatever it is — for
+   * the same reason an edit that leaves the body alone is not re-checked: it is
+   * debris from before the check existed, and refusing a label fix or a
+   * one-paragraph correction over it blocks the edit without removing a
+   * single bad reference. Compared by normalised slug, so respelling an old
+   * `[[a_b]]` as `[[a-b]]` is not a new reference either.
+   */
+  previous?: string | null
+  /** Normalised slug -> normalised slug of the entry that superseded it. */
+  successors?: ReadonlyMap<string, string>
 }): ReferenceReport => {
   const exists = new Set(known.map(normalizeSlugRef))
-  if (slug) exists.add(normalizeSlugRef(slug))
+  const self = slug ? normalizeSlugRef(slug) : null
+  if (self) exists.add(self)
+  const carried = new Set(previous ? referencesIn(previous) : [])
 
   const taskShaped: WikiRef[] = []
   const unresolved: UnresolvedRef[] = []
+  const superseded: SupersededRef[] = []
 
   for (const ref of wikiRefsIn(body)) {
-    if (exists.has(ref.slug)) continue
+    if (carried.has(ref.slug)) continue
+    if (exists.has(ref.slug)) {
+      const by = ref.slug === self || !successors ? null : successorOf(ref.slug, successors)
+      if (by) superseded.push({ ...ref, by })
+      continue
+    }
     if (TASK_SHAPED.test(ref.slug)) {
       taskShaped.push(ref)
       continue
@@ -241,7 +298,7 @@ export const checkReferences = ({
     })
   }
 
-  return { taskShaped, unresolved }
+  return { taskShaped, unresolved, superseded }
 }
 
 const nameList = (slugs: string[]): string => slugs.map((s) => `[[${s}]]`).join(', ')
@@ -298,12 +355,66 @@ export const referenceRefusal = (
  * recorded and reported rather than refused. Silence is what let 70 of these
  * accumulate.
  */
-export const referenceWarnings = (report: ReferenceReport): string[] =>
-  report.unresolved.map((ref) =>
+export const referenceWarnings = (report: ReferenceReport): string[] => [
+  ...report.unresolved.map((ref) =>
     ref.suggestions.length > 0
       ? `[[${ref.raw}]] points at no entry. Close matches: ${nameList(ref.suggestions)}.`
       : `[[${ref.raw}]] points at no entry — write it, or correct the reference.`,
+  ),
+  ...report.superseded.map(
+    (ref) =>
+      `[[${ref.raw}]] is superseded by [[${ref.by}]] — point at the successor, ` +
+      `unless the old claim is what you mean.`,
+  ),
+]
+
+/**
+ * Live entries whose prose points at `slug`, by normalised slug.
+ *
+ * Pure, over rows the caller has already read, for the same reason
+ * `checkReferences` is: the decision is worth testing without a database.
+ * A superseded referrer does not count — its references are history, and a
+ * reader is sent to its successor before they ever follow one — and nor does
+ * the entry citing itself, which goes with it.
+ */
+export const referrersOf = (
+  slug: string,
+  rows: readonly { slug: string; body: string | null; superseded_by?: string | null }[],
+): string[] => {
+  const target = normalizeSlugRef(slug)
+  return rows
+    .filter((row) => !row.superseded_by && normalizeSlugRef(row.slug) !== target)
+    .filter((row) => referencesIn(row.body ?? '').includes(target))
+    .map((row) => normalizeSlugRef(row.slug))
+    .sort()
+}
+
+/** How many referrers a refusal names before it says "and N more". */
+const REFERRERS_NAMED = 5
+
+/**
+ * The refusal for deleting an entry other entries still point at (CAIRN-347).
+ *
+ * The write path refuses a NEW reference to nothing; deletion manufactured the
+ * same thing wholesale, in silence — every `[[slug]]` pointing at the entry
+ * became a reference to an entry nobody wrote the moment the row went, and was
+ * found later, if at all, by `cairn know --dangling`. One string, like
+ * `referenceRefusal`, because the CLI prints `error` and nothing beside it.
+ */
+export const deletionRefusal = (slug: string, referrers: readonly string[]): string | null => {
+  if (referrers.length === 0) return null
+  const named = referrers.slice(0, REFERRERS_NAMED)
+  const more = referrers.length - named.length
+  const count = `${referrers.length} live entr${referrers.length === 1 ? 'y' : 'ies'}`
+  return (
+    `"${slug}" is referenced by ${count}: ${nameList(named)}` +
+    `${more > 0 ? ` and ${more} more` : ''}. ` +
+    `Deleting it leaves every one of those references pointing at nothing. ` +
+    `If something replaced it, supersede it instead — cairn unlearn ${slug} --superseded-by <slug> — ` +
+    `so the references still land on the page and it points onward; otherwise fix the referrers first. ` +
+    `If the references really should dangle, pass --allow-dangling ("allowUnresolvedRefs": true).`
   )
+}
 
 export type GraphNode = {
   slug: string
@@ -390,6 +501,51 @@ export const knownSlugs = async (): Promise<string[]> => {
   const { data, error } = await admin().from('knowledge').select('slug')
   if (error) throw new Error(error.message)
   return (data ?? []).map((row) => normalizeSlugRef(row.slug as string))
+}
+
+/**
+ * What the write-time check resolves against: every slug, and which of them
+ * have been superseded by what (CAIRN-347).
+ *
+ * `knownSlugs` alone answered "does it exist", which a superseded entry does —
+ * so a new reference to a corrected claim passed with nothing said. The
+ * replacement is stored as a row id, not a slug, hence the id column: one
+ * read, still no bodies.
+ */
+export const referenceCorpus = async (): Promise<{
+  known: string[]
+  successors: Map<string, string>
+}> => {
+  const { data, error } = await admin().from('knowledge').select('id, slug, superseded_by')
+  if (error) throw new Error(error.message)
+
+  const rows = (data ?? []) as { id: string; slug: string; superseded_by: string | null }[]
+  const slugOf = new Map(rows.map((row) => [row.id, normalizeSlugRef(row.slug)]))
+  const successors = new Map<string, string>()
+  for (const row of rows) {
+    const by = row.superseded_by ? slugOf.get(row.superseded_by) : undefined
+    if (by) successors.set(normalizeSlugRef(row.slug), by)
+  }
+  return { known: rows.map((row) => normalizeSlugRef(row.slug)), successors }
+}
+
+/**
+ * Live entries that reference `slug`, read for a deletion (CAIRN-347).
+ *
+ * Bodies, so this is not cheap — but it runs only on a hard delete, which is
+ * rare, and the corpus is a few hundred rows. Pre-filtered to bodies that hold
+ * a `[[` at all; the slug itself cannot be matched in SQL, because the author
+ * may have spelt it with underscores or capitals that only the normaliser
+ * folds.
+ */
+export const liveReferrers = async (slug: string): Promise<string[]> => {
+  const { data, error } = await admin()
+    .from('knowledge')
+    .select('slug, body, superseded_by')
+    .is('superseded_by', null)
+    .like('body', '%[[%')
+  if (error) throw new Error(error.message)
+  return referrersOf(slug, (data ?? []) as { slug: string; body: string; superseded_by: string | null }[])
 }
 
 /**

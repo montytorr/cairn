@@ -324,6 +324,11 @@ problem.
   refused outright when a reference resolves to nothing and the store already holds a
   near-named entry, and the refusal names that slug: at that distance it is a misspelling,
   not an entry nobody has written yet. `--allow-dangling` is for when that reading is wrong.
+  A reference to a superseded entry is accepted with a warning naming its successor. An
+  edit is checked only for the references it adds, so a typo fix is never refused over one
+  the entry already carried. And a hard delete (`cairn unlearn` with no successor) is
+  refused while live entries still reference the entry, naming them — supersede it
+  instead, fix the referrers, or pass `--allow-dangling` to delete anyway.
 - **A map of the corpus** at `/knowledge/graph`, and the same findings without a screen
   through `cairn know --gaps`. It answers the question a list cannot: what is connected to
   *nothing*. Here that was a quarter of the entries, nineteen separate islands, and dozens
@@ -434,6 +439,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn relearn <slug> --project K` · `--entity E` · `--global` | Re-scope it. Each flag replaces its own side, and `none` clears one: `--entity E --project none` moves a fact from a project to an entity. `--global` clears both and refuses to be combined with either |
 | `cairn verify <slug>` | This fact is still true. Clears the stale mark without rewriting it |
 | `--allow-dangling` (on `learn` and `relearn`) | Keep a `[[reference]]` the store cannot resolve. A write is otherwise refused when a reference names nothing and a near-named entry exists; the refusal names that slug, so retrying with it is the usual answer, and this flag is for when it gets that wrong |
+| `--allow-dangling` (on `unlearn` without `--superseded-by`) | Delete an entry other live entries still `[[reference]]`. The delete is otherwise refused, naming the referrers; superseding it instead keeps their references landing somewhere |
 | `cairn entities` · `cairn entities assign\|unassign <key> --project A,B` · `cairn entities rename <key>` | Groupings a fact can be true of |
 | **Sessions and upkeep** | |
 | `cairn session list` · `cairn session checkpoint\|end --id <id>` | The episodic record; `checkpoint` records progress without ending it |

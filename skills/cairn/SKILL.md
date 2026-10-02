@@ -148,11 +148,11 @@ surfaced on an unrelated project, it is knowledge; bound to one task and moment,
   bodies, resolutions, checkpoints (`sk-…`, `ghp_…`, `AKIA…`, private keys, JWTs,
   `password: <value>`). Write where it lives instead: `$ENV_VAR`, a vault path.
 - **The title is the claim; the slug is the handle** — give a long claim a short `--slug`.
-- **`[[slug]]` in a body is a link**, followable in browser and terminal. A reference that
-  misses while a near-named entry exists is refused, naming the slug you probably meant —
-  take it; it is almost always a typo. With nothing close it is accepted with a warning.
-  `[[ACME-42]]` is refused: write task refs bare. `--allow-dangling` is for when the
-  refusal is wrong.
+- **`[[slug]]` in a body is a link**, followable in browser and terminal. A miss beside a
+  near-named entry is refused, naming the slug you meant — take it. Nothing close, or a
+  superseded target: accepted with a warning. `[[ACME-42]]` is refused: write task refs
+  bare. `--allow-dangling` overrides a wrong refusal, or a bare `unlearn` (delete)
+  refused while others link it.
 - **Correct rather than add.** Two contradictory claims, equally findable, is how every
   memory store fails. When `learn` lists same-subject entries, supersede the wrong one.
 

@@ -22,11 +22,18 @@
  *                  null means import that directory's memory globally
  *   --global       treat every unmapped directory as global rather than
  *                  refusing it
+ *
+ * Two passes (CAIRN-347). The first reads every file and decides the slug each
+ * will be written under, collision re-slugs included; the second rewrites each
+ * body's `[[file_stem]]` links to those slugs and writes it. The first pass
+ * reads the store to decide collisions, so `--dry-run` reads too — it writes
+ * nothing, and the slugs it prints are the ones a real run would use.
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { linkTargets, planSlugs, rewriteLinks, slugOf } from './memory-links.mjs'
 
 const DRY = process.argv.includes('--dry-run')
 const GLOBAL = process.argv.includes('--global')
@@ -132,16 +139,49 @@ const cairn = (args, body) => {
   return execFileSync('cairn', args, { input: body ?? '', encoding: 'utf8' })
 }
 
+/**
+ * The body stored under `slug`, or null when there is none.
+ *
+ * Asked as two reads so that a miss stays a miss. `cairn know <word>` falls
+ * back to a full-text search when the slug is not there, which would record a
+ * search per file and return results that look like an answer; `--history`
+ * 404s instead, and records nothing. Only a hit is then read for its body,
+ * tagged as a sweep so an import does not count as anybody recalling it.
+ */
+const QUIET = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CAIRN_SWEEP: '1' } }
+const storedBody = (slug) => {
+  try {
+    execFileSync('cairn', ['know', slug, '--history', '--json'], QUIET)
+  } catch {
+    return null
+  }
+  try {
+    const hit = JSON.parse(execFileSync('cairn', ['know', slug, '--json'], QUIET))
+    return typeof hit?.body === 'string' ? hit.body : ''
+  } catch {
+    // It exists and its body could not be read: a fact we cannot prove is
+    // this one is treated as another one, which re-slugs rather than drops.
+    return ''
+  }
+}
+
 let imported = 0
 let skipped = 0
 const collisions = []
 const requalified = []
+
+// Pass one: read every file and decide the slug it will be written under.
+// Nothing is written until every slug is known, because a link can point at a
+// file that is planned after the one carrying it.
+const entries = []
+const fileCounts = []
 
 for (const [dir, project] of candidates) {
   const memoryDir = join(ROOT, dir, 'memory')
 
   const titles = titlesFrom(memoryDir)
   const files = readdirSync(memoryDir).filter((f) => f.endsWith('.md') && f !== 'MEMORY.md')
+  fileCounts.push([dir, project, files.length])
 
   for (const file of files) {
     const raw = readFileSync(join(memoryDir, file), 'utf8')
@@ -156,10 +196,8 @@ for (const [dir, project] of candidates) {
     // these files use underscores (`project_aircall_widget_...`) and were
     // being rejected outright rather than collided -- which looked identical
     // in the summary and was not.
-    const slug = (front.name || file.replace(/\.md$/, ''))
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+    const stem = file.replace(/\.md$/, '')
+    const slug = slugOf(front.name || stem)
     // MEMORY.md is supposed to carry a human title per file, but in several
     // projects its link text is just the filename -- which produced 110 rows
     // titled `project_recap_encoding_recurrence`. A title that is only the
@@ -173,63 +211,59 @@ for (const [dir, project] of candidates) {
 
     const labels = [front.type, project ? null : 'global'].filter(Boolean)
 
-    const args = ['learn', title, '--slug', slug, '--body', '-']
-    if (project) args.push('--project', project)
-    if (labels.length) args.push('--label', labels.join(','))
-
     // The description is the one-line summary and the body is the fact; keeping
     // both means the index line reads well without opening the row.
     const full = front.description ? `${front.description}\n\n${body}` : body
 
-    try {
-      cairn(args, full)
-      imported += 1
-    } catch (error) {
-      const message = String(error.stderr ?? error.message)
-      if (!message.includes('already exists')) {
-        console.error(`  ! ${slug}: ${message.trim().split('\n')[0]}`)
-        skipped += 1
-        continue
-      }
-
-      // A taken slug means one of two very different things, and guessing
-      // wrong is expensive in both directions. If the row already there has
-      // this exact body it is this same file, imported by an earlier pass --
-      // re-slugging it produced 125 duplicate rows. If the body differs it is
-      // a different project's fact of the same name (every codebase has a
-      // `feedback-verify-branch-before-commit`), and dropping it loses content.
-      let existing = null
-      try {
-        existing = JSON.parse(
-          execFileSync('cairn', ['know', slug, '--json'], { encoding: 'utf8' }),
-        )
-      } catch {
-        existing = null
-      }
-
-      if (existing && existing.body?.trim() === full.trim()) {
-        skipped += 1
-        continue
-      }
-
-      if (!project) {
-        collisions.push(slug)
-        skipped += 1
-        continue
-      }
-
-      const qualified = `${project.toLowerCase()}-${slug}`
-      try {
-        cairn([...args.slice(0, 2), '--slug', qualified, ...args.slice(4)], full)
-        imported += 1
-        requalified.push(qualified)
-      } catch {
-        collisions.push(slug)
-        skipped += 1
-      }
-    }
+    entries.push({ dir, project, stem, slug, title, labels, full })
   }
-  console.log(`${dir} -> ${project ?? 'global'}: ${files.length} files`)
+}
+
+// A taken slug means one of two very different things, and guessing wrong is
+// expensive in both directions. If the row already there has this same body it
+// is this same file, imported by an earlier pass -- re-slugging it produced 125
+// duplicate rows. If the body differs it is a different project's fact of the
+// same name (every codebase has a `feedback-verify-branch-before-commit`), and
+// dropping it loses content. That decision used to wait for the write to fail;
+// it is made here instead, in the same order, so the link map below knows it.
+const plan = planSlugs(entries, storedBody)
+const targets = linkTargets(plan)
+
+// Pass two: rewrite each body's `[[file_stem]]` links to the slugs just
+// decided, and write it. A link to a stem with no file here is left as it is,
+// for `cairn learn` to resolve, warn about or refuse.
+for (const entry of plan) {
+  if (entry.action === 'present') {
+    skipped += 1
+    continue
+  }
+  if (entry.action === 'collision') {
+    collisions.push(entry.slug)
+    skipped += 1
+    continue
+  }
+
+  const args = ['learn', entry.title, '--slug', entry.final, '--body', '-']
+  if (entry.project) args.push('--project', entry.project)
+  if (entry.labels.length) args.push('--label', entry.labels.join(','))
+
+  try {
+    cairn(args, rewriteLinks(entry.full, targets.get(entry.dir)))
+    imported += 1
+    if (entry.requalified) requalified.push(entry.final)
+  } catch (error) {
+    // `already exists` here means something wrote the slug after it was
+    // planned: a collision, reported as one rather than retried under a slug
+    // the links were not told about.
+    const message = String(error.stderr ?? error.message)
+    if (message.includes('already exists')) collisions.push(entry.final)
+    else console.error(`  ! ${entry.final}: ${message.trim().split('\n')[0]}`)
+    skipped += 1
+  }
+}
+
+for (const [dir, project, count] of fileCounts) {
+  console.log(`${dir} -> ${project ?? 'global'}: ${count} files`)
 }
 
 console.log(`\nimported ${imported}, skipped ${skipped}`)

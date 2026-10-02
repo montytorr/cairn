@@ -228,6 +228,7 @@ describe('documented invocations stay silent', () => {
     ['learn', 'A fact', '--body', 'b', '--global', '--label', 'l', '--task', 'CAI-1'],
     ['relearn', 'a-fact', '--body', 'b', '--title', 'T'],
     ['unlearn', 'a-fact', '--superseded-by', 'b-fact'],
+    ['unlearn', 'a-fact', '--allow-dangling'],
     ['check', 'x', '--project', 'CAI', '--kinds', 'task'],
     ['check', 'x', '--tasks'],
     ['show', 'CAI-1', '--full'],

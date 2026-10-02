@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, ChevronRight, ShieldCheck, Undo2 } from 'lucide-react'
+import { ArrowRight, ChevronRight, Info, ShieldCheck, Undo2, X } from 'lucide-react'
 import { MarkdownView } from '@/components/markdown'
 import { LabelPill, ProjectIcon, entityColor, projectColor } from '@/components/icons'
 import { Button, Field, Input, Select, Textarea } from '@/components/ui/control'
@@ -58,7 +58,7 @@ const patch = async (slug: string, body: Record<string, unknown>) => {
   if (!res.ok || !json?.success) {
     throw new Error(json?.error ?? 'The update was refused.')
   }
-  return json.data
+  return json.data as { warnings?: string[] } | null
 }
 
 /** A wrapping list of toggleable chips — projects and entities are small
@@ -123,6 +123,13 @@ export const KnowledgeDetail = ({
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * What the save accepted but still had something to say about: a reference
+   * to nothing, or to an entry somebody has superseded (CAIRN-347). The CLI
+   * prints these on stderr; this page read `data` and dropped them, so the one
+   * surface a person edits on was the one that never heard.
+   */
+  const [warnings, setWarnings] = useState<string[]>([])
   const [current, setCurrent] = useState(row)
 
   const [draftTitle, setDraftTitle] = useState(row.title)
@@ -144,14 +151,16 @@ export const KnowledgeDetail = ({
     setDraftEntities(current.entities)
     setDraftVerified(current.verified)
     setError(null)
+    setWarnings([])
     setEditing(true)
   }
 
   const save = async () => {
     setSaving(true)
     setError(null)
+    setWarnings([])
     try {
-      await patch(slug, {
+      const saved = await patch(slug, {
         title: draftTitle,
         body: draftBody,
         labels: draftLabels,
@@ -168,6 +177,7 @@ export const KnowledgeDetail = ({
         entities: draftEntities,
         verified: draftVerified,
       })
+      setWarnings(saved?.warnings ?? [])
       setEditing(false)
       router.refresh()
     } catch (e) {
@@ -237,10 +247,41 @@ export const KnowledgeDetail = ({
         </div>
       )}
 
-      {error && (
-        <p className="text-danger bg-danger-subtle mb-4 rounded-md px-3 py-2 text-[0.78125rem]">
+      {error && !editing && (
+        <p
+          role="alert"
+          className="text-danger bg-danger-subtle mb-4 rounded-md px-3 py-2 text-[0.78125rem] whitespace-pre-line"
+        >
           {error}
         </p>
+      )}
+
+      {/* Saved, with a remark — the same quiet card as the superseded notice
+          above, because nothing failed. Kept until dismissed or the next
+          edit: it names references to fix, and a toast would time out first. */}
+      {warnings.length > 0 && (
+        <div
+          role="status"
+          className="surface-card text-fg-muted enter-rise mb-4 flex items-start gap-2 px-3 py-2 text-[0.78125rem]"
+        >
+          <Info size={13} className="mt-[0.1875rem] shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-fg">Saved. Some references need a look:</p>
+            <ul className="mt-1 flex flex-col gap-0.5 leading-relaxed break-words">
+              {warnings.map((warning, i) => (
+                <li key={i}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWarnings([])}
+            aria-label="Dismiss"
+            className="text-fg-subtle hover:text-fg -mr-1 grid size-5 shrink-0 place-items-center rounded transition-colors"
+          >
+            <X size={13} />
+          </button>
+        </div>
       )}
 
       {!editing ? (
@@ -514,11 +555,31 @@ export const KnowledgeDetail = ({
             Verified — this has been checked, not just recorded
           </label>
 
+          {/* A refused save is said beside the button that was pressed. At the
+              top of the page it sat a full editor's height above the click,
+              out of view, so a refusal from the reference check looked like a
+              save that did nothing (CAIRN-347). */}
+          {error && (
+            <p
+              role="alert"
+              className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-[0.78125rem] whitespace-pre-line"
+            >
+              {error}
+            </p>
+          )}
+
           <div className="flex items-center gap-2">
             <Button variant="primary" onClick={save} disabled={saving || !draftTitle.trim()}>
               {saving ? 'Saving…' : 'Save'}
             </Button>
-            <Button variant="ghost" onClick={() => setEditing(false)} disabled={saving}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditing(false)
+                setError(null)
+              }}
+              disabled={saving}
+            >
               Cancel
             </Button>
           </div>

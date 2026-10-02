@@ -1920,7 +1920,9 @@ const request = async (method, path, body, { soft = false } = {}) => {
     // list of what they were and what the store actually calls them.
     const refs = [
       ...(payload.unresolvedReferences ?? []).map(
-        (r) => `  [[${r.ref ?? r}]]${r.suggestions?.length ? ` — did you mean ${r.suggestions.join(', ')}?` : ''}`,
+        // The server sends `raw` (as spelt) and `slug`; `ref` was never one
+        // of its fields, so this printed `[[[object Object]]]` (CAIRN-347).
+        (r) => `  [[${r.raw ?? r.slug ?? r.ref ?? r}]]${r.suggestions?.length ? ` — did you mean ${r.suggestions.join(', ')}?` : ''}`,
       ),
       ...(payload.taskReferences ?? []).map((r) => `  [[${r}]] is a task ref — write it bare as ${String(r).toUpperCase()}`),
     ]
@@ -2722,6 +2724,9 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    (none clears one side: --entity E --project none moves it)
                                    --files a,b  the files it is about (replaces those named before)
     cairn unlearn <slug> [--superseded-by <slug> [--reason "why"]]
+                                   without a successor it deletes, and refuses while
+                                   live entries [[reference]] it; --allow-dangling
+                                   deletes anyway and leaves those references dangling
     cairn session list             recent sessions
     cairn session checkpoint --id <id>  upsert ongoing session, do not checkpoint held tasks
     cairn session end --id <id>    write the episodic record, checkpoint what is held
@@ -4229,14 +4234,20 @@ const commands = {
   },
 
   async unlearn() {
-    const slug = need(positional[0], 'usage: cairn unlearn <slug> [--superseded-by <slug>]')
+    const slug = need(positional[0], 'usage: cairn unlearn <slug> [--superseded-by <slug> | --allow-dangling]')
     if (flags['superseded-by']) {
       return emit(await request('PATCH', `/api/v1/knowledge/${slug}`, {
         supersededBy: flags['superseded-by'],
         ...(typeof flags.reason === 'string' ? { reason: flags.reason } : {}),
       }))
     }
-    emit(await request('DELETE', `/api/v1/knowledge/${slug}`))
+    // A hard delete is refused while live entries still `[[reference]]` it,
+    // because every one of those would become a reference to nothing
+    // (CAIRN-347). The refusal names them; `--superseded-by` above is the
+    // usual answer, and this is the deliberate way past for when it is not.
+    // A query parameter: a DELETE body is not something to rely on arriving.
+    const query = flags['allow-dangling'] ? '?allowUnresolvedRefs=true' : ''
+    emit(await request('DELETE', `/api/v1/knowledge/${slug}${query}`))
   },
 
   /**
