@@ -733,7 +733,9 @@ const SESSION = (() => {
  */
 // Read through `flags` when a request is made, so the flag counts as used by
 // whichever verb it was passed to rather than being reported as ignored.
-const sweeping = () => process.env.CAIRN_SWEEP === '1' || Boolean(flags.sweep)
+// READ_TO_EDIT: `cairn link` reading the body it is about to extend (CAIRN-350).
+let READ_TO_EDIT = false
+const sweeping = () => process.env.CAIRN_SWEEP === '1' || Boolean(flags.sweep) || READ_TO_EDIT
 
 /**
  * Which machine is speaking.
@@ -1088,7 +1090,7 @@ const KNOWN_FLAGS = new Set([
   'message', 'mine', 'name', 'next', 'no-checkpoint', 'no-herdr', 'no-hooks', 'no-jobs', 'no-parent',
   'no-skill', 'no-start', 'notify', 'older',
   'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
-  'reason', 'remote', 'repo', 'request', 'resolution', 'runtimes', 'scheduled', 'scope',
+  'reason', 'related', 'remote', 'repo', 'request', 'resolution', 'runtimes', 'scheduled', 'scope',
   'session', 'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
   'superseded', 'superseded-by', 'sweep', 'task', 'tasks', 'title', 'tool-calls',
   'type', 'unused', 'url', 'verified', 'version',
@@ -2427,6 +2429,127 @@ const splitList = (v) => {
 }
 
 /**
+ * Naming the entries a fact relates to, without typing a body (CAIRN-350).
+ *
+ * 178 of 351 knowledge entries linked to nothing, and 161 of those were
+ * written by agents after the import — of which two contained a `[[` at all.
+ * Linking needed the exact slug spelled inside a body, and acting on `learn`'s
+ * own "existing entries on the same subject" nudge needed a whole `relearn
+ * --body` restating everything else. So `--related a,b` and `cairn link` both
+ * come down to this: one trailing `Related: [[a]], [[b]]` line, grown in place.
+ *
+ * Merged into a trailing `Related:` line when the body already ends with one,
+ * so linking twice reads as one list rather than two. A slug the body already
+ * links anywhere — its own prose, a Related line further up — is not added
+ * again; a `[[slug]]` inside code is not a link (the renderer and the map both
+ * skip code), so it does not count as one. Compared through the same
+ * normaliser the server resolves references with: `Foo_Bar` and `foo-bar` are
+ * one entry, and written in the canonical form.
+ *
+ * The block between the markers is evaluated on its own by
+ * src/lib/cli-related-links.test.ts — this file is a standalone copy in
+ * ~/.local/bin and cannot import a module — so it must not use anything
+ * defined elsewhere in it.
+ */
+// <related-links>
+const RELATED_SLUG = /^[a-z0-9][a-z0-9_-]{1,118}[a-z0-9]$/
+const RELATED_WIKI = /\[\[([A-Za-z0-9][A-Za-z0-9_-]{1,118}[A-Za-z0-9])\]\]/g
+const relatedSlugRef = (raw) => String(raw).trim().replace(/^\[\[|\]\]$/g, '').trim().toLowerCase().replace(/_/g, '-')
+const linkingProse = (body) =>
+  body.replace(/```[\s\S]*?```/g, ' ').replace(/(`+)(?:(?!\1)[^\n]|\n(?![ \t]*\n))+?\1/g, ' ')
+const relatedLinksIn = (body) =>
+  new Set([...linkingProse(String(body ?? '')).matchAll(RELATED_WIKI)].map(([, raw]) => relatedSlugRef(raw)))
+
+const withRelated = (body, slugs, self) => {
+  const text = String(body ?? '')
+  const present = relatedLinksIn(text)
+  const own = self ? relatedSlugRef(self) : null
+  const wanted = [...new Set(slugs.map(relatedSlugRef).filter(Boolean))]
+  const invalid = wanted.filter((slug) => !RELATED_SLUG.test(slug))
+  const selfLinked = own !== null && wanted.includes(own)
+  const already = wanted.filter((slug) => present.has(slug))
+  const added = wanted.filter((slug) => slug !== own && !present.has(slug) && RELATED_SLUG.test(slug))
+  const unchanged = { body: text, added: [], already, invalid, selfLinked }
+  if (selfLinked || invalid.length > 0 || added.length === 0) return unchanged
+
+  const links = added.map((slug) => `[[${slug}]]`).join(', ')
+  const kept = text.replace(/\s+$/, '')
+  const lines = kept.split('\n')
+  const last = lines[lines.length - 1] ?? ''
+  if (/^related:/i.test(last.trim())) {
+    // A trailing full stop is a sentence ending, not part of the list.
+    const stem = last.replace(/[\s.;,]+$/, '')
+    lines[lines.length - 1] = /^related:$/i.test(stem.trim()) ? `${stem} ${links}` : `${stem}, ${links}`
+    return { ...unchanged, body: lines.join('\n'), added }
+  }
+  return { ...unchanged, body: kept ? `${kept}\n\nRelated: ${links}` : `Related: ${links}`, added }
+}
+// </related-links>
+
+/**
+ * `--related` as a list, refused when empty rather than read as "not given" —
+ * the CAIRN-262 failure, where a flag parses and then changes nothing.
+ */
+const relatedFlag = () => {
+  if (flags.related === undefined) return []
+  const list = splitList(flags.related)
+  if (list.length === 0) die('--related needs a value: the slugs it relates to, comma-separated')
+  return list
+}
+
+/**
+ * The slug the server will derive from a title when no --slug is given — its
+ * `slugify` before the length cap, which is all a self-link check needs: a
+ * title long enough to be cut is not one anybody types back as a slug.
+ */
+const titleSlug = (title) =>
+  String(title)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+/**
+ * The body a `--related` edit grows, read from the store when the caller did
+ * not supply one. The read is tagged as a sweep: fetching an entry to append a
+ * line to it is not anybody recalling it, and counting it would mark every
+ * entry ever linked as in use (CAIRN-289).
+ */
+const relatedEdit = async (slug, related, given) => {
+  let current = given
+  let self = slug
+  if (current === undefined) {
+    READ_TO_EDIT = true
+    let entry
+    try {
+      entry = await request('GET', `/api/v1/knowledge/${slug}`)
+    } finally {
+      READ_TO_EDIT = false
+    }
+    current = entry?.body ?? ''
+    self = entry?.slug ?? slug
+  }
+  const merged = withRelated(current, related, self)
+  refuseRelated(merged, self)
+  return merged
+}
+
+/** Nothing to add: said, and exit 0, because the state asked for is the state there is. */
+const reportLinked = (slug, merged) => {
+  if (FORMAT !== 'tsv') return emit({ slug, changed: false, alreadyLinked: merged.already })
+  process.stdout.write(`${slug} already links ${merged.already.join(', ')} — nothing to change\n`)
+}
+
+/** Why `withRelated` would not write, said once for `learn`, `relearn` and `link`. */
+const refuseRelated = (merged, self) => {
+  if (merged.selfLinked) die(`an entry cannot be related to itself (${relatedSlugRef(self)})`)
+  if (merged.invalid.length > 0) {
+    die(`not a slug: ${merged.invalid.join(', ')} — a knowledge slug is letters, digits and hyphens (cairn know "<query>" finds one)`)
+  }
+}
+
+/**
  * The briefing, as text a model reads once at the top of a session.
  *
  * Ordered by what changes behaviour soonest: what you are still holding, then
@@ -2699,6 +2822,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    what is known;
                                    project scope filters tasks and sessions (default: all)
     cairn learn "<title>" --body - record what we now know
+                                   --related a,b  the entries it relates to: appends
+                                   a Related: [[a]], [[b]] line, checked like any [[ref]]
                                    --allow-dangling  keep a [[ref]] the store cannot resolve
                                    --files a,b  files it is about, beyond those its body names
                                    --project K  true of that project
@@ -2723,6 +2848,10 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    --project K | --entity E | --global  re-scope it
                                    (none clears one side: --entity E --project none moves it)
                                    --files a,b  the files it is about (replaces those named before)
+                                   --related a,b  add them to its Related: line, body or not
+    cairn link <slug> <other> [<other>…] [--reason "why"]
+                                   relate it to others: grows its Related: line, as a
+                                   versioned edit; linking what is already linked writes nothing
     cairn unlearn <slug> [--superseded-by <slug> [--reason "why"]]
                                    without a successor it deletes, and refuses while
                                    live entries [[reference]] it; --allow-dangling
@@ -3865,6 +3994,20 @@ const commands = {
       die('a fact needs a body: what it means and how it was found.\n' +
         '  cairn learn "<title>" --body -   # markdown on stdin')
     }
+    // Merged into the body here rather than sent as a field, so the server's
+    // existing reference check sees them exactly as it sees a hand-written
+    // `[[slug]]` — a near-miss is refused naming the slug meant, the same as
+    // ever (CAIRN-350). After the blank-body check on purpose: a Related line
+    // is not an explanation, and must not turn a bare title into a fact.
+    // Merged before scope is resolved, so a bad slug costs no round trip.
+    const related = relatedFlag()
+    let sentBody = body
+    if (related.length > 0) {
+      const self = flags.slug ?? titleSlug(title)
+      const merged = withRelated(body, related, self)
+      refuseRelated(merged, self)
+      sentBody = merged.body
+    }
     /**
      * Scope is decided before the write, not regretted after it.
      *
@@ -3918,7 +4061,7 @@ const commands = {
 
     const payload = {
       title,
-      body,
+      body: sentBody,
       labels: splitList(flags.label),
       projects,
     }
@@ -3947,12 +4090,26 @@ const commands = {
 
     // Same-topic entries already in the store. A new fact that contradicts
     // an old one leaves both reading as true unless somebody links them.
+    //
+    // "If they agree, link them with [[slug]]" was prose, and acting on it
+    // meant a whole `relearn --body` restating the entry just written — so
+    // nobody did: of 161 entries agents wrote after the import and left
+    // linked to nothing, two contained a `[[` at all (CAIRN-350). The agreeing
+    // case is now a line to run. Entries this write already links are left
+    // out of it, and the line is left out when that is all of them.
     if (result?.similar?.length) {
+      const linked = relatedLinksIn(sentBody)
+      const candidates = result.similar
+        .map((k) => k.slug)
+        .filter((slug) => slug && !linked.has(relatedSlugRef(slug)))
+        .slice(0, 3)
       process.stderr.write('cairn: existing entries on the same subject:\n')
       for (const k of result.similar) process.stderr.write(`  ${k.slug}  (${k.scope})  ${truncate(k.title, 70)}\n`)
+      if (candidates.length > 0) {
+        process.stderr.write(`  if they agree:       cairn link ${result.slug} ${candidates.join(' ')}\n`)
+      }
       process.stderr.write(
-        `  if one is now wrong: cairn unlearn <slug> --superseded-by ${result.slug}` +
-          ' — or cairn relearn it; if they agree, link them with [[slug]]\n',
+        `  if one is now wrong: cairn unlearn <slug> --superseded-by ${result.slug} — or cairn relearn it\n`,
       )
     }
     if (FORMAT === 'tsv' && result?.source_task_id && !flags.task) {
@@ -4333,10 +4490,65 @@ const commands = {
     // Replaces the explicitly named files; `--files ''` clears them (CAIRN-269).
     if (flags.files !== undefined) patch.files = flags.files === true ? [] : splitList(flags.files)
 
+    // Grows the Related line of the body being sent, or of the stored one
+    // when no --body is given — then it is `cairn link` with the rest of
+    // relearn beside it (CAIRN-350).
+    const related = relatedFlag()
+    if (related.length > 0) {
+      const merged = await relatedEdit(slug, related, patch.body)
+      if (merged.added.length > 0) {
+        patch.body = merged.body
+        if (patch.reason === undefined && flags.body === undefined) patch.reason = `linked to ${merged.added.join(', ')}`
+      } else if (Object.keys(patch).every((key) => key === 'reason')) {
+        return reportLinked(slug, merged)
+      }
+    }
+
     const result = await request('PATCH', `/api/v1/knowledge/${slug}`, patch)
     emit(result)
     for (const warning of result?.warnings ?? []) {
       process.stderr.write(`cairn: ${warning}\n`)
+    }
+  },
+
+  /**
+   * Relate one entry to others in one command (CAIRN-350).
+   *
+   * `learn` lists same-subject entries after every write, and the only way to
+   * act on "they agree" was a `relearn --body` restating the whole entry to
+   * add one `[[slug]]` — so it went undone, and half the store linked to
+   * nothing. This appends to the entry's trailing `Related:` line and PATCHes
+   * it with a reason, so it is a versioned edit like any relearn, visible in
+   * `--history`. The PATCH checks only the references it adds (CAIRN-347), so
+   * old debris elsewhere in the body cannot block a new link.
+   *
+   * Idempotent: linking what is already linked says so and writes nothing —
+   * an empty revision would be noise in the history, and a retried command
+   * should not create one.
+   */
+  async link() {
+    const usage = 'usage: cairn link <slug> <other> [<other>…] [--reason "why"]'
+    const slug = need(positional[0], usage)
+    const others = positional.slice(1).flatMap((p) => splitList(p))
+    if (others.length === 0) die(`${usage}\nname at least one entry to relate it to`)
+    if (flags.reason === true) die('--reason needs a value: why they are related')
+    const reason = typeof flags.reason === 'string' ? flags.reason : undefined
+    const allowDangling = Boolean(flags['allow-dangling'])
+
+    const merged = await relatedEdit(slug, others)
+    if (merged.added.length === 0) return reportLinked(slug, merged)
+
+    const result = await request('PATCH', `/api/v1/knowledge/${slug}`, {
+      body: merged.body,
+      reason: reason ?? `linked to ${merged.added.join(', ')}`,
+      ...(allowDangling ? { allowUnresolvedRefs: true } : {}),
+    })
+    emit(result)
+    for (const warning of result?.warnings ?? []) {
+      process.stderr.write(`cairn: ${warning}\n`)
+    }
+    if (merged.already.length > 0) {
+      process.stderr.write(`cairn: already linked, left as they were: ${merged.already.join(', ')}\n`)
     }
   },
 
