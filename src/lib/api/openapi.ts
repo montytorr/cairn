@@ -1070,9 +1070,11 @@ export const openapiSpec = () => ({
           'and is marked.\n\n' +
           'A changed `body` runs the same reference check as the write, and refuses or warns ' +
           'the same way — otherwise the check is reachable in one hop: write a clean entry, ' +
-          'then edit a dangling `[[ref]]` into it with nothing looking. A body that is not ' +
-          'being changed is not re-checked, so a rename or a `verified` does not fail on a ' +
-          'reference the entry has carried for weeks.',
+          'then edit a dangling `[[ref]]` into it with nothing looking. Only references the ' +
+          'edit adds are checked: one already in the stored body passes, so a rename, a ' +
+          '`verified` or a one-paragraph fix does not fail on a reference the entry has ' +
+          'carried for weeks. A new reference to a superseded entry is accepted with a ' +
+          '`warning` naming its successor.',
         requestBody: body(json(knowledgeUpdate)),
         responses: {
           '200': okResponse('Updated.', knowledgeEntry),
@@ -1080,7 +1082,17 @@ export const openapiSpec = () => ({
           '404': errorResponse,
         },
       },
-      delete: { summary: 'Forget it', responses: { '200': okResponse('Deleted.'), '404': errorResponse } },
+      delete: {
+        summary: 'Forget it',
+        description:
+          'Refused with 409 while live entries still `[[reference]]` this one: deleting it ' +
+          'would leave every one of those pointing at nothing. The error names them, and ' +
+          '`referrers` / `referrerCount` carry them. PATCH `supersededBy` instead, so the ' +
+          'references still land on a page that points onward, or fix the referrers. ' +
+          '`?allowUnresolvedRefs=true` deletes anyway.',
+        parameters: [{ name: 'allowUnresolvedRefs', in: 'query', schema: { type: 'boolean' } }],
+        responses: { '200': okResponse('Deleted.'), '404': errorResponse, '409': errorResponse },
+      },
     },
     '/tasks/{ref}/recall': {
       parameters: [

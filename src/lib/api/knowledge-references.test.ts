@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import {
   checkReferences,
   closeSlugs,
+  deletionRefusal,
   referenceRefusal,
+  referrersOf,
   referenceWarnings,
   referencesIn,
   wikiRefsIn,
@@ -198,7 +200,181 @@ describe('what the write path does about it', () => {
   it('says nothing about a body whose references all resolve', () => {
     const report = checkReferences({ body: 'See [[proxy_buffer_defaults]].', known: corpus })
 
-    expect(report).toEqual({ taskShaped: [], unresolved: [] })
+    expect(report).toEqual({ taskShaped: [], unresolved: [], superseded: [] })
+  })
+})
+
+/**
+ * An edit is checked for what it adds, not for what the entry already carried
+ * (CAIRN-347). The web editor sends the whole body on every save, so checking
+ * all of it refused a typo fix over a reference that predates the check —
+ * blocking the edit without removing the bad reference.
+ */
+describe('an edit, checked against the body it replaces', () => {
+  const stored =
+    'Old notes cite [[capsolver-akamai-bug]], [[BB-192]] and [[never-written-thing]].'
+
+  it('passes references the stored body already carried, refusal and warning alike', () => {
+    const report = checkReferences({
+      body: `${stored}\n\nA corrected paragraph.`,
+      known: corpus,
+      previous: stored,
+    })
+
+    expect(report).toEqual({ taskShaped: [], unresolved: [], superseded: [] })
+    expect(referenceRefusal(report)).toBeNull()
+    expect(referenceWarnings(report)).toEqual([])
+  })
+
+  it('matches carried references by normalised slug, so a respelling is not new', () => {
+    const report = checkReferences({
+      body: 'Now cites [[capsolver_akamai_bug]] and [[bb-192]].',
+      known: corpus,
+      previous: stored,
+    })
+
+    expect(referenceRefusal(report)).toBeNull()
+  })
+
+  it('still refuses a near-miss the edit introduces — the one hop stays closed', () => {
+    const report = checkReferences({
+      body: `${stored} Also [[seetickets-session]].`,
+      known: corpus,
+      previous: stored,
+    })
+
+    expect(report.unresolved.map((ref) => ref.slug)).toEqual(['seetickets-session'])
+    expect(referenceRefusal(report)).toContain('[[seetickets-session-mechanics]]')
+  })
+
+  it('still refuses a task ref in wiki brackets the edit introduces', () => {
+    const report = checkReferences({
+      body: `${stored} Fixed in [[CAIRN-347]].`,
+      known: corpus,
+      previous: stored,
+    })
+
+    expect(report.taskShaped.map((ref) => ref.raw)).toEqual(['CAIRN-347'])
+    expect(referenceRefusal(report)).toContain('CAIRN-347')
+  })
+
+  it('still warns about a new reference to nothing', () => {
+    const report = checkReferences({
+      body: `${stored} Next: [[kafka-consumer-lag-alerting]].`,
+      known: corpus,
+      previous: stored,
+    })
+
+    expect(referenceWarnings(report)).toEqual([
+      '[[kafka-consumer-lag-alerting]] points at no entry — write it, or correct the reference.',
+    ])
+  })
+})
+
+/**
+ * A reference to a superseded entry resolves — the page is still there — so
+ * it passed with nothing said, and a new trail was laid to a claim the store
+ * had already corrected (CAIRN-347). Warned, never refused.
+ */
+describe('a new reference to a superseded entry', () => {
+  const successors = new Map([
+    ['proxy-buffer-defaults', 'proxy-buffer-defaults-v2'],
+    ['proxy-buffer-defaults-v2', 'proxy-buffer-defaults-v3'],
+    ['seetickets-session-mechanics', 'borrower-insurance-appointments'],
+  ])
+  const known = [...corpus, 'proxy-buffer-defaults-v2', 'proxy-buffer-defaults-v3']
+
+  it('is accepted with a warning that names the successor', () => {
+    const report = checkReferences({
+      body: 'See [[seetickets-session-mechanics]].',
+      known,
+      successors,
+    })
+
+    expect(referenceRefusal(report)).toBeNull()
+    expect(referenceWarnings(report)).toEqual([
+      '[[seetickets-session-mechanics]] is superseded by [[borrower-insurance-appointments]] — ' +
+        'point at the successor, unless the old claim is what you mean.',
+    ])
+  })
+
+  it('names the end of the chain, not a successor that was itself replaced', () => {
+    const report = checkReferences({ body: 'See [[proxy_buffer_defaults]].', known, successors })
+
+    expect(report.superseded).toEqual([
+      { raw: 'proxy_buffer_defaults', slug: 'proxy-buffer-defaults', by: 'proxy-buffer-defaults-v3' },
+    ])
+  })
+
+  it('terminates on a cycle, which is a data error and must not hang a write', () => {
+    const cycle = new Map([
+      ['proxy-buffer-defaults', 'proxy-buffer-defaults-v2'],
+      ['proxy-buffer-defaults-v2', 'proxy-buffer-defaults'],
+    ])
+    const report = checkReferences({ body: 'See [[proxy-buffer-defaults]].', known, successors: cycle })
+
+    expect(report.superseded).toHaveLength(1)
+  })
+
+  it('says nothing about one the entry already carried', () => {
+    const report = checkReferences({
+      body: 'See [[seetickets-session-mechanics]], edited.',
+      known,
+      successors,
+      previous: 'See [[seetickets-session-mechanics]].',
+    })
+
+    expect(referenceWarnings(report)).toEqual([])
+  })
+
+  it('says nothing about a live entry', () => {
+    const report = checkReferences({ body: 'See [[borrower-insurance-appointments]].', known, successors })
+
+    expect(report.superseded).toEqual([])
+  })
+})
+
+/**
+ * A hard delete turned every `[[reference]]` to the entry into a reference to
+ * nothing, at once and in silence (CAIRN-347). The write path refuses to make
+ * one of those; deletion made them in bulk.
+ */
+describe('deleting an entry other entries point at', () => {
+  const rows = [
+    { slug: 'proxy-buffer-defaults', body: 'The fact itself, citing [[proxy-buffer-defaults]].' },
+    { slug: 'nginx-tuning', body: 'Buffers: see [[proxy_buffer_defaults]].', superseded_by: null },
+    { slug: 'old-nginx-notes', body: 'See [[proxy-buffer-defaults]].', superseded_by: 'some-id' },
+    { slug: 'quoted-only', body: 'The flag is `[[proxy-buffer-defaults]]` in prose.' },
+    { slug: 'unrelated', body: 'See [[herdr-plugin-ecosystem-audit]].' },
+  ]
+
+  it('finds live referrers by normalised slug, not the entry itself or superseded ones', () => {
+    expect(referrersOf('proxy-buffer-defaults', rows)).toEqual(['nginx-tuning'])
+  })
+
+  it('does not count a reference quoted as code, which the renderer never links', () => {
+    expect(referrersOf('proxy-buffer-defaults', rows)).not.toContain('quoted-only')
+  })
+
+  it('refuses, naming the referrers and the two ways forward', () => {
+    const refusal = deletionRefusal('proxy-buffer-defaults', ['nginx-tuning'])
+
+    expect(refusal).toContain('"proxy-buffer-defaults" is referenced by 1 live entry: [[nginx-tuning]].')
+    expect(refusal).toContain('--superseded-by')
+    expect(refusal).toContain('--allow-dangling')
+  })
+
+  it('caps the names and gives the count, so a hub entry does not print a page', () => {
+    const many = Array.from({ length: 12 }, (_, i) => `referrer-${String(i).padStart(2, '0')}`)
+    const refusal = deletionRefusal('hub-entry', many) ?? ''
+
+    expect(refusal).toContain('12 live entries')
+    expect(refusal).toContain('[[referrer-04]] and 7 more')
+    expect(refusal).not.toContain('referrer-05')
+  })
+
+  it('has nothing to say about an entry nothing points at', () => {
+    expect(deletionRefusal('lonely-entry', [])).toBeNull()
   })
 })
 
@@ -215,7 +391,7 @@ describe('POST /api/v1/knowledge resolves references before inserting', () => {
 
   it('checks the body against the corpus', () => {
     expect(route).toContain('checkReferences')
-    expect(route).toContain('knownSlugs')
+    expect(route).toContain('referenceCorpus')
   })
 
   it('refuses before it writes, not after', () => {

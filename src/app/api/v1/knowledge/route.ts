@@ -5,7 +5,7 @@ import { createKnowledge, listKnowledge } from '@/lib/api/knowledge'
 import { searchAll } from '@/lib/api/search'
 import {
   checkReferences,
-  knownSlugs,
+  referenceCorpus,
   referenceRefusal,
   referenceWarnings,
 } from '@/lib/api/knowledge-graph'
@@ -108,9 +108,13 @@ export const GET = route({
  * fact Cairn already holds under a different slug — `capsolver-akamai-bug`
  * where `capsolver-akamai-script-bug` exists — so the useful half of the
  * answer is not "that does not exist" but "that exists, spelt this way".
+ *
+ * And a reference that DOES resolve can still be worth a word: one to an entry
+ * that has been superseded is accepted with a warning naming the successor
+ * (CAIRN-347), rather than passing because the old page is still there.
  */
 const referenceCheck = async (body: string, slug: string) =>
-  checkReferences({ body, slug, known: await knownSlugs() })
+  checkReferences({ body, slug, ...(await referenceCorpus()) })
 
 /**
  * Entries that already say something about the same thing (CAIRN-289).
