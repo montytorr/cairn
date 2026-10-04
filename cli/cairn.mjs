@@ -3429,7 +3429,7 @@ const commands = {
     const data = await request('GET', `/api/v1/projects${suffix}`)
     if (FORMAT !== 'tsv') return emit(data)
     // `was` is the keys a project used to have, space-separated, and it is the
-    // LAST column: readers of this table (trig's connector among them) key on
+    // LAST column: readers of this table (downstream readers among them) key on
     // the header, and a column appended at the end is one they never see move.
     // When they were retired, and by whom, is in --json as `former_keys`.
     const rows = data.map(({ former_keys: former, ...rest }) => ({

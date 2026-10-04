@@ -21,25 +21,6 @@ import { spawn } from 'node:child_process'
 const TIMEOUT_MS = Number(process.env.CAIRN_HOOK_TIMEOUT_MS ?? 4000)
 const CLI = process.env.CAIRN_CLI ?? 'cairn'
 
-/**
- * Trig, if this machine has it, gets a line after Cairn's.
- *
- * Trig is the map of what exists. It installs no session hook of its own where
- * this one runs, because two briefings competing for the top of every session
- * is how both get skimmed. But an agent that never hears it exists will never
- * ask it anything, so Cairn — which owns the opening — names it once and gets
- * out of the way.
- *
- * It runs beside Cairn's own call on a short deadline of its own, and is
- * silent when absent, unconfigured, slow or empty. Rule 2 above: never speak
- * when there is nothing to say. A summariser child hears nothing from it: it
- * is a session only by accident, and would pay for the spawn every time.
- */
-const TRIG_CLI = process.env.TRIG_CLI ?? 'trig'
-const TRIG_TIMEOUT_MS = Number(process.env.CAIRN_TRIG_TIMEOUT_MS ?? 1500)
-
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
-
 const readStdin = async () => {
   let raw = ''
   for await (const chunk of process.stdin) raw += chunk
@@ -76,7 +57,7 @@ const runTool = (bin, args, timeoutMs, { undecided = false } = {}) =>
       child.kill('SIGKILL')
       // Killing the child does not kill what it forked: a wrapper script's
       // own child keeps these pipes open, and the hook cannot exit until it
-      // ends, so a slow sibling would hold the session for its full run.
+      // ends, so a slow child would hold the session for its full run.
       child.stdout.destroy()
       child.stderr.destroy()
       child.unref()
@@ -100,26 +81,6 @@ const runTool = (bin, args, timeoutMs, { undecided = false } = {}) =>
   })
 
 const run = (args) => runTool(CLI, args, TIMEOUT_MS, { undecided: true })
-
-/** One line about the map, or nothing at all. Never throws, never blocks. */
-const trigLine = async () => {
-  const out = await runTool(TRIG_CLI, ['scans', '--limit', '1', '--json'], TRIG_TIMEOUT_MS)
-  if (!out.trim()) return ''
-  try {
-    const rows = JSON.parse(out)
-    const last = Array.isArray(rows) ? rows[0] : (rows?.data ?? rows?.results ?? [])[0]
-    if (!last) return ''
-    const when = last.finishedAt ?? last.finished_at ?? last.startedAt ?? last.started_at
-    const age = when ? Math.round((Date.now() - new Date(when).getTime()) / 3_600_000) : null
-    const scanned = age === null ? 'scanned at an unknown time' : age < 1 ? 'scanned within the hour' : `scanned ${age}h ago`
-    return `\nTrig — the map of what exists (${scanned}):\n  trig what-is <thing> · trig impact <thing> · trig inbox\n`
-  } catch {
-    return ''
-  }
-}
-
-/** Each returns its block with a leading and trailing newline, or ''. */
-const SIBLINGS = [trigLine]
 
 const main = async () => {
   const payload = await readStdin()
@@ -160,10 +121,7 @@ const main = async () => {
     args.push('--file', path)
   }
 
-  // Siblings belong to the opening, not to a question about one file.
-  const siblings = event === 'PreToolUse' || SUMMARISER_FLAGS.some((name) => process.env[name] === '1') ? [] : SIBLINGS
-  const [cairnText, ...blocks] = await Promise.all([run(args), ...siblings.map((sibling) => sibling(cwd))])
-  const text = `${cairnText.trim()}${blocks.join('')}`.trim()
+  const text = (await run(args)).trim()
   if (!text) return
 
   if (event === 'pre_llm_call') {

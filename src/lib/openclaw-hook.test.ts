@@ -262,20 +262,6 @@ describe('the OpenClaw briefing hook', () => {
     return path
   }
 
-  // Hermetic: the machine running the tests may have Trig installed.
-  beforeEach(() => {
-    process.env.TRIG_CLI = '/nonexistent/trig'
-  })
-
-  const fakeTrig = async (script: string) => {
-    const bin = await temp('cairn-openclaw-trig-')
-    const path = join(bin, 'trig')
-    await writeFile(path, `#!/usr/bin/env node\n${script}\n`)
-    await chmod(path, 0o755)
-    process.env.TRIG_CLI = path
-    return bin
-  }
-
   const bootstrap = (workspaceDir: string, files: unknown[] = []) => ({
     type: 'agent',
     action: 'bootstrap',
@@ -346,38 +332,21 @@ describe('the OpenClaw briefing hook', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
-  it("appends Trig's line after the live briefing", async () => {
+  it('appends nothing beyond the live briefing, even with a trig binary on PATH', async () => {
     const workspace = await temp('cairn-openclaw-ws-')
     await fakeCairn(`process.stdout.write('live')`)
-    await fakeTrig(`process.stdout.write(JSON.stringify([{ finishedAt: new Date().toISOString() }]))`)
-    const event = bootstrap(workspace)
-    await handler(event)
-    const [file] = event.context.bootstrapFiles as { content: string }[]
-    const trig = 'Trig — the map of what exists (scanned within the hour):\n  trig what-is <thing> · trig impact <thing> · trig inbox'
-    expect(file?.content).toBe(`${RULE}\n\nlive\n\n${trig}`)
-  })
-
-  it('says nothing for Trig when it fails, is slow, or runs under a summariser', async () => {
-    const workspace = await temp('cairn-openclaw-ws-')
-    await fakeCairn(`process.stdout.write('live')`)
-    process.env.CAIRN_TRIG_TIMEOUT_MS = '200'
-    for (const trig of [`process.stdout.write('not json')`, `process.exit(2)`, `setTimeout(() => process.stdout.write('late'), 5000)`]) {
-      await fakeTrig(trig)
-      const event = bootstrap(workspace)
-      const started = Date.now()
-      await handler(event)
-      expect(Date.now() - started).toBeLessThan(3000)
-      expect((event.context.bootstrapFiles as { content: string }[])[0]?.content).toBe(`${RULE}\n\nlive`)
-    }
-
-    const bin = await fakeTrig(`require('node:fs').writeFileSync(require('node:path').join(__dirname, 'asked'), '1'); process.stdout.write('[{}]')`)
-    for (const flag of ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']) {
-      process.env[flag] = '1'
+    const bin = await temp('cairn-openclaw-path-')
+    await writeFile(join(bin, 'trig'), `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(require('node:path').join(__dirname, 'asked'), '1'); process.stdout.write('[{}]')\n`)
+    await chmod(join(bin, 'trig'), 0o755)
+    const previous = process.env.PATH
+    process.env.PATH = `${bin}:${previous}`
+    try {
       const event = bootstrap(workspace)
       await handler(event)
-      delete process.env[flag]
       expect((event.context.bootstrapFiles as { content: string }[])[0]?.content).toBe(`${RULE}\n\nlive`)
       expect(existsSync(join(bin, 'asked'))).toBe(false)
+    } finally {
+      process.env.PATH = previous
     }
   })
 

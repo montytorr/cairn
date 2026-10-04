@@ -23,20 +23,16 @@ const script = async (dir: string, name: string, body: string) => {
   return path
 }
 
-const hook = async (cairnScript: string, { env = {}, trig, event = 'SessionStart' }: {
+const hook = async (cairnScript: string, { env = {}, event = 'SessionStart' }: {
   env?: Record<string, string>
-  trig?: string
   event?: string
 } = {}) => {
   const dir = await mkdtemp(join(tmpdir(), 'cairn-context-hook-'))
   directories.push(dir)
   const cli = await script(dir, 'cairn', cairnScript)
-  const siblings = {
-    TRIG_CLI: trig ? await script(dir, 'trig', trig) : join(dir, 'no-trig'),
-  }
   return new Promise<{ code: number | null; stdout: string; dir: string; context: () => string }>((resolve) => {
     const child = spawn('node', ['hooks/cairn-context.mjs'], {
-      env: { ...process.env, CAIRN_CLI: cli, ...siblings, ...env },
+      env: { ...process.env, CAIRN_CLI: cli, ...env },
     })
     let stdout = ''
     child.stdout.on('data', (c: Buffer) => { stdout += c.toString() })
@@ -64,40 +60,17 @@ describe('the briefing hook on a machine with several instances', () => {
   })
 })
 
-/**
- * Trig's line rides at the end of Cairn's block: same deadline, same silence.
- * Nothing else is appended, whatever else is installed on the machine.
- */
-describe('the briefing hook with a sibling product', () => {
+/** Cairn's block is the whole briefing, whatever else is installed on the machine. */
+describe('the briefing hook with other tools on PATH', () => {
   const CAIRN = 'printf "## Cairn [ACME]\\nHolding ACME-1\\n"'
-  const TRIG_LINE = 'Trig — the map of what exists (scanned within the hour):\n  trig what-is <thing> · trig impact <thing> · trig inbox'
 
-  it("appends Trig's line after Cairn's block", async () => {
-    const finishedAt = new Date().toISOString()
-    const { code, context } = await hook(CAIRN, { trig: `printf '[{"finishedAt":"${finishedAt}"}]'` })
+  it('appends nothing beyond Cairn\'s block, even with a trig binary on PATH', async () => {
+    const bin = await mkdtemp(join(tmpdir(), 'cairn-context-path-'))
+    directories.push(bin)
+    await script(bin, 'trig', 'touch "$(dirname "$0")/asked"; echo \'[{"finishedAt":"2026-01-01T00:00:00Z"}]\'')
+    const { code, context } = await hook(CAIRN, { env: { PATH: `${bin}:${process.env.PATH}` } })
     expect(code).toBe(0)
-    expect(context()).toBe(`## Cairn [ACME]\nHolding ACME-1\n${TRIG_LINE}`)
-  })
-
-  it('says only Cairn\'s block when Trig is absent, failing, silent or slow', async () => {
-    for (const trig of [undefined, 'exit 2', 'exit 0', 'sleep 5; echo "[]"']) {
-      const started = Date.now()
-      const { code, context } = await hook(CAIRN, { trig, env: { CAIRN_TRIG_TIMEOUT_MS: '200' } })
-      expect(code).toBe(0)
-      expect(Date.now() - started).toBeLessThan(3000)
-      expect(context()).toBe('## Cairn [ACME]\nHolding ACME-1')
-    }
-  })
-
-  it('asks Trig nothing inside a summariser, or on a question about one file', async () => {
-    const asked = 'touch "$(dirname "$0")/asked"; echo "[]"'
-    for (const flag of ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']) {
-      const run = await hook(CAIRN, { env: { [flag]: '1' }, trig: asked })
-      expect(run.context()).toBe('## Cairn [ACME]\nHolding ACME-1')
-      expect(existsSync(join(run.dir, 'asked'))).toBe(false)
-    }
-    const read = await hook(CAIRN, { event: 'PreToolUse', trig: asked })
-    expect(read.context()).toBe('## Cairn [ACME]\nHolding ACME-1')
-    expect(existsSync(join(read.dir, 'asked'))).toBe(false)
+    expect(context()).toBe('## Cairn [ACME]\nHolding ACME-1')
+    expect(existsSync(join(bin, 'asked'))).toBe(false)
   })
 })
