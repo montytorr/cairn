@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-04
+
 ### Added
 
 - **External refs are writable and filterable.** A task may carry an external ref: where it
@@ -1809,7 +1811,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/montytorr/cairn/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/montytorr/cairn/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/montytorr/cairn/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/montytorr/cairn/compare/v0.14.4...v0.15.0
