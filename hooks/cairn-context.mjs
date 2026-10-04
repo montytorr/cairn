@@ -17,50 +17,28 @@
  *   3. Stay small. This is a briefing, not a corpus.
  */
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
 
 const TIMEOUT_MS = Number(process.env.CAIRN_HOOK_TIMEOUT_MS ?? 4000)
 const CLI = process.env.CAIRN_CLI ?? 'cairn'
 
 /**
- * The siblings, if this machine has them, each get a few lines after Cairn's.
+ * Trig, if this machine has it, gets a line after Cairn's.
  *
- * Trig is the map of what exists; Croft is the lab board of ideas being
- * explored, proved or built. Neither installs a session hook of its own where
+ * Trig is the map of what exists. It installs no session hook of its own where
  * this one runs, because two briefings competing for the top of every session
- * is how both get skimmed. But an agent that never hears a sibling exists will
- * never ask it anything, so Cairn — which owns the opening — names each once
- * and gets out of the way.
+ * is how both get skimmed. But an agent that never hears it exists will never
+ * ask it anything, so Cairn — which owns the opening — names it once and gets
+ * out of the way.
  *
- * Each runs beside Cairn's own call on a short deadline of its own, and is
+ * It runs beside Cairn's own call on a short deadline of its own, and is
  * silent when absent, unconfigured, slow or empty. Rule 2 above: never speak
- * when there is nothing to say. A summariser child hears nothing from them:
- * it is a session only by accident, and would pay for the spawns every time.
+ * when there is nothing to say. A summariser child hears nothing from it: it
+ * is a session only by accident, and would pay for the spawn every time.
  */
 const TRIG_CLI = process.env.TRIG_CLI ?? 'trig'
 const TRIG_TIMEOUT_MS = Number(process.env.CAIRN_TRIG_TIMEOUT_MS ?? 1500)
-const CROFT_TIMEOUT_MS = Number(process.env.CAIRN_CROFT_TIMEOUT_MS ?? 1500)
-const CROFT_MAX_LINES = 5
-const CROFT_MAX_BYTES = 600
 
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'CROFT_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
-
-const onPath = (name) =>
-  (process.env.PATH ?? '').split(delimiter).some((dir) => dir && existsSync(join(dir, name)))
-
-/**
- * A hook runs with the runtime's PATH, which often lacks ~/.local/bin, where
- * Croft's installer puts it. A PATH miss would look exactly like "nothing on
- * the board", so look there too before giving up.
- */
-const croftCli = () => {
-  if (process.env.CROFT_CLI) return process.env.CROFT_CLI
-  if (onPath('croft')) return 'croft'
-  const local = join(homedir(), '.local', 'bin', 'croft')
-  return existsSync(local) ? local : 'croft'
-}
+const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
 
 const readStdin = async () => {
   let raw = ''
@@ -140,18 +118,8 @@ const trigLine = async () => {
   }
 }
 
-/** Croft's own brief for this directory, clipped, or nothing at all. */
-const croftBlock = async (cwd) => {
-  const out = (await runTool(croftCli(), ['context', '--brief', '--cwd', cwd], CROFT_TIMEOUT_MS)).trim()
-  if (!out) return ''
-  const lines = out.split('\n').slice(0, CROFT_MAX_LINES)
-  while (lines.length > 1 && Buffer.byteLength(lines.join('\n')) > CROFT_MAX_BYTES) lines.pop()
-  const kept = Buffer.from(lines.join('\n')).subarray(0, CROFT_MAX_BYTES).toString('utf8').replace(/\uFFFD+$/, '')
-  return `\n${kept.trimEnd()}\n`
-}
-
 /** Each returns its block with a leading and trailing newline, or ''. */
-const SIBLINGS = [trigLine, croftBlock]
+const SIBLINGS = [trigLine]
 
 const main = async () => {
   const payload = await readStdin()

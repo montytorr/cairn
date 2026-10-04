@@ -12,9 +12,9 @@
  * machine and drifts; the skill is read in about half of sessions. A briefing
  * that carried data only told the agent what exists, never what to do next.
  *
- * Trig and Croft, when this machine has them, follow in a few lines each, as
- * they do in hooks/cairn-context.mjs: Cairn owns the opening and names its
- * siblings, each on a 1.5 s deadline of its own and silent on any failure.
+ * Trig, when this machine has it, follows in a line, as it does in
+ * hooks/cairn-context.mjs: Cairn owns the opening and names it, on a 1.5 s
+ * deadline of its own and silent on any failure.
  *
  * Same rules as hooks/cairn-context.mjs: never block (a 5 s deadline, and every
  * failure leaves the session starting as it would have without this hook), and
@@ -25,9 +25,7 @@
  * types below are the subset of its documented event this reads.
  */
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { join } from 'node:path'
 
 type BootstrapFile = { name: string; path: string; content?: string; missing: boolean }
 
@@ -75,9 +73,7 @@ export const briefing = (cwd: string): Promise<string> =>
     }
   })
 
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'CROFT_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
-const CROFT_MAX_LINES = 5
-const CROFT_MAX_BYTES = 600
+const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
 
 const siblingTimeout = (name: string) => {
   const value = Number(process.env[name] ?? 1500)
@@ -104,15 +100,6 @@ const quiet = (bin: string, args: string[], cwd: string, timeout: number): Promi
     }
   })
 
-/** Where Croft's installer puts it, for a gateway whose PATH lacks ~/.local/bin. */
-const croftCli = () => {
-  const env = process.env.CROFT_CLI?.trim()
-  if (env) return env
-  if ((process.env.PATH ?? '').split(delimiter).some((dir) => dir && existsSync(join(dir, 'croft')))) return 'croft'
-  const local = join(homedir(), '.local', 'bin', 'croft')
-  return existsSync(local) ? local : 'croft'
-}
-
 /** One line about the map, or ''. */
 export const trigLine = async (cwd: string): Promise<string> => {
   const bin = process.env.TRIG_CLI?.trim() || 'trig'
@@ -131,19 +118,10 @@ export const trigLine = async (cwd: string): Promise<string> => {
   }
 }
 
-/** Croft's own brief for the workspace, clipped, or ''. */
-export const croftBlock = async (cwd: string): Promise<string> => {
-  const out = await quiet(croftCli(), ['context', '--brief', '--cwd', cwd], cwd, siblingTimeout('CAIRN_CROFT_TIMEOUT_MS'))
-  if (!out) return ''
-  const lines = out.split('\n').slice(0, CROFT_MAX_LINES)
-  while (lines.length > 1 && Buffer.byteLength(lines.join('\n')) > CROFT_MAX_BYTES) lines.pop()
-  return Buffer.from(lines.join('\n')).subarray(0, CROFT_MAX_BYTES).toString('utf8').replace(/\uFFFD+$/, '').trimEnd()
-}
-
 /** Every sibling's block, in order, or [] under a summariser. */
 export const siblings = async (cwd: string): Promise<string[]> => {
   if (SUMMARISER_FLAGS.some((name) => process.env[name] === '1')) return []
-  return (await Promise.all([trigLine(cwd), croftBlock(cwd)])).filter(Boolean)
+  return (await Promise.all([trigLine(cwd)])).filter(Boolean)
 }
 
 const handler = async (event: HookEvent): Promise<void> => {

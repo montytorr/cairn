@@ -131,3 +131,34 @@ describe('terminal transitions release the claim', () => {
     }
   })
 })
+
+describe('external refs', () => {
+  it('accepts a ref and an http(s) url on create, and neither', () => {
+    expect(createTaskSchema.parse({ title: 'x', externalRef: 'tracker:host/T-4', externalUrl: 'https://example.test/t/4' })).toMatchObject({
+      externalRef: 'tracker:host/T-4',
+      externalUrl: 'https://example.test/t/4',
+    })
+    const bare = createTaskSchema.parse({ title: 'x' })
+    expect(bare).not.toHaveProperty('externalRef')
+    expect(bare).not.toHaveProperty('externalUrl')
+  })
+
+  it('refuses whitespace, control characters, an empty ref and one over 200', () => {
+    for (const externalRef of ['has space', 'tab\there', 'line\nbreak', 'nul\u0000', '', 'x'.repeat(201)]) {
+      expect(createTaskSchema.safeParse({ title: 'x', externalRef }).success, JSON.stringify(externalRef)).toBe(false)
+    }
+    expect(createTaskSchema.safeParse({ title: 'x', externalRef: 'x'.repeat(200) }).success).toBe(true)
+  })
+
+  it('refuses a url that is not http(s) or runs past 2000 characters', () => {
+    for (const externalUrl of ['javascript:alert(1)', 'ftp://example.test/a', 'not a url', `https://example.test/${'a'.repeat(2_000)}`]) {
+      expect(createTaskSchema.safeParse({ title: 'x', externalUrl }).success, externalUrl).toBe(false)
+    }
+  })
+
+  it('lets an update clear both with null, and leaves them absent otherwise', () => {
+    expect(updateTaskSchema.parse({ externalRef: null, externalUrl: null })).toEqual({ externalRef: null, externalUrl: null })
+    expect(updateTaskSchema.parse({ title: 'y' })).toEqual({ title: 'y' })
+    expect(updateTaskSchema.safeParse({ externalRef: 'has space' }).success).toBe(false)
+  })
+})

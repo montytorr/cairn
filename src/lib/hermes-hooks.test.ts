@@ -115,7 +115,7 @@ process.exit(64)
     const fakeCairn = join(directory, 'cairn')
     await writeFile(fakeCairn, '#!/bin/sh\nprintf "## Cairn [MES]\\nKnown here: affiliate governance\\n"\n')
     await chmod(fakeCairn, 0o755)
-    const environment = { ...process.env, CAIRN_CLI: fakeCairn, TRIG_CLI: join(directory, 'no-trig'), CROFT_CLI: join(directory, 'no-croft') }
+    const environment = { ...process.env, CAIRN_CLI: fakeCairn, TRIG_CLI: join(directory, 'no-trig') }
 
     const first = await run('node', ['hooks/cairn-context.mjs'], environment, JSON.stringify({
       hook_event_name: 'pre_llm_call',

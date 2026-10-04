@@ -229,6 +229,15 @@ const taskSummary = {
       description: 'The agent executing it right now, if any. Not the owner: that is `assignee`.',
     },
     resolution: { type: ['string', 'null'] },
+    external_ref: {
+      type: ['string', 'null'],
+      description: 'Where the task came from in another tool. Unique across the instance.',
+    },
+    external_url: { type: ['string', 'null'], description: 'A link back to the original, http(s).' },
+    duplicate: {
+      type: 'boolean',
+      description: 'Only on a create that sent an `externalRef` already held: this is the existing task, not a new one.',
+    },
   },
 }
 
@@ -673,6 +682,8 @@ export const openapiSpec = () => ({
             description: 'Held by the calling agent (and its session, when it sent one).' },
           { name: 'assignee', in: 'query', schema: { type: 'string' },
             description: 'Owned by: `me`, an email, a display name or a user id.' },
+          { name: 'external_ref', in: 'query', schema: { type: 'string' },
+            description: 'Exact match on the task\'s external ref: where it came from in another tool.' },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 200 } },
           { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
         ],
@@ -687,9 +698,14 @@ export const openapiSpec = () => ({
           'wall of text — capitals for headings, a long unbroken paragraph, paths and calls outside ' +
           'backticks — is refused with `validation_failed` and `problems`, one fix each. A 409 ' +
           'means the project is archived — most likely the copy left behind by a move to another ' +
-          'Cairn instance; restore it first, or point the CLI at the other instance.',
+          'Cairn instance; restore it first, or point the CLI at the other instance. A task ' +
+          'may carry an external ref (`externalRef`, `externalUrl`): where it came from in ' +
+          'another tool. The ref is unique across the instance, and creating with one that is ' +
+          'already held is idempotent: it returns the existing task with `duplicate: true` and ' +
+          'status 200, whichever project it is in, and changes nothing.',
         requestBody: body(json(createTaskSchema)),
         responses: {
+          '200': okResponse('A task already carries that `externalRef`; this is it, with `duplicate: true`.', taskSummary),
           '201': okResponse('Created.', taskSummary),
           '400': errorResponse,
           '404': errorResponse,
@@ -742,7 +758,9 @@ export const openapiSpec = () => ({
           '`project` moves the task: per-project numbering means it is renumbered and ' +
           'its ref changes, so anything referring to the old ref goes stale. `assignee` ' +
           'reassigns it (`me`, an email, a display name or a user id) and is never cleared; ' +
-          '`dueDate: null` clears the due date. An agent\'s changed `description` meets the same ' +
+          '`dueDate: null` clears the due date. `externalRef` and `externalUrl` set where the ' +
+          'task came from in another tool, and `null` clears them; a ref another task holds is a ' +
+          '409 `conflict` naming that task. An agent\'s changed `description` meets the same ' +
           'readable-markdown check as on create. Every write here, including moving the task ' +
           'elsewhere, is refused with 409 if its current project is archived — most likely the ' +
           'copy left behind by a move to another Cairn instance; restore the project first, or ' +

@@ -65,6 +65,26 @@ export const isTerminal = (s: TaskStatus): boolean =>
 const assigneeField = z.string().trim().min(1).max(320)
 
 /**
+ * Where a task came from in another tool: an issue key, a URL slug, any stable
+ * identifier the other side owns. Unique across the instance (migration 002),
+ * which is what makes a create with the same ref a retry rather than a second
+ * task. No whitespace or control characters, so it survives a shell, a TSV
+ * cell and a URL without quoting.
+ */
+export const externalRefField = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[^\s\u0000-\u001f\u007f]+$/, 'an external ref has no whitespace or control characters')
+
+/** A link back to the original. http(s) only: it is rendered as an anchor. */
+export const externalUrlField = z
+  .string()
+  .max(2_000)
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value), 'an external url must be http(s)')
+
+/**
  * Field definitions WITHOUT defaults.
  *
  * This split is load-bearing. `.default()` survives `.partial()` — Zod's
@@ -113,6 +133,9 @@ export const createTaskSchema = taskFields
      * The escape hatch has to be something the caller says, never a default.
      */
     forceEmpty: z.boolean().optional(),
+    /** Where it came from in another tool. A create with a ref that exists returns that task. */
+    externalRef: externalRefField.optional(),
+    externalUrl: externalUrlField.optional(),
   })
   /**
    * The bug/spike body rule, where every caller meets it (CAIRN-291).
@@ -161,6 +184,9 @@ export const updateTaskSchema = taskFields.partial().extend({
    * the ref, and these only widen where the task appears.
    */
   alsoProjects: z.array(z.string().min(1).max(10)).max(20).nullable().optional(),
+  /** Where it came from in another tool. `null` clears it. */
+  externalRef: externalRefField.nullable().optional(),
+  externalUrl: externalUrlField.nullable().optional(),
 })
 
 export const createNoteSchema = z.object({

@@ -127,6 +127,8 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
     if (body.labels !== undefined) patch.labels = body.labels
     if (body.dueDate !== undefined) patch.due_date = body.dueDate
     if (body.resolutionKind !== undefined) patch.resolution_kind = body.resolutionKind
+    if (body.externalRef !== undefined) patch.external_ref = body.externalRef
+    if (body.externalUrl !== undefined) patch.external_url = body.externalUrl
 
     if (body.assignee !== undefined) {
       const owner = await resolveAssignee(body.assignee, actor.userId)
@@ -284,8 +286,23 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       .from('tasks')
       .update(patch)
       .eq('id', task.id)
-      .select('id, number, title, type, status, priority, labels, assignee_user_id, resolution, resolution_kind, updated_at')
+      .select('id, number, title, type, status, priority, labels, assignee_user_id, resolution, resolution_kind, external_ref, external_url, updated_at')
       .single()
+
+    if (error?.code === '23505' && error.message.includes('tasks_external_ref_key')) {
+      const { data: holder } = await admin()
+        .from('tasks')
+        .select('number, project:projects!project_id!inner(key)')
+        .eq('external_ref', String(patch.external_ref))
+        .maybeSingle()
+      const row = holder as unknown as { number: number; project: { key: string } | { key: string }[] } | null
+      const key = row && (Array.isArray(row.project) ? row.project[0] : row.project)?.key
+      return fail(
+        'conflict',
+        `Another task already carries that external ref${key ? `: ${key}-${row!.number}` : ''}. ` +
+          'An external ref names one task; clear it there first, or work that one.',
+      )
+    }
 
     if (error) {
       return failFromDb(error, {

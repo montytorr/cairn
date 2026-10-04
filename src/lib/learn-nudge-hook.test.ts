@@ -104,7 +104,7 @@ describe('the learn nudge', () => {
   it('stays out of summariser runs, and off when switched off', async () => {
     const path = transcript([prompt('Fix it'), tool('Edit', { file_path: '/a.ts' })])
     expect(await run({ session_id: 's6', transcript_path: path }, { CAIRN_SUMMARISER: '1' })).toBe('')
-    expect(await run({ session_id: 's6', transcript_path: path }, { CROFT_SUMMARISER: '1' })).toBe('')
+    expect(await run({ session_id: 's6', transcript_path: path }, { AGENT_MEMORY_SUMMARISER: '1' })).toBe('')
     expect(await run({ session_id: 's6', transcript_path: path }, { CAIRN_LEARN_NUDGE: '0' })).toBe('')
   })
 
