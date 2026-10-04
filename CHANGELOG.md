@@ -9,6 +9,34 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **External refs are writable and filterable.** A task may carry an external ref: where it
+  came from in another tool. `POST /projects/{id}/tasks` takes `externalRef` (1-200
+  characters, no whitespace or control characters) and `externalUrl` (http(s), at most 2000);
+  `PATCH /tasks/{ref}` takes both, `null` clearing. The ref is unique across the instance (the
+  index from migration 002 is unchanged), so a create with a ref that is already held is
+  idempotent: it returns the existing task with `duplicate: true` and status 200, whichever
+  project it is in, as a repeated note does, and a create that loses a race to the unique index
+  gets the winner. A PATCH to a ref another task holds is a 409 naming that task. Both go
+  through the same secret check as the title. `GET /projects/{id}/tasks?external_ref=` is an
+  exact filter. CLI: `cairn add ... --external-ref X --external-url U` (a duplicate is said on
+  stderr and claims nothing), `cairn update <ref> --external-ref X|'' --external-url U|''`,
+  `cairn list --project K --external-ref X`; `cairn show` prints both (`externalRef` and
+  `externalUrl` in the digest, `external_ref` and `external_url` with `--full`). The task page
+  links the ref to its url.
+
+### Changed
+
+- **The session briefing names only Trig.** `hooks/cairn-context.mjs` and the OpenClaw
+  briefing no longer run another product's brief, so Cairn's opening names no product but
+  Trig. The environment variables that pointed at the other product's CLI are no longer read.
+- **The other product's summariser flag is gone from the guard.** The session-end and learn-nudge
+  hooks, both briefings and the summariser child now use `CAIRN_SUMMARISER`,
+  `QUARRY_SUMMARISER` and the shared `AGENT_MEMORY_SUMMARISER`, which Cairn's summariser sets
+  in the child so any product's hooks can stay out of its runs without naming Cairn.
+- The skill and README no longer describe another product; the external-ref line replaces it.
+
 ## [0.17.0] — 2026-10-02
 
 ### Added

@@ -611,7 +611,14 @@ export const Properties = ({
         )}
         {task.external_ref && (
           <p className="text-fg-subtle truncate text-[0.75rem]" title={task.external_ref}>
-            Imported from <span className="font-mono">{task.external_ref}</span>
+            From{' '}
+            {task.external_url && /^https?:\/\//i.test(task.external_url) ? (
+              <a href={task.external_url} target="_blank" rel="noopener noreferrer" className="font-mono underline">
+                {task.external_ref}
+              </a>
+            ) : (
+              <span className="font-mono">{task.external_ref}</span>
+            )}
           </p>
         )}
         {task.attempt > 1 && (

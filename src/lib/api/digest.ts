@@ -90,6 +90,10 @@ export const buildDigest = async (task: Record<string, unknown>) => {
     claimedSession: task.claimed_session,
     updatedAt: task.updated_at,
 
+    // Where it came from in another tool, when it came from one.
+    externalRef: task.external_ref ?? null,
+    externalUrl: task.external_url ?? null,
+
     // The answer, never clipped. It is the whole reason to look.
     resolution: task.resolution,
     resolutionKind: task.resolution_kind,

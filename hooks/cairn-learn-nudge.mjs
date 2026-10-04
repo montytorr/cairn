@@ -25,7 +25,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, sta
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'CROFT_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
+const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
 
 const STATE_PATH = join(homedir(), '.cairn', 'nudged.json')
 const STATE_KEPT = 200

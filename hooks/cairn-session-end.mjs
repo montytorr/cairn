@@ -53,11 +53,11 @@ const MAX_DIGEST_CHARS = 24_000
  * Every summariser, not only this one. Quarry runs the same kind of hook with
  * its own `claude -p` child and marks it QUARRY_SUMMARISER; checking only our
  * own flag recorded 37 of Quarry's child runs as Cairn sessions, each wearing
- * a copy of its parent's summary (CAIRN-287). Croft does the same with
- * CROFT_SUMMARISER. AGENT_MEMORY_SUMMARISER is the shared name any of them
- * can set.
+ * a copy of its parent's summary (CAIRN-287). AGENT_MEMORY_SUMMARISER is
+ * the shared name any product's summariser can set, so no product has to name
+ * another to stay out of its runs.
  */
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'CROFT_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
+const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
 if (SUMMARISER_FLAGS.some((name) => process.env[name] === '1')) process.exit(0)
 
 const DRY_RUN = process.argv.includes('--dry-run')
@@ -833,7 +833,7 @@ const logSummariser = (line) => {
  * the person's real work was recorded under the summariser's prompt (af1af02c,
  * 293 tool calls). `--no-session-persistence` stops the save; the scratch cwd
  * keeps a CLI too old for the flag from saving into the project. Every
- * summariser flag is set, so Quarry's and Croft's hooks skip this child the
+ * summariser flag is set, so another product's hooks skip this child the
  * way this hook skips theirs.
  */
 const NO_PERSISTENCE = '--no-session-persistence'

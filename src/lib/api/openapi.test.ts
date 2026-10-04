@@ -128,3 +128,22 @@ describe('openapi spec', () => {
     expect(Object.keys(spec.paths).filter((p) => !routes.has(p))).toEqual([])
   })
 })
+
+describe('openapi spec: external refs', () => {
+  const spec = openapiSpec()
+  const tasks = spec.paths['/projects/{id}/tasks']
+
+  it('documents the ref on create and update, and the duplicate answer', () => {
+    for (const request of [tasks.post.requestBody, spec.paths['/tasks/{ref}'].patch.requestBody]) {
+      const schema = request.content['application/json'].schema as { properties: Record<string, unknown> }
+      expect(Object.keys(schema.properties)).toEqual(expect.arrayContaining(['externalRef', 'externalUrl']))
+    }
+    expect(Object.keys(tasks.post.responses)).toContain('200')
+    expect(tasks.post.description).toContain('duplicate: true')
+  })
+
+  it('documents the exact filter', () => {
+    const names = (tasks.get.parameters as { name: string }[]).map((p) => p.name)
+    expect(names).toContain('external_ref')
+  })
+})

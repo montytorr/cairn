@@ -1084,7 +1084,7 @@ const KNOWN_FLAGS = new Set([
   'adopt', 'agent', 'all', 'all-instances', 'allow-dangling', 'also-project', 'archived', 'assignee', 'body',
   'branch', 'completed',
   'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'dir', 'dry-run',
-  'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'file', 'files', 'folder',
+  'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'external-ref', 'external-url', 'file', 'files', 'folder',
   'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id', 'instance',
   'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'maintenance', 'max-parents',
   'message', 'mine', 'name', 'next', 'no-checkpoint', 'no-herdr', 'no-hooks', 'no-jobs', 'no-parent',
@@ -2706,6 +2706,21 @@ const named = (task) => {
   return { ...rest, assignee: assignee.name }
 }
 
+/**
+ * An external ref or url flag: undefined when absent, the value when given,
+ * and null when it is given empty, which is how `update` clears it. The parser
+ * reads `--flag ''` as a bare flag (an empty next argument is falsy), so the
+ * empty string is recognised from argv rather than guessed from `true`.
+ */
+const externalFlag = (name) => {
+  const value = flags[name]
+  if (value === undefined) return undefined
+  if (typeof value === 'string' && value !== '') return value
+  const at = argv.indexOf(`--${name}`)
+  if (value === '' || (at !== -1 && argv[at + 1] === '')) return null
+  return die(`--${name} needs a value${name === 'external-ref' ? ' (an empty one clears it on update)' : ''}`)
+}
+
 /** The task's page on the server the request went to; BASE is the chosen instance. */
 const taskUrl = (ref) => {
   const m = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/.exec(ref ?? '')
@@ -2741,6 +2756,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    what to pick up, and why — ranked, never blocked;
                                    your human's work first, anyone else's says whose
     cairn list [--project K] [--status S] [--type T] [--label L] [--mine] [--assignee me|<who>]
+               [--external-ref KEY]
                                    --mine: what this agent holds now; --assignee: whose it is
     cairn show <ref> [--full]      e.g. CAI-42; a digest unless --full
     cairn log <ref> [--kind K]     the work log
@@ -2757,6 +2773,11 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    already holds work here or similar open work
                                    exists; --no-start to only file it)
     cairn update <ref> [--title T] [--status S] [--type T] [--priority P] [--assignee <who>] [--body -]
+    cairn add ... --external-ref KEY --external-url URL
+                                   where it came from in another tool; filing the same
+                                   --external-ref again returns that task, not a second
+    cairn update <ref> --external-ref KEY|'' --external-url URL|''
+                                   set or clear it ('' clears)
     cairn update <ref> --also-project HM,AT      work that spans several projects
     cairn update <ref> --project OTHER      moves it; the ref changes
     cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
@@ -3362,6 +3383,10 @@ const commands = {
     // Whose, not who is on it: `me` is the human behind this key, resolved by
     // the server of whichever instance answers.
     if (flags.assignee) params.set('assignee', flags.assignee)
+    // Exact, for "is this upstream item already filed here".
+    const external = externalFlag('external-ref')
+    if (external) params.set('external_ref', external)
+    else if (external === null) die('--external-ref needs a value to filter on')
     const data = await request('GET', `/api/v1/projects/${project}/tasks?${params}`)
     const listed = { ...data, tasks: data.tasks.map((t) => withUrl({ ...t, ref: t.ref ?? `${t.project?.key ?? project}-${t.number}` })) }
     emit(listed, {
@@ -3426,6 +3451,10 @@ const commands = {
   async add() {
     const title = need(positional[0], 'usage: cairn add "<title>" --project <KEY>')
     const project = need(flags.project, 'a --project is required')
+    // Checked before any request: an empty ref here is a typo, not a clear.
+    const externalRef = externalFlag('external-ref')
+    const externalUrl = externalFlag('external-url')
+    if (externalRef === null || externalUrl === null) die('--external-ref and --external-url need a value on add')
 
     /**
      * A bug or a spike with no body is not yet a report — it is a title.
@@ -3526,7 +3555,16 @@ const commands = {
     if (flags.parent) body.parentRef = flags.parent
     // Omitted, the server assigns it to the human behind this key.
     if (flags.assignee) body.assignee = flags.assignee
+    if (externalRef) body.externalRef = externalRef
+    if (externalUrl) body.externalUrl = externalUrl
     const created = withUrl(named(await request('POST', `/api/v1/projects/${project}/tasks`, body)))
+
+    // The ref was already filed: this is that task, untouched. Nothing is
+    // claimed on it either, so a retry cannot take work from whoever holds it.
+    if (created.duplicate) {
+      process.stderr.write(`already filed as ${created.ref} (same --external-ref); nothing was created or claimed\n`)
+      return emit(created)
+    }
 
     // File-and-work-it-now is the pattern that skips claiming: the agent that
     // files a task and finishes it in the same session never perceives a
@@ -3585,6 +3623,11 @@ const commands = {
       body.duplicateOf = flags['duplicate-of']
       body.resolutionKind = 'duplicate'
     }
+    // '' clears: the server takes null for both.
+    const externalRef = externalFlag('external-ref')
+    const externalUrl = externalFlag('external-url')
+    if (externalRef !== undefined) body.externalRef = externalRef
+    if (externalUrl !== undefined) body.externalUrl = externalUrl
     emit(named(await request('PATCH', `/api/v1/tasks/${ref}`, body)))
   },
 
@@ -5170,7 +5213,7 @@ const commands = {
         // Always the runtimes this run set up, never "whatever the installer
         // finds": left to detect, it wired Hermes wherever `hermes` was on PATH,
         // a hook in a runtime nobody chose, with no key paired for it
-        // (CAIRN-330; Croft made the same choice in e170fce).
+        // (CAIRN-330).
         const hookArgs = [...(dry ? ['--dry-run'] : []), '--runtimes', hookRuntimes.join(','), ...(flags['no-herdr'] ? ['--no-herdr'] : [])]
         const result = spawnSync(process.execPath, [join(releaseDir, 'scripts', 'install-hooks.mjs'), ...hookArgs], { encoding: 'utf8' })
         line(`${dry ? '!' : '✓'} hooks     ${dry ? 'would install:' : 'installed:'}`)

@@ -262,18 +262,17 @@ describe('the OpenClaw briefing hook', () => {
     return path
   }
 
-  // Hermetic: the machine running the tests may have Trig or Croft installed.
+  // Hermetic: the machine running the tests may have Trig installed.
   beforeEach(() => {
     process.env.TRIG_CLI = '/nonexistent/trig'
-    process.env.CROFT_CLI = '/nonexistent/croft'
   })
 
-  const fakeSibling = async (name: 'trig' | 'croft', script: string) => {
-    const bin = await temp(`cairn-openclaw-${name}-`)
-    const path = join(bin, name)
+  const fakeTrig = async (script: string) => {
+    const bin = await temp('cairn-openclaw-trig-')
+    const path = join(bin, 'trig')
     await writeFile(path, `#!/usr/bin/env node\n${script}\n`)
     await chmod(path, 0o755)
-    process.env[name === 'trig' ? 'TRIG_CLI' : 'CROFT_CLI'] = path
+    process.env.TRIG_CLI = path
     return bin
   }
 
@@ -347,30 +346,23 @@ describe('the OpenClaw briefing hook', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
-  it("appends Trig's line and Croft's brief after the live briefing", async () => {
+  it("appends Trig's line after the live briefing", async () => {
     const workspace = await temp('cairn-openclaw-ws-')
     await fakeCairn(`process.stdout.write('live')`)
-    await fakeSibling('trig', `process.stdout.write(JSON.stringify([{ finishedAt: new Date().toISOString() }]))`)
-    await fakeSibling(
-      'croft',
-      `process.stdout.write('## Croft\\nargs=' + process.argv.slice(2).join(' ') + '\\n' + Array.from({ length: 8 }, (_, i) => 'line ' + i).join('\\n'))`,
-    )
+    await fakeTrig(`process.stdout.write(JSON.stringify([{ finishedAt: new Date().toISOString() }]))`)
     const event = bootstrap(workspace)
     await handler(event)
     const [file] = event.context.bootstrapFiles as { content: string }[]
     const trig = 'Trig — the map of what exists (scanned within the hour):\n  trig what-is <thing> · trig impact <thing> · trig inbox'
-    const croft = `## Croft\nargs=context --brief --cwd ${workspace}\nline 0\nline 1\nline 2`
-    expect(file?.content).toBe(`${RULE}\n\nlive\n\n${trig}\n\n${croft}`)
+    expect(file?.content).toBe(`${RULE}\n\nlive\n\n${trig}`)
   })
 
-  it('says nothing for a sibling that fails, is slow, or runs under a summariser', async () => {
+  it('says nothing for Trig when it fails, is slow, or runs under a summariser', async () => {
     const workspace = await temp('cairn-openclaw-ws-')
     await fakeCairn(`process.stdout.write('live')`)
-    process.env.CAIRN_CROFT_TIMEOUT_MS = '200'
     process.env.CAIRN_TRIG_TIMEOUT_MS = '200'
-    await fakeSibling('trig', `process.stdout.write('not json')`)
-    for (const croft of [`process.exit(2)`, `setTimeout(() => process.stdout.write('late'), 5000)`]) {
-      await fakeSibling('croft', croft)
+    for (const trig of [`process.stdout.write('not json')`, `process.exit(2)`, `setTimeout(() => process.stdout.write('late'), 5000)`]) {
+      await fakeTrig(trig)
       const event = bootstrap(workspace)
       const started = Date.now()
       await handler(event)
@@ -378,12 +370,15 @@ describe('the OpenClaw briefing hook', () => {
       expect((event.context.bootstrapFiles as { content: string }[])[0]?.content).toBe(`${RULE}\n\nlive`)
     }
 
-    const bin = await fakeSibling('croft', `require('node:fs').writeFileSync(require('node:path').join(__dirname, 'asked'), '1'); process.stdout.write('## Croft')`)
-    process.env.CROFT_SUMMARISER = '1'
-    const event = bootstrap(workspace)
-    await handler(event)
-    expect((event.context.bootstrapFiles as { content: string }[])[0]?.content).toBe(`${RULE}\n\nlive`)
-    expect(existsSync(join(bin, 'asked'))).toBe(false)
+    const bin = await fakeTrig(`require('node:fs').writeFileSync(require('node:path').join(__dirname, 'asked'), '1'); process.stdout.write('[{}]')`)
+    for (const flag of ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']) {
+      process.env[flag] = '1'
+      const event = bootstrap(workspace)
+      await handler(event)
+      delete process.env[flag]
+      expect((event.context.bootstrapFiles as { content: string }[])[0]?.content).toBe(`${RULE}\n\nlive`)
+      expect(existsSync(join(bin, 'asked'))).toBe(false)
+    }
   })
 
   it('keeps the rule short, and in step with the lifecycle the skill teaches', async () => {

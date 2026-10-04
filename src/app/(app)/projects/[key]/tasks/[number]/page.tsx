@@ -189,7 +189,7 @@ const TaskPage = async ({
         {task.external_ref ? (
           <span
             className="text-fg-subtle hidden shrink-0 text-[0.6875rem] tabular sm:inline"
-            title={`Imported as ${task.external_ref}`}
+            title={`External ref ${task.external_ref}`}
           >
             ({task.external_ref})
           </span>

@@ -103,6 +103,9 @@ cairn add "title" --project ACME --type bug --body - --assignee bob@acme.io   # 
 
 `--type feature|bug|improvement|chore|spike|docs` · `--priority urgent|high|medium|low`.
 
+A task may carry an external ref: where it came from in another tool (`--external-ref KEY
+--external-url URL`; `update` takes `''` to clear). Filing the same ref again returns that task.
+
 The title says which task; the body says what it is. **The server refuses a bug or spike
 whose body is under 40 characters**; `--force-empty` is for the rare title that is the
 whole story. What earns its place: what happens vs what you expected; how to see it
@@ -175,10 +178,6 @@ are not recalls:** pass `--sweep` (or `CAIRN_SWEEP=1`) when looping over entries
 **With Trig** (the map of what exists): *could a re-scan rediscover this?* Yes → `trig
 learn`; no or unsure → `cairn learn` — Trig ingests Cairn knowledge; a fact hand-written
 into Trig is never superseded.
-
-**With Croft** (the lab board): exploring, evaluating or proving an idea → a Croft subject
-(`croft check` first). Changing a repo for real → a Cairn task; Croft pushes its todos
-here labelled `croft:T-n`, and Cairn owns their status.
 
 ## Claims and liveness
 

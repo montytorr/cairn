@@ -411,6 +411,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn recall <ref>` | Picking a task up: the decisions, findings and knowledge that bear on it, each with why it was picked. `claim` prints the top of it |
 | **File and change** | |
 | `cairn add "<title>" --project K --body -` | File work; a bug or spike needs a body of 40 characters or more (`--force-empty` when the title really is the whole story). From an agent, `add` and `update --body` also refuse a body that would be a wall of text — capitals standing in for headings, one long paragraph, paths and calls outside backticks — and list what to fix. Warns if something similar already exists. From an agent runtime it also claims the task, unless similar open work exists or you already hold a task in that project (it says which); `--no-start` only files it. Assigned to the human behind your key; `--assignee <email\|name\|id>` gives it to someone else |
+| `cairn add ... --external-ref KEY --external-url URL` | Record where the task came from in another tool. The ref is unique across the instance, so filing the same one again returns the existing task (`duplicate: true` with `--json`) and claims nothing. `cairn update <ref> --external-ref KEY\|'' --external-url URL\|''` sets or clears it; `cairn show` prints both and `cairn list --project K --external-ref KEY` filters on it exactly |
 | `cairn add ... --start` | File it and claim it, always — for a person, or to override the agent default's hold-backs |
 | `cairn update <ref> --status S --priority P` | Change fields; `--assignee <who>` reassigns it, `--project` moves it, `--also-project` widens it. `--status in-review` is written but not landed: unmerged, or merged and undeployed |
 | `cairn done <ref> --resolution "…"` | Close. The resolution is required; `--duplicate-of <ref>` closes it as a copy of another. `--kind verified` when you closed it because somebody else's fix was already there — `fixed` would claim their work |
@@ -977,7 +978,7 @@ Two cases where the summariser needs help:
   Point `CAIRN_SUMMARY_CLI` at a wrapper that drops to the account that is:
   `sudo -n -u <user> -H env HOME=/home/<user> CAIRN_SUMMARISER=1 claude "$@"`.
 - **The summariser is itself a Claude Code session.** It would trigger the hook again, so
-  the hook sets `CAIRN_SUMMARISER=1`, `QUARRY_SUMMARISER=1`, `CROFT_SUMMARISER=1` and `AGENT_MEMORY_SUMMARISER=1`
+  the hook sets `CAIRN_SUMMARISER=1`, `QUARRY_SUMMARISER=1` and `AGENT_MEMORY_SUMMARISER=1`
   in the child and exits immediately when it sees any of them — so Quarry's summariser is
   skipped too, and Quarry skips ours. The child also runs with `--no-session-persistence`
   from a scratch directory, so `claude --continue` in a project can never resume it. And a

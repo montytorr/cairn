@@ -5,7 +5,7 @@ import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/db/client'
 import { findTask, TASK_LIST_FIELDS } from '@/lib/api/tasks'
 import { resolveProject } from '@/lib/api/project-keys'
-import { resolveAssignee, withAssignees } from '@/lib/api/people'
+import { resolveAssignee, withAssignee, withAssignees } from '@/lib/api/people'
 import { refuseUnreadableBody } from '@/lib/api/task-body'
 import { createTaskSchema, TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
@@ -38,6 +38,8 @@ const listQuery = z.object({
    * which is what this agent holds right now, this is what a human owns.
    */
   assignee: z.string().trim().min(1).max(320).optional(),
+  /** Exact, not a search: the identifier another tool gave it. */
+  external_ref: z.string().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -53,7 +55,7 @@ export const GET = route<{ id: string }>({
 
     const parsed = listQuery.safeParse(Object.fromEntries(url.searchParams))
     if (!parsed.success) return fail('validation_failed', 'Bad query parameters.')
-    const { status, type, label, mine, claimed_by, assignee, limit, offset } = parsed.data
+    const { status, type, label, mine, claimed_by, assignee, external_ref, limit, offset } = parsed.data
 
     let query = admin()
       .from('tasks')
@@ -77,6 +79,7 @@ export const GET = route<{ id: string }>({
     if (type) query = query.eq('type', type)
     if (label) query = query.contains('labels', [label])
     if (claimed_by) query = query.eq('claimed_by', claimed_by)
+    if (external_ref) query = query.eq('external_ref', external_ref)
     if (assignee) {
       const owner = await resolveAssignee(assignee, actor.userId)
       if (!owner.ok) return fail(owner.code, owner.error)
@@ -117,9 +120,25 @@ export const GET = route<{ id: string }>({
   },
 })
 
+const CREATED_FIELDS =
+  'id, number, title, type, status, priority, labels, assignee_user_id, external_ref, external_url, created_at'
+
+/** The task already carrying an external ref, wherever it is filed. */
+const holderOf = async (externalRef: string) => {
+  const { data } = await admin()
+    .from('tasks')
+    .select(`${CREATED_FIELDS}, project:projects!project_id!inner(key)`)
+    .eq('external_ref', externalRef)
+    .maybeSingle()
+  if (!data) return null
+  const { project, ...task } = data as unknown as { number: number; project: { key: string } | { key: string }[] }
+  const key = (Array.isArray(project) ? project[0] : project)?.key
+  return { ...(await withAssignee(task)), ref: `${key}-${task.number}` }
+}
+
 export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
   schema: createTaskSchema,
-  secretFields: ['title', 'description'],
+  secretFields: ['title', 'description', 'externalRef', 'externalUrl'],
   handler: async ({ actor, params, body }) => {
     const resolved = await resolveProject<{ id: string; key: string; status: string }>(
       params.id,
@@ -145,6 +164,14 @@ export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
 
     const unreadable = refuseUnreadableBody(actor, body.description, `cairn add "<title>" --project ${project.key} --body -`)
     if (unreadable) return unreadable
+
+    // Idempotent on the external ref, as a note is on its content: a caller
+    // that retries after a timeout, or files the same upstream item twice,
+    // gets the task it already made. Instance-wide, because the index is.
+    if (body.externalRef) {
+      const existing = await holderOf(body.externalRef)
+      if (existing) return ok({ ...existing, duplicate: true, ...(renamed ? { renamed_from: renamed } : {}) }, { status: 200 })
+    }
 
     // A new task has no id yet, so it cannot be its own ancestor — the cycle
     // walk that re-parenting needs is unnecessary here.
@@ -173,10 +200,18 @@ export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
         actor_type: actor.actorType,
         actor_id: actor.actorId,
         assignee_user_id: owner.person.id,
+        external_ref: body.externalRef ?? null,
+        external_url: body.externalUrl ?? null,
       })
-      .select('id, number, title, type, status, priority, labels, assignee_user_id, created_at')
+      .select(CREATED_FIELDS)
       .single()
 
+    // Two creates racing past the lookup: the loser meets the unique index and
+    // gets the winner, which is what the lookup would have said a moment later.
+    if (error && body.externalRef && error.code === '23505' && error.message.includes('tasks_external_ref_key')) {
+      const winner = await holderOf(body.externalRef)
+      if (winner) return ok({ ...winner, duplicate: true, ...(renamed ? { renamed_from: renamed } : {}) }, { status: 200 })
+    }
     if (error) return failFromDb(error)
 
     await admin().from('task_activity_events').insert({
