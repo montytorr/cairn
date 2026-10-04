@@ -106,7 +106,7 @@ const simulate = (ids: readonly string[], edges: readonly Edge[], size: number):
    * own comment calls "not stable across an update or a vacuum". The symptom
    * is a map that quietly rearranges after an unrelated write, which reads as
    * the map being organic rather than as a bug, which is why it survived.
-   * Found porting this layout into Trig, where the edges come from Postgres
+   * Found porting this layout elsewhere, where the edges come from Postgres
    * and the drift was obvious. */
   links.sort((p, q) => p[0] - q[0] || p[1] - q[1])
 

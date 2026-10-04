@@ -12,10 +12,6 @@
  * machine and drifts; the skill is read in about half of sessions. A briefing
  * that carried data only told the agent what exists, never what to do next.
  *
- * Trig, when this machine has it, follows in a line, as it does in
- * hooks/cairn-context.mjs: Cairn owns the opening and names it, on a 1.5 s
- * deadline of its own and silent on any failure.
- *
  * Same rules as hooks/cairn-context.mjs: never block (a 5 s deadline, and every
  * failure leaves the session starting as it would have without this hook), and
  * stay small. Unlike that hook it still injects the rule when the CLI fails,
@@ -73,57 +69,6 @@ export const briefing = (cwd: string): Promise<string> =>
     }
   })
 
-const SUMMARISER_FLAGS = ['CAIRN_SUMMARISER', 'QUARRY_SUMMARISER', 'AGENT_MEMORY_SUMMARISER']
-
-const siblingTimeout = (name: string) => {
-  const value = Number(process.env[name] ?? 1500)
-  return Number.isFinite(value) && value > 0 ? value : 1500
-}
-
-/** stdout of a sibling CLI, or '' on any failure, never slower than its deadline. */
-const quiet = (bin: string, args: string[], cwd: string, timeout: number): Promise<string> =>
-  new Promise((resolve) => {
-    try {
-      const child = execFile(bin, args, { cwd, timeout, killSignal: 'SIGKILL', maxBuffer: 256 * 1024 }, (error, stdout) => {
-        clearTimeout(deadline)
-        resolve(error ? '' : String(stdout).trim())
-      })
-      // execFile answers only once the pipes close, and a process the sibling
-      // forked keeps them open after the kill; the deadline is ours to keep.
-      const deadline = setTimeout(() => {
-        child.stdout?.destroy()
-        child.stderr?.destroy()
-        resolve('')
-      }, timeout + 100)
-    } catch {
-      resolve('')
-    }
-  })
-
-/** One line about the map, or ''. */
-export const trigLine = async (cwd: string): Promise<string> => {
-  const bin = process.env.TRIG_CLI?.trim() || 'trig'
-  const out = await quiet(bin, ['scans', '--limit', '1', '--json'], cwd, siblingTimeout('CAIRN_TRIG_TIMEOUT_MS'))
-  if (!out) return ''
-  try {
-    const rows = JSON.parse(out)
-    const last = Array.isArray(rows) ? rows[0] : (rows?.data ?? rows?.results ?? [])[0]
-    if (!last) return ''
-    const when = last.finishedAt ?? last.finished_at ?? last.startedAt ?? last.started_at
-    const age = when ? Math.round((Date.now() - new Date(when).getTime()) / 3_600_000) : null
-    const scanned = age === null ? 'scanned at an unknown time' : age < 1 ? 'scanned within the hour' : `scanned ${age}h ago`
-    return `Trig — the map of what exists (${scanned}):\n  trig what-is <thing> · trig impact <thing> · trig inbox`
-  } catch {
-    return ''
-  }
-}
-
-/** Every sibling's block, in order, or [] under a summariser. */
-export const siblings = async (cwd: string): Promise<string[]> => {
-  if (SUMMARISER_FLAGS.some((name) => process.env[name] === '1')) return []
-  return (await Promise.all([trigLine(cwd)])).filter(Boolean)
-}
-
 const handler = async (event: HookEvent): Promise<void> => {
   if (event?.type !== 'agent' || event.action !== 'bootstrap') return
   const context = event.context
@@ -131,12 +76,12 @@ const handler = async (event: HookEvent): Promise<void> => {
 
   try {
     const workspaceDir = context.workspaceDir
-    const [live, extra] = await Promise.all([briefing(workspaceDir), siblings(workspaceDir)])
+    const live = await briefing(workspaceDir)
     const files = (context.bootstrapFiles as BootstrapFile[]).filter((f) => f?.name !== FILE_NAME)
     files.push({
       name: FILE_NAME,
       path: join(workspaceDir, FILE_NAME),
-      content: [RULE, live, ...extra].filter(Boolean).join('\n\n'),
+      content: [RULE, live].filter(Boolean).join('\n\n'),
       missing: false,
     })
     context.bootstrapFiles = files

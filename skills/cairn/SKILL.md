@@ -175,9 +175,7 @@ evidence of change. Either way: check it, then `verify` or `relearn`.
 `know --unused|--gaps|--orphans|--dangling` show what is *not* connected. **Scripted reads
 are not recalls:** pass `--sweep` (or `CAIRN_SWEEP=1`) when looping over entries.
 
-**With Trig** (the map of what exists): *could a re-scan rediscover this?* Yes → `trig
-learn`; no or unsure → `cairn learn` — Trig ingests Cairn knowledge; a fact hand-written
-into Trig is never superseded.
+Facts a scan of your systems could rediscover belong in that system's map, not in Cairn's knowledge.
 
 ## Claims and liveness
 

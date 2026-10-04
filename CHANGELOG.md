@@ -9,6 +9,11 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The session briefing names no other product.** The Trig line is gone, along with the
+  plumbing that ran it; Trig carries its own session hook (`trig setup`).
+
 ## [0.18.0] — 2026-10-04
 
 ### Added
