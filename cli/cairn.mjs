@@ -919,8 +919,13 @@ const AGENT = detectAgent()
  * manual handoff from Codex or OpenClaw and is filed as `claude` writes a
  * second row beside its hook's (CAIRN-321). The hook always says; this only
  * decides for a caller that did not.
+ *
+ * hooks/cairn-session-end.mjs keeps the inverse (PLATFORM_AGENTS, platform ->
+ * agent) to name the agent of a session nothing else named (CAIRN-354): a
+ * change here is a change there.
  */
 const SESSION_PLATFORMS = { 'claude-code': 'claude', codex: 'codex', openclaw: 'openclaw' }
+const PLATFORM_AGENTS = Object.fromEntries(Object.entries(SESSION_PLATFORMS).map(([agent, platform]) => [platform, agent]))
 const PLATFORM_SOURCES = new Set(['claude', 'codex', 'openclaw', 'other'])
 const defaultPlatform = () => {
   // Hermes's hooks set CAIRN_PLATFORM=hermes: a value the server's enum would
@@ -4810,8 +4815,13 @@ const commands = {
       // The instance decides the server and the key; a CAIRN_API_KEY left in
       // this shell would only get every replay refused.
       const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !['CAIRN_API_KEY', 'CAIRN_BASE_URL', 'CAIRN_INSTANCE'].includes(k)))
+      // A session parked before the hook stored its agent (`agent: null`) is
+      // its platform's agent. An empty CAIRN_AGENT would let detection fall
+      // back to the shell running `route add` — another runtime's identity
+      // (CAIRN-354).
+      const parkedAgent = parked.agent ?? PLATFORM_AGENTS[parked.platform] ?? ''
       const result = spawnSync(process.execPath, [process.argv[1], ...args, '--instance', target], {
-        env: { ...env, CAIRN_AGENT: parked.agent ?? '', CAIRN_PLATFORM: parked.platform ?? '' },
+        env: { ...env, CAIRN_AGENT: parkedAgent, CAIRN_PLATFORM: parked.platform ?? '' },
         stdio: ['ignore', 'ignore', 'pipe'],
         encoding: 'utf8',
         timeout: 30_000,

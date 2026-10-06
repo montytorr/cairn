@@ -342,6 +342,36 @@ const label = (r: Pick<RuntimeHost, 'runtime' | 'host'>) => `${r.runtime}@${r.ho
 const pct = (n: number, d: number) => `${Math.round((n / d) * 100)}%`
 
 /**
+ * The runtime an actor label names: `codex · cal@x` and a bare `codex` are
+ * both codex. Labels became `<runtime> · <owner>` partway through, so the
+ * same runtime has written under both shapes.
+ */
+export const runtimeOfActor = (actorId: string) => (actorId.split(' · ')[0] ?? actorId).trim()
+
+/**
+ * CAIRN-354: `claude-code` (bare, last seen 2026-09-15) was reported as gone
+ * while `claude-code · monty.torr@gmail.com` — the same runtime under the label
+ * it was renamed to — wrote every day. A bare label is only news when nothing
+ * of its runtime has written in the window or the week before.
+ *
+ * Bare labels only: that is the one rename there has been, from before labels
+ * carried their owner. A qualified label that has gone quiet is still said even
+ * while another owner's copy of the same runtime writes, because in a shared
+ * workspace that is exactly the silence worth hearing about.
+ */
+export const absentAgentsStillGone = (
+  absent: VitalsSignals['absentAgents'],
+  agents: Vitals['agents'],
+) => {
+  const writing = new Set(
+    agents
+      .filter((a) => a.actorType !== 'human' && (a.recent > 0 || a.baseline > 0))
+      .map((a) => runtimeOfActor(a.agent)),
+  )
+  return absent.filter((a) => a.agent.includes(' · ') || !writing.has(runtimeOfActor(a.agent)))
+}
+
+/**
  * The checks migration 065 made possible, each one a blind spot CAIRN-282
  * found reading green while it failed.
  *
@@ -482,7 +512,7 @@ export const assessSignals = (v: Vitals, now = Date.now()): Finding[] => {
   // Seen in the month before and not since, so cairn_vitals' lists — which
   // only reach back a week — no longer contain them at all.
   const gone = s.runtimes.filter((r) => r.recent === 0 && r.baseline === 0)
-  const goneAgents = s.absentAgents
+  const goneAgents = absentAgentsStillGone(s.absentAgents, v.agents)
   if (gone.length > 0 || goneAgents.length > 0) {
     findings.push({
       code: 'runtime-absent',

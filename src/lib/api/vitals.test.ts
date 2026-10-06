@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  absentAgentsStillGone,
   assess,
   assessSignals,
   isMaintenance,
@@ -454,10 +457,62 @@ describe('assessSignals', () => {
           ],
           absentAgents: [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(24 * 10) }],
         }),
+        // Nothing of codex's has written since, under any label.
+        { agents: [{ agent: 'claude-code · Dev', recent: 40, baseline: 300 }] },
       )
       const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-absent')
       expect(f?.message).toContain('codex@linux sessions (last 288h ago)')
       expect(f?.message).toContain('codex · Dev writes (last 240h ago)')
+    })
+
+    /**
+     * CAIRN-354: `claude-code` was renamed `claude-code · <owner>` and the old
+     * label, silent since, was reported as a runtime that had stopped.
+     */
+    it('does not call a label gone when its runtime writes under a newer one', () => {
+      const v = withSignals(
+        healthySignals({
+          absentAgents: [
+            { agent: 'claude-code', lastSeenAt: hoursAgo(487) },
+            { agent: 'hermes', lastSeenAt: hoursAgo(300) },
+          ],
+        }),
+        {
+          agents: [
+            { agent: 'claude-code · monty.torr@gmail.com', actorType: 'agent', recent: 40, baseline: 300 },
+            { agent: 'codex · monty.torr@gmail.com', actorType: 'agent', recent: 12, baseline: 90 },
+          ],
+        },
+      )
+      const f = assessSignals(v, NOW).find((x) => x.code === 'runtime-absent')
+      expect(f?.message).not.toContain('claude-code writes')
+      expect(f?.message).toContain('hermes writes (last 300h ago)')
+    })
+
+    it('says nothing when the only absent labels were renamed', () => {
+      const v = withSignals(
+        healthySignals({ absentAgents: [{ agent: 'codex', lastSeenAt: hoursAgo(400) }] }),
+        { agents: [{ agent: 'codex · Dev', actorType: 'agent', recent: 0, baseline: 20 }] },
+      )
+      expect(signalCodes(v)).not.toContain('runtime-absent')
+    })
+
+    it('does not let a person under a runtime-shaped name hide that runtime', () => {
+      expect(
+        absentAgentsStillGone(
+          [{ agent: 'codex', lastSeenAt: hoursAgo(400) }],
+          [{ agent: 'codex · Dev', actorType: 'human', recent: 5, baseline: 5 }],
+        ),
+      ).toHaveLength(1)
+    })
+
+    it("still says one owner's runtime went quiet while another owner's copy writes", () => {
+      expect(
+        absentAgentsStillGone(
+          [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(400) }],
+          [{ agent: 'codex · Other', actorType: 'agent', recent: 5, baseline: 5 }],
+        ),
+      ).toHaveLength(1)
     })
   })
 
@@ -469,5 +524,38 @@ describe('assessSignals', () => {
     expect(codes(v)).not.toContain('agent-silent')
     expect(isMaintenance('maintenance')).toBe(true)
     expect(isMaintenance('claude-code · Dev')).toBe(false)
+  })
+})
+
+/**
+ * Migration 070 edits the installed cairn_vitals_signals by exact text and
+ * refuses to run when that text is missing. Pinned here so a change to 065's
+ * `sess` CTE (or a typo in 070's copy of it) fails in the unit suite rather
+ * than at deploy.
+ */
+describe('migration 070 (CAIRN-354)', () => {
+  const read = (name: string) => readFileSync(join(process.cwd(), 'migrations', name), 'utf8')
+  const literal = (sql: string, name: string) => {
+    const start = sql.indexOf(`${name} :=`)
+    return [...sql.slice(start, sql.indexOf(';', start)).matchAll(/'((?:[^']|'')*)'/g)]
+      .map((m) => m[1])
+      .join('')
+      .replace(/\\n/g, '\n')
+      .replace(/''/g, "'")
+  }
+  const migration = read('070_vitals_signals_skip_imports.sql')
+  const v065 = read('065_vitals_signals.sql')
+  const body065 = v065.slice(v065.indexOf('create or replace function cairn_vitals_signals'))
+
+  it("matches 065's sess CTE byte for byte, exactly once", () => {
+    expect(body065.split(literal(migration, 'old_where'))).toHaveLength(2)
+  })
+
+  it('only adds the claude-mem filter', () => {
+    const old = literal(migration, 'old_where')
+    const added = literal(migration, 'new_where')
+    expect(added.startsWith(old.slice(0, old.lastIndexOf('\n')))).toBe(true)
+    expect(added).toContain("and s.external_id not like 'cmem-%'")
+    expect(added.endsWith('\n  ),')).toBe(true)
   })
 })

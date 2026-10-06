@@ -144,13 +144,14 @@ describe('cairn_vitals_signals', () => {
     hoursAgo: number
     summarised?: boolean
     request?: string
+    externalId?: string
   }) =>
     client.query(
       `insert into sessions (owner_user_id,external_id,platform_source,cwd,request,learned,created_at)
        values ($1,$2,$3,$4,$5,$6, now() - make_interval(hours => $7::int))`,
       [
         user,
-        randomUUID(),
+        fields.externalId ?? randomUUID(),
         fields.platform,
         fields.cwd,
         fields.request ?? 'do the work',
@@ -306,6 +307,18 @@ describe('cairn_vitals_signals', () => {
     })
     expect(v.absentAgents.map((a) => a.agent)).toContain('retired-runtime · Dev')
     expect(v.absentAgents.map((a) => a.agent)).not.toContain('openclaw · Dev')
+  })
+
+  // CAIRN-354 (migration 070): the claude-mem import (CAIRN-73) is history
+  // loaded in bulk, not a runtime, and was reported as `claude@other` gone.
+  it('leaves sessions imported from claude-mem out of the runtimes and the totals', async () => {
+    const before = await signals()
+    await session({ platform: 'claude', cwd: null as unknown as string, hoursAgo: 24 * 20, externalId: `cmem-${randomUUID()}` })
+    await session({ platform: 'claude', cwd: null as unknown as string, hoursAgo: 2, externalId: `cmem-${randomUUID()}` })
+
+    const v = await signals()
+    expect(v.runtimes.find((r) => r.runtime === 'claude' && r.host === 'other')).toBeUndefined()
+    expect(v.sessions.recent).toBe(before.sessions.recent)
   })
 
   it('counts current knowledge by when it was last verified', async () => {
