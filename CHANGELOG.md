@@ -9,6 +9,23 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A retried session is written as its own runtime, not the one that retried it**
+  (CAIRN-354). A Claude session whose summary timed out was queued with no agent, and the
+  queue is drained by whichever hook runs next — usually Codex's, every turn — whose `cairn`
+  inherited `CAIRN_AGENT=codex`: the row came back `codex · …` on platform `claude`. The
+  session-end hook now names the agent at the first attempt (from `CAIRN_AGENT`, else the
+  platform's own runtime), stores it with the retry, and always tells the `cairn` it spawns
+  whose session it is. An entry queued before this, or a session parked for `cairn route
+  add` without an agent, is replayed as its platform's runtime.
+- **Vitals stopped reporting renamed and imported identities as gone** (CAIRN-354).
+  `runtime-absent` named `claude-code` writes, a label since renamed `claude-code · <owner>`
+  and active under it; an absent label is now left out while its runtime writes under any
+  label. It also named `claude@other` sessions, which are the claude-mem import (CAIRN-73,
+  `external_id` `cmem-…`): migration 070 leaves those out of every session count in
+  `cairn_vitals_signals`.
+
 ## [0.19.0] — 2026-10-04
 
 ### Changed

@@ -363,6 +363,69 @@ describe('the session-end hook', () => {
     expect(argValue(parked.args, '--cwd')).toBe('/work/demo')
   })
 
+  /**
+   * CAIRN-354: the retry queue is drained by whichever runtime's hook runs
+   * next, and Codex's runs every turn under CAIRN_AGENT=codex. A Claude
+   * session queued with no agent was re-posted by a `cairn` that inherited
+   * that, and its row came back as `codex · …` with platform `claude`.
+   */
+  describe('a retried session keeps its own identity', () => {
+    const CODEX_ENV = { CAIRN_AGENT: 'codex', CAIRN_PLATFORM: 'codex', CODEX_MANAGED_BY_NPM: '1' }
+    const CLAUDE_ENV = { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli' }
+    const posted = () => lines('cli.jsonl') as { args: string[]; agent: string | null; platform: string | null }[]
+
+    beforeEach(() => {
+      fake('cairn', `require('fs').appendFileSync(process.env.OUT + '/cli.jsonl', JSON.stringify({
+        args: process.argv.slice(2), agent: process.env.CAIRN_AGENT ?? null, platform: process.env.CAIRN_PLATFORM ?? null,
+      }) + '\\n')`)
+    })
+
+    const retriedFrom = async (env: Record<string, string>) => {
+      const next = transcript('next', [user('Tidy the README'), edit('/work/demo/README.md')])
+      await run({ transcript_path: next, session_id: 'next', cwd: '/work/demo' }, { ...env, CAIRN_SUMMARY_RETRY_SPACING_MS: '0' })
+      const retry = posted().find((p) => argValue(p.args, '--id') === 'queued' && p.args.includes('--no-checkpoint'))
+      expect(retry).toBeDefined()
+      return retry!
+    }
+
+    it('names the agent of a Claude session nothing named, and a Codex retry does not take it', async () => {
+      const path = transcript('queued', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])
+      await run({ transcript_path: path, session_id: 'queued', cwd: '/work/demo' }, { ...CLAUDE_ENV, FAKE_MODE: 'fail' })
+      const [first] = posted()
+      expect(first).toMatchObject({ agent: 'claude-code', platform: 'claude' })
+      expect(argValue(first!.args, '--agent')).toBe('claude-code')
+      expect(JSON.parse(readFileSync(join(dir, '.cairn', 'unsummarised.json'), 'utf8')).queued)
+        .toMatchObject({ platform: 'claude', agent: 'claude-code' })
+
+      const retry = await retriedFrom(CODEX_ENV)
+      expect(retry).toMatchObject({ agent: 'claude-code', platform: 'claude' })
+      expect(argValue(retry.args, '--agent')).toBe('claude-code')
+      expect(argValue(retry.args, '--platform')).toBe('claude')
+    })
+
+    it('keeps a Codex session Codex when a Claude session retries it', async () => {
+      const path = transcript('queued', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])
+      await run({ transcript_path: path, session_id: 'queued', cwd: '/work/demo' }, { ...CODEX_ENV, FAKE_MODE: 'fail' })
+
+      const retry = await retriedFrom(CLAUDE_ENV)
+      expect(retry).toMatchObject({ agent: 'codex', platform: 'codex' })
+      expect(argValue(retry.args, '--agent')).toBe('codex')
+      expect(argValue(retry.args, '--platform')).toBe('codex')
+    })
+
+    it('retries an entry queued before agents were stored as its platform\'s agent', async () => {
+      const path = transcript('queued', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])
+      mkdirSync(join(dir, '.cairn'), { recursive: true })
+      writeFileSync(join(dir, '.cairn', 'unsummarised.json'), JSON.stringify({
+        queued: { path, cwd: '/work/demo', platform: 'claude', agent: null, ongoing: false, firstAt: Date.now(), lastAt: 0, tries: 0 },
+      }))
+
+      const retry = await retriedFrom(CODEX_ENV)
+      expect(retry).toMatchObject({ agent: 'claude-code', platform: 'claude' })
+      expect(argValue(retry.args, '--agent')).toBe('claude-code')
+    })
+  })
+
   it('parks nothing when the CLI simply fails', async () => {
     fake('cairn', 'process.exit(1)')
     const path = transcript('failing', [user('Please fix the login redirect'), edit('/work/demo/a.ts')])

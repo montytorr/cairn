@@ -1169,9 +1169,41 @@ const UNDECIDED_EXIT = 10
 const SESSION_CLOSED_EXIT = 11
 const UNROUTED_DIR = join(homedir(), '.cairn', 'unrouted')
 
-const post = (args) =>
+/**
+ * The agent a platform's sessions are written as when nothing named one.
+ *
+ * CAIRN-354: Claude Code's hook command sets no CAIRN_AGENT, so a Claude
+ * session whose summary timed out was queued with `agent: null`. The queue is
+ * retried at the end of *any* hook run — Codex's Stop fires every turn, under
+ * CAIRN_AGENT=codex — and the `cairn` child inherited that, so the Claude row
+ * came back written as `codex · …` with its platform still `claude`. The agent
+ * is therefore decided once, at the first attempt, from the session's own
+ * platform when the environment says nothing, and travels with it from then on.
+ *
+ * The inverse of SESSION_PLATFORMS in cli/cairn.mjs (agent -> platform): the
+ * two must agree, so a change to one is a change to the other.
+ */
+const PLATFORM_AGENTS = { claude: 'claude-code', codex: 'codex', openclaw: 'openclaw' }
+const agentFor = (platform, named) => named?.trim() || PLATFORM_AGENTS[platform] || undefined
+
+/**
+ * The child is told whose session it is, always. Left to itself the CLI's
+ * detectAgent() reads CAIRN_AGENT and the runtime markers it inherited — the
+ * identity of whichever process happens to be running the hook, which for a
+ * retry is not the one whose session this is (CAIRN-354). With no agent to
+ * name, the inherited one is removed rather than kept, for the same reason.
+ */
+const identityEnv = ({ platform, agent }) => {
+  const env = { ...process.env, CAIRN_PLATFORM: platform }
+  if (agent) env.CAIRN_AGENT = agent
+  else delete env.CAIRN_AGENT
+  return env
+}
+
+const post = (args, identity) =>
   new Promise((resolve) => {
     const child = spawn(CLI, args, {
+      env: identityEnv(identity),
       stdio: ['ignore', DEBUG ? 'inherit' : 'ignore', DEBUG ? 'inherit' : 'ignore'],
     })
     child.on('error', () => resolve(null))
@@ -1287,8 +1319,12 @@ const record = async (payload, opts = {}) => {
   if (opts.ongoing && knownClosed(sessionId)) return { sessionId }
 
   const cwd = payload.cwd ?? t.cwd
-  const platform = opts.platform ?? process.env.CAIRN_PLATFORM ?? 'claude'
-  const agent = opts.agent ?? process.env.CAIRN_AGENT
+  // A retry is somebody else's session: it takes its identity from what the
+  // first attempt stored, never from this process's environment, and an entry
+  // queued before the agent was stored (`agent: null`) is the agent of its own
+  // platform, not of whatever runtime is retrying it (CAIRN-354).
+  const platform = opts.platform ?? (opts.retry ? undefined : process.env.CAIRN_PLATFORM) ?? 'claude'
+  const agent = agentFor(platform, opts.retry ? opts.agent : (opts.agent ?? process.env.CAIRN_AGENT))
   const files = keepFiles(t.files, cwd)
   const outcome = await summaryFor(sessionId, buildDigest(t), format)
   const summary = outcome.summary ?? {}
@@ -1358,7 +1394,7 @@ const record = async (payload, opts = {}) => {
     if (summary[key]) args.push(flag, String(summary[key]).slice(0, 8000))
   }
 
-  const code = await post(args)
+  const code = await post(args, { platform, agent })
   if (code === UNDECIDED_EXIT) park(sessionId, cwd ?? process.cwd(), args, platform, agent)
   if (code === SESSION_CLOSED_EXIT && opts.ongoing) markClosed(sessionId)
   return { sessionId, failed: Boolean(outcome.error) }
