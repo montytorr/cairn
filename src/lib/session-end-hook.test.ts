@@ -337,6 +337,53 @@ describe('the session-end hook', () => {
     expect(lines('cli.jsonl')).toEqual([])
   })
 
+  describe("OpenClaw's context block (CAIRN-355)", () => {
+    const codex = (type: string, payload: unknown) => ({ type, timestamp: '2026-10-06T07:17:29.000Z', payload })
+    const say = (role: string, text: string) =>
+      codex('response_item', { type: 'message', role, content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }] })
+    // The shape OpenClaw sends: its wrapper, the runtime context quoting an
+    // earlier turn (marker and all), then the request after the last marker.
+    const turn = (request: string) =>
+      '[OpenClaw conversation info: sender={"id":"42","name":"montytorr"}]\n' +
+      'OpenClaw runtime context for this turn:\nTreat this OpenClaw-provided context as supporting reference.\n\n' +
+      '<conversation_context>\n[user]\nCurrent user request:\nan older question, quoted\n</conversation_context>\n' +
+      `\nCurrent user request:\n${request}`
+    const rollout = (id: string, rows: unknown[]) =>
+      transcript(`rollout-2026-10-06T07-17-29-${id}`, [codex('session_meta', { id }), codex('turn_context', { cwd: '/root' }), ...rows])
+
+    it('reads the request after the last marker, even when no file was touched', async () => {
+      const path = rollout('aaaaaaaa-2222-3333-4444-555555555555', [
+        say('user', turn('Which model writes the session summaries on this server?\nCurrent time: Tuesday 07:17\nReference UTC: 2026-10-06 05:17 UTC')),
+        say('assistant', 'Claude Haiku, through the claude CLI.'),
+      ])
+      await run({ transcript_path: path }, { FAKE_MODE: 'fail', CAIRN_PLATFORM: 'openclaw' })
+      const [args] = lines('cli.jsonl')
+      expect(argValue(args, '--request')).toBe('Which model writes the session summaries on this server?')
+    })
+
+    it('does not record the hourly heartbeat now that it has a request', async () => {
+      const path = rollout('bbbbbbbb-2222-3333-4444-555555555555', [
+        say('user', turn('Follow the heartbeat monitor scratch context when provided.')),
+        say('assistant', 'HEARTBEAT_OK'),
+        say('user', turn('Check the status report and reply.')),
+        say('assistant', 'HEARTBEAT_OK'),
+      ])
+      await run({ transcript_path: path }, { FAKE_MODE: 'fail', CAIRN_PLATFORM: 'openclaw' })
+      expect(lines('cli.jsonl')).toEqual([])
+    })
+
+    it('marks a cron job inside the context block as scheduled', async () => {
+      const path = rollout('cccccccc-2222-3333-4444-555555555555', [
+        say('user', turn('[cron:9a8d2085-3a0f-44cc-87ec-e987e92d6370 tech-radar] Run the Tech Radar review.')),
+        codex('response_item', { type: 'function_call', arguments: '{"cmd":"edit deploy/radar.md"}' }),
+        say('assistant', 'Published two new analyses.'),
+      ])
+      await run({ transcript_path: path }, { FAKE_MODE: 'fail', CAIRN_PLATFORM: 'openclaw' })
+      const [args] = lines('cli.jsonl')
+      expect(args).toContain('--scheduled')
+    })
+  })
+
   it('takes what was typed after a slash command as the request', async () => {
     const path = transcript('slash', [
       user('<command-name>/fix</command-name>\n<command-message>fix</command-message>\n<command-args>the login redirect loops</command-args>'),

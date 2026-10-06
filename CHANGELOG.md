@@ -19,10 +19,19 @@ out under **Breaking** with what to do about it.
   platform's own runtime), stores it with the retry, and always tells the `cairn` it spawns
   whose session it is. An entry queued before this, or a session parked for `cairn route
   add` without an agent, is replayed as its platform's runtime.
+- **OpenClaw sessions keep the request a person sent** (CAIRN-355). OpenClaw sends a turn as
+  one message, its runtime context (workspace files, the conversation so far) followed by
+  `Current user request:` and the request itself. The session-end hook refused the whole
+  message as machinery, so every OpenClaw session was recorded with no request, and one that
+  touched no file was not recorded at all. The request after the last marker is now read and
+  judged like any other turn. A `[cron:…]` job inside the block is marked scheduled, and a
+  session whose every reply is `HEARTBEAT_OK`, `NO_REPLY` or `OK` and that touched nothing is
+  still skipped, so the hourly heartbeat is not recorded.
 - **Vitals stopped reporting renamed and imported identities as gone** (CAIRN-354).
   `runtime-absent` named `claude-code` writes, a label since renamed `claude-code · <owner>`
-  and active under it; an absent label is now left out while its runtime writes under any
-  label. It also named `claude@other` sessions, which are the claude-mem import (CAIRN-73,
+  and active under it; a bare label, from before labels carried their owner, is now left
+  out while its runtime still writes. An owner-qualified label that goes quiet is still
+  reported, even while another owner's copy of the runtime writes. It also named `claude@other` sessions, which are the claude-mem import (CAIRN-73,
   `external_id` `cmem-…`): migration 070 leaves those out of every session count in
   `cairn_vitals_signals`.
 
