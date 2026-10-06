@@ -351,11 +351,13 @@ export const runtimeOfActor = (actorId: string) => (actorId.split(' · ')[0] ?? 
 /**
  * CAIRN-354: `claude-code` (bare, last seen 2026-09-15) was reported as gone
  * while `claude-code · monty.torr@gmail.com` — the same runtime under the label
- * it was renamed to — wrote every day. An absent label is only news when
- * nothing of its runtime has written in the window or the week before.
+ * it was renamed to — wrote every day. A bare label is only news when nothing
+ * of its runtime has written in the window or the week before.
  *
- * The cost, accepted: in a workspace two owners share, one owner's codex going
- * quiet while the other's keeps writing is not said here.
+ * Bare labels only: that is the one rename there has been, from before labels
+ * carried their owner. A qualified label that has gone quiet is still said even
+ * while another owner's copy of the same runtime writes, because in a shared
+ * workspace that is exactly the silence worth hearing about.
  */
 export const absentAgentsStillGone = (
   absent: VitalsSignals['absentAgents'],
@@ -366,7 +368,7 @@ export const absentAgentsStillGone = (
       .filter((a) => a.actorType !== 'human' && (a.recent > 0 || a.baseline > 0))
       .map((a) => runtimeOfActor(a.agent)),
   )
-  return absent.filter((a) => !writing.has(runtimeOfActor(a.agent)))
+  return absent.filter((a) => a.agent.includes(' · ') || !writing.has(runtimeOfActor(a.agent)))
 }
 
 /**

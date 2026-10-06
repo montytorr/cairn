@@ -505,6 +505,15 @@ describe('assessSignals', () => {
         ),
       ).toHaveLength(1)
     })
+
+    it("still says one owner's runtime went quiet while another owner's copy writes", () => {
+      expect(
+        absentAgentsStillGone(
+          [{ agent: 'codex · Dev', lastSeenAt: hoursAgo(400) }],
+          [{ agent: 'codex · Other', actorType: 'agent', recent: 5, baseline: 5 }],
+        ),
+      ).toHaveLength(1)
+    })
   })
 
   it('does not call the maintenance identity a silent runtime', () => {
