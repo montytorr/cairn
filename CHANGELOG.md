@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-10-06
+
 ### Fixed
 
 - **A retried session is written as its own runtime, not the one that retried it**
@@ -1844,7 +1846,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/montytorr/cairn/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/montytorr/cairn/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/montytorr/cairn/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/montytorr/cairn/compare/v0.16.0...v0.17.0
