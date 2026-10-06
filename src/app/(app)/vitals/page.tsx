@@ -241,7 +241,7 @@ const VitalsPage = async ({
         </span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {/* Centred in the content column, like the task page and /projects.
             This was left-aligned on the reasoning that centring inside a shell
             which already has a sidebar leaves a dead column — true when every

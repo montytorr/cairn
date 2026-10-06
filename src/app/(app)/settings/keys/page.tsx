@@ -38,7 +38,7 @@ const OwnKeysPage = async () => {
         <span className="text-fg text-[0.8125rem] font-medium">Your agent keys</span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
           <p className="text-fg-subtle mb-5 text-[0.75rem] leading-relaxed">
             New keys arrive when you run <code>cairn setup</code> on a machine and approve it — each is

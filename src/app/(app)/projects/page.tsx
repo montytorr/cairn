@@ -69,7 +69,7 @@ const ProjectsPage = async () => {
         </span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mx-auto max-w-[56rem] px-4 py-6 sm:px-6">
           <ProjectsManager
             projects={rows}

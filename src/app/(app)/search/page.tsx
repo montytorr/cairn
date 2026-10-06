@@ -112,7 +112,7 @@ const SearchPage = async ({
         projects={projects.map((p) => ({ key: p.key, title: p.title }))}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {failure ? (
           <p className="text-danger px-4 py-8 text-[0.8125rem]">{failure}</p>
         ) : query.length < 2 ? (

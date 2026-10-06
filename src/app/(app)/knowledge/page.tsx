@@ -205,7 +205,7 @@ const KnowledgePage = async ({
         </p>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {failure ? (
           <p className="text-danger px-4 py-8 text-[0.8125rem]">{failure}</p>
         ) : items.length === 0 ? (

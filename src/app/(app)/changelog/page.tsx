@@ -29,7 +29,7 @@ const ChangelogPage = () => {
         ) : null}
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mx-auto flex max-w-4xl flex-col px-4 py-5 md:px-6">
           {intro ? (
             <div className="text-fg-muted mb-6 text-[0.8125rem] [&_p]:my-0 [&_p+p]:mt-2">

@@ -218,7 +218,7 @@ const TaskPage = async ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto max-w-[51.25rem] px-4 py-6 sm:px-6 lg:px-8">
             {/* The ref and the project, quiet above the title rather than
                 competing with it: the title is the page's one voice. */}
