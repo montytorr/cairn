@@ -117,7 +117,7 @@ export const MarkdownEditor = ({
         {initial.trim() ? (
           <MarkdownView>{initial}</MarkdownView>
         ) : (
-          <p className="text-fg-subtle text-sm italic">No description.</p>
+          <p className="text-fg-subtle text-sm">No description.</p>
         )}
         <button
           type="button"

@@ -346,8 +346,9 @@ export const KnowledgeDetail = ({
                   </Link>
                 ))}
                 {current.projects.length === 0 && current.entities.length === 0 && (
-                  <TintPill color="var(--fg-subtle)" className="text-fg-subtle italic">
-                    global
+                  <TintPill color="var(--fg-subtle)" className="text-fg-subtle">
+                    <span className="bg-fg-subtle size-[0.4375rem] rounded-full opacity-60" aria-hidden />
+                    everywhere
                   </TintPill>
                 )}
               </span>

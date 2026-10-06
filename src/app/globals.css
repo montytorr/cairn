@@ -581,8 +581,10 @@
 }
 
 @layer base {
+  /* A comment is told apart by its colour, not a slant: the interface sets
+     no italic outside written emphasis. */
   .hljs-comment,
-  .hljs-quote { color: var(--code-comment); font-style: italic; }
+  .hljs-quote { color: var(--code-comment); }
 
   .hljs-keyword,
   .hljs-selector-tag,
@@ -617,6 +619,7 @@
   .hljs-property,
   .hljs-params { color: var(--code-variable); }
 
+  /* Emphasis written in a markdown block: the one slant that means something. */
   .hljs-emphasis { font-style: italic; }
   .hljs-strong { font-weight: 600; }
   .hljs-deletion { color: var(--danger); }
