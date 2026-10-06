@@ -1,5 +1,14 @@
 import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { extendTailwindMerge } from 'tailwind-merge'
+
+/**
+ * The type scale's names (globals.css) are font sizes. Unregistered, the merge
+ * reads `text-meta` as a colour and drops it whenever a colour such as
+ * `text-fg-muted` follows, which silently put every such chip back at body size.
+ */
+const twMerge = extendTailwindMerge({
+  extend: { classGroups: { 'font-size': [{ text: ['ui', 'meta', 'label'] }] } },
+})
 
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
 

@@ -88,30 +88,30 @@ const ProjectPage = async ({
             name is already the page title, and the sidebar is a tap away. */}
         <Link
           href="/"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors sm:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors sm:block"
         >
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg-muted flex min-w-0 items-center gap-1.5 text-[0.8125rem]">
+        <span className="text-fg-muted flex min-w-0 items-center gap-1.5 text-ui">
           <ProjectIcon size={13} projectKey={project.key} />
           <span className="truncate">{project.title}</span>
         </span>
         {renames.length > 0 && (
           <span
-            className="text-fg-subtle shrink-0 text-[0.6875rem]"
+            className="text-fg-subtle shrink-0 text-meta"
             title={renames.map((r) => renameLine(r)).join('\n')}
           >
             formerly {renames.map((r) => r.from).join(', ')}
           </span>
         )}
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg hidden text-[0.8125rem] sm:block">Tasks</span>
+        <span className="text-fg hidden text-ui sm:block">Tasks</span>
         {/* Which groupings this project belongs to, so "why am I seeing this
             fact here" has an answer where the work happens rather than only in
             settings. Hidden on a phone; the crumbs go first there too. */}
         {entities.length > 0 && (
-          <span className="text-fg-subtle ml-1 hidden items-center gap-1 text-[0.6875rem] lg:flex">
+          <span className="text-fg-subtle ml-1 hidden items-center gap-1 text-meta lg:flex">
             {entities.map((key) => (
               <Link
                 key={key}
@@ -124,7 +124,7 @@ const ProjectPage = async ({
           </span>
         )}
         {project.status === 'archived' && (
-          <span className="border-border text-fg-subtle ml-1 rounded border px-1.5 py-px text-[0.625rem] uppercase tracking-wide">
+          <span className="border-border text-fg-subtle ml-1 rounded border px-1.5 py-px text-label uppercase tracking-wide">
             Archived
           </span>
         )}
@@ -135,7 +135,7 @@ const ProjectPage = async ({
               path={`/projects/${project.key}`}
               includeClosed={includeClosed}
               hidden={closedHidden}
-              className="text-fg-subtle hover:text-fg flex items-center gap-1.5 whitespace-nowrap text-[0.75rem] transition-colors"
+              className="text-fg-subtle hover:text-fg flex items-center gap-1.5 whitespace-nowrap text-meta transition-colors"
             />
           ) : null}
           <ProjectMenu

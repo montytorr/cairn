@@ -29,7 +29,7 @@ const Prose = ({ label, body }: { label: string; body: string | null }) => {
   if (!body) return null
   return (
     <div>
-      <h3 className="text-fg-subtle mb-1 text-[0.6875rem] font-medium tracking-wide uppercase">
+      <h3 className="text-fg-subtle mb-1 text-label font-medium tracking-wide uppercase">
         {label}
       </h3>
       <MarkdownView>{body}</MarkdownView>
@@ -77,7 +77,7 @@ const Row = ({ item }: { item: SessionItem }) => {
           )}
           aria-hidden
         />
-        <span className="text-fg-subtle w-[2.625rem] shrink-0 font-mono text-[0.71875rem] tabular-nums">
+        <span className="text-fg-subtle w-[2.625rem] shrink-0 font-mono text-meta tabular-nums">
           {item.endedAt ? timeOfDay(item.endedAt) : '—'}
         </span>
         {/* A hairline ring so the initials disc reads as a crisp token on the
@@ -86,7 +86,7 @@ const Row = ({ item }: { item: SessionItem }) => {
           <Avatar name={agentName} size={18} />
         </span>
         {item.project && (
-          <span className="text-fg-muted hidden shrink-0 items-center gap-1 text-[0.75rem] sm:flex">
+          <span className="text-fg-muted hidden shrink-0 items-center gap-1 text-meta sm:flex">
             <ProjectIcon size={11} projectKey={item.project} />
             {item.project}
           </span>
@@ -96,7 +96,7 @@ const Row = ({ item }: { item: SessionItem }) => {
           return (
             <span
               className={cn(
-                'min-w-0 flex-1 truncate text-[0.8125rem]',
+                'min-w-0 flex-1 text-ui line-clamp-2 break-words sm:line-clamp-1',
                 machine ? 'text-fg-muted' : 'text-fg',
               )}
               // The machine prompt is still what opened the session, so it stays
@@ -107,7 +107,7 @@ const Row = ({ item }: { item: SessionItem }) => {
             </span>
           )
         })()}
-        <span className="flex shrink-0 items-center gap-1.5 text-[0.6875rem]">
+        <span className="flex shrink-0 items-center gap-1.5 text-meta">
           {item.files.length > 0 && (
             <Count
               icon={<FileText size={10} aria-hidden />}
@@ -146,7 +146,7 @@ const Row = ({ item }: { item: SessionItem }) => {
 
                 {item.taskRefs.length > 0 && (
                   <div>
-                    <h3 className="text-fg-subtle mb-1.5 text-[0.6875rem] font-medium tracking-wide uppercase">
+                    <h3 className="text-fg-subtle mb-1.5 text-label font-medium tracking-wide uppercase">
                       Tasks
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
@@ -157,14 +157,14 @@ const Row = ({ item }: { item: SessionItem }) => {
                             key={ref}
                             href={href}
                             prefetch
-                            className="border-border bg-surface text-fg-muted hover:border-accent hover:text-accent rounded-full border px-2 py-0.5 font-mono text-[0.6875rem] transition-[color,border-color] duration-[var(--dur-2)] ease-[var(--ease-out)]"
+                            className="border-border bg-surface text-fg-muted hover:border-accent hover:text-accent rounded-full border px-2 py-0.5 font-mono text-meta transition-[color,border-color] duration-[var(--dur-2)] ease-[var(--ease-out)]"
                           >
                             {ref}
                           </Link>
                         ) : (
                           <span
                             key={ref}
-                            className="border-border text-fg-subtle rounded-full border px-2 py-0.5 font-mono text-[0.6875rem]"
+                            className="border-border text-fg-subtle rounded-full border px-2 py-0.5 font-mono text-meta"
                           >
                             {ref}
                           </span>
@@ -176,13 +176,13 @@ const Row = ({ item }: { item: SessionItem }) => {
 
                 {item.files.length > 0 && (
                   <div>
-                    <h3 className="text-fg-subtle mb-1.5 text-[0.6875rem] font-medium tracking-wide uppercase">
+                    <h3 className="text-fg-subtle mb-1.5 text-label font-medium tracking-wide uppercase">
                       Files <span className="tabular-nums">({item.files.length})</span>
                     </h3>
                     <div className="border-border bg-bg max-h-[11.25rem] overflow-y-auto rounded-md border">
                       <ul className="divide-border divide-y">
                         {item.files.map((f) => (
-                          <li key={f} className="text-fg-muted truncate px-2.5 py-1 font-mono text-[0.71875rem]">
+                          <li key={f} className="text-fg-muted truncate px-2.5 py-1 font-mono text-meta">
                             {f}
                           </li>
                         ))}
@@ -204,7 +204,7 @@ export const SessionTimeline = ({ groups }: { groups: DayGroup<SessionItem>[] })
     {groups.map((group) => (
       <section key={group.day}>
         <div className="group-band border-border sticky top-0 z-10 flex h-[1.875rem] items-center border-b px-3 sm:px-4">
-          <span className="text-fg-muted text-[0.75rem] font-medium">{group.day}</span>
+          <span className="text-fg-muted text-meta font-medium">{group.day}</span>
         </div>
         <ul className="stagger">
           {group.rows.map((item) => (

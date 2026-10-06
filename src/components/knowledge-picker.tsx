@@ -133,7 +133,7 @@ export const KnowledgePicker = ({
           {hits.length === 0 ? (
             <li>
               {busy ? (
-                <p className="text-fg-subtle px-2.5 py-2 text-[0.75rem]">Searching…</p>
+                <p className="text-fg-subtle px-2.5 py-2 text-meta">Searching…</p>
               ) : (
                 <EmptyState compact title="Nothing matches." />
               )}
@@ -151,8 +151,8 @@ export const KnowledgePicker = ({
                   }}
                   className="hover:bg-accent-subtle focus-visible:bg-accent-subtle flex w-full flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-[background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)] outline-none hover:shadow-[inset_2px_0_0_var(--accent)] focus-visible:shadow-[inset_2px_0_0_var(--accent)]"
                 >
-                  <span className="text-fg truncate text-[0.8125rem]">{hit.title}</span>
-                  <span className="text-fg-subtle truncate font-mono text-[0.6875rem]">
+                  <span className="text-fg truncate text-ui">{hit.title}</span>
+                  <span className="text-fg-subtle truncate font-mono text-meta">
                     {hit.slug}
                   </span>
                 </button>

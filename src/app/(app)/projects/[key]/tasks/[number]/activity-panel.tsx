@@ -86,34 +86,34 @@ const describe = (entry: ActivityEntry): React.ReactNode => {
     case 'unblocked':
       return <>unblocked it</>
     case 'git_commit':
-      return <>recorded commit <code className="font-mono text-[0.6875rem]">{val(d.sha)}</code>{d.message ? <> · {String(d.message)}</> : null}</>
+      return <>recorded commit <code className="font-mono text-meta">{val(d.sha)}</code>{d.message ? <> · {String(d.message)}</> : null}</>
     case 'git_push':
-      return <>pushed <code className="font-mono text-[0.6875rem]">{val(d.sha)}</code>{d.branch ? <> to {String(d.branch)}</> : null}</>
+      return <>pushed <code className="font-mono text-meta">{val(d.sha)}</code>{d.branch ? <> to {String(d.branch)}</> : null}</>
     case 'checkpointed':
       return <>checkpointed{d.summary ? <>: {String(d.summary)}</> : null}</>
     case 'auto_checkpointed':
       return <>checkpointed it automatically at session end{d.worked ? null : <> (held, not worked)</>}</>
     case 'attachment_added':
-      return <>attached <code className="font-mono text-[0.6875rem]">{val(d.name)}</code></>
+      return <>attached <code className="font-mono text-meta">{val(d.name)}</code></>
     case 'attachment_removed':
-      return <>removed the attachment <code className="font-mono text-[0.6875rem]">{val(d.name)}</code></>
+      return <>removed the attachment <code className="font-mono text-meta">{val(d.name)}</code></>
     case 'dependency_added':
       return (
         <>
           made it {d.direction === 'blocking' ? 'block' : 'depend on'}{' '}
-          <code className="font-mono text-[0.6875rem]">{val(d.other ?? d.ref)}</code>
+          <code className="font-mono text-meta">{val(d.other ?? d.ref)}</code>
         </>
       )
     case 'dependency_removed':
       return (
         <>
-          unlinked <code className="font-mono text-[0.6875rem]">{val(d.other ?? d.ref)}</code>
+          unlinked <code className="font-mono text-meta">{val(d.other ?? d.ref)}</code>
         </>
       )
     case 'task_deleted':
-      return <>deleted <code className="font-mono text-[0.6875rem]">{val(d.ref)}</code></>
+      return <>deleted <code className="font-mono text-meta">{val(d.ref)}</code></>
     case 'run_result':
-      return <>{val(d.status)} <code className="font-mono text-[0.6875rem]">{val(d.command)}</code>{d.exitCode !== undefined ? <> · exit {String(d.exitCode)}</> : null}</>
+      return <>{val(d.status)} <code className="font-mono text-meta">{val(d.command)}</code>{d.exitCode !== undefined ? <> · exit {String(d.exitCode)}</> : null}</>
     default:
       return <>{entry.event.replace(/_/g, ' ')}</>
   }
@@ -173,13 +173,13 @@ export const ActivityPanel = ({ entries }: { entries: ActivityEntry[] }) => {
               {entries.map((e) => (
                 <li
                   key={e.id}
-                  className="row-hover -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-0.5 text-[0.78125rem]"
+                  className="row-hover -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-0.5 text-ui"
                 >
                   <Avatar name={e.actor_id} size={16} />
                   <span className="text-fg-muted min-w-0 flex-1">
                     <span className="text-fg">{e.actor_id}</span> {describe(e)}
                   </span>
-                  <RelativeTime iso={e.created_at} className="text-fg-subtle shrink-0 text-[0.6875rem]" />
+                  <RelativeTime iso={e.created_at} className="text-fg-subtle shrink-0 text-meta" />
                 </li>
               ))}
             </ol>

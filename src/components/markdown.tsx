@@ -54,15 +54,15 @@ const components: Components = {
     />
   ),
   h3: ({ className, ...p }) => (
-    <h3 className={cn(MEASURE, 'text-fg-muted mt-4 mb-1.5 text-sm font-semibold first:mt-0', className)} {...dom(p)} />
+    <h3 className={cn(MEASURE, 'text-fg-muted mt-4 mb-1.5 text-ui font-semibold first:mt-0', className)} {...dom(p)} />
   ),
   // Unmapped, a fourth-level heading was preflight's reset: body text with no
   // weight and no space, indistinguishable from the paragraph under it.
   h4: ({ className, ...p }) => (
-    <h4 className={cn(MEASURE, 'text-fg-muted mt-3 mb-1 text-sm font-medium first:mt-0', className)} {...dom(p)} />
+    <h4 className={cn(MEASURE, 'text-fg-muted mt-3 mb-1 text-ui font-medium first:mt-0', className)} {...dom(p)} />
   ),
   p: ({ className, ...p }) => (
-    <p className={cn(MEASURE, 'mb-3 text-sm leading-relaxed text-pretty last:mb-0', className)} {...dom(p)} />
+    <p className={cn(MEASURE, 'mb-3 text-ui leading-relaxed text-pretty last:mb-0', className)} {...dom(p)} />
   ),
   // The class is merged, not replaced: GFM gives a task list its own class,
   // and spreading it last used to wipe every style off the list.
@@ -70,7 +70,7 @@ const components: Components = {
     <ul
       className={cn(
         MEASURE,
-        'marker:text-fg-subtle mb-3 ml-4 list-disc space-y-1 text-sm last:mb-0',
+        'marker:text-fg-subtle mb-3 ml-4 list-disc space-y-1 text-ui last:mb-0',
         '[&.contains-task-list]:ml-0 [&.contains-task-list]:list-none',
         className,
       )}
@@ -79,7 +79,7 @@ const components: Components = {
   ),
   ol: ({ className, ...p }) => (
     <ol
-      className={cn(MEASURE, 'marker:text-fg-subtle mb-3 ml-4 list-decimal space-y-1 text-sm marker:tabular-nums last:mb-0', className)}
+      className={cn(MEASURE, 'marker:text-fg-subtle mb-3 ml-4 list-decimal space-y-1 text-ui marker:tabular-nums last:mb-0', className)}
       {...dom(p)}
     />
   ),
@@ -141,7 +141,7 @@ const components: Components = {
     <blockquote
       className={cn(
         MEASURE,
-        'text-fg-muted mb-3 rounded-r-md py-1 pr-3 pl-3.5 text-sm last:mb-0',
+        'text-fg-muted mb-3 rounded-r-md py-1 pr-3 pl-3.5 text-ui last:mb-0',
         'shadow-[inset_2px_0_0_color-mix(in_oklab,var(--accent)_60%,transparent)]',
         className,
       )}
@@ -157,7 +157,7 @@ const components: Components = {
     const isBlock = /language-/.test(className ?? '')
     if (isBlock) {
       return (
-        <code className={cn('font-mono text-[0.8125rem] leading-relaxed', className)} {...dom(rest)}>
+        <code className={cn('font-mono text-ui leading-relaxed', className)} {...dom(rest)}>
           {children}
         </code>
       )
@@ -166,7 +166,7 @@ const components: Components = {
     // a box that competes with the words around it.
     return (
       <code
-        className="bg-surface-raised text-fg rounded-[0.3125rem] px-[0.3em] py-px font-mono text-[0.78125rem] break-words ring-1 ring-border ring-inset"
+        className="bg-surface-raised text-fg rounded-[0.3125rem] px-[0.3em] py-px font-mono text-ui break-words ring-1 ring-border ring-inset"
         {...dom(rest)}
       >
         {children}
@@ -180,7 +180,7 @@ const components: Components = {
     <div className="border-border mb-3 overflow-x-auto rounded-lg border last:mb-0">
       <table
         className={cn(
-          'w-full border-collapse text-[0.78125rem] tabular-nums',
+          'w-full border-collapse text-ui tabular-nums',
           '[&_tbody_tr]:transition-colors [&_tbody_tr]:duration-[var(--dur-1)] [&_tbody_tr:hover]:bg-surface-hover',
           '[&_tbody_tr:last-child>td]:border-b-0',
           className,
@@ -192,7 +192,7 @@ const components: Components = {
   th: ({ className, ...p }) => (
     <th
       className={cn(
-        'border-border bg-surface-raised text-fg-muted border-b px-2.5 py-1.5 text-left text-[0.6875rem] font-medium',
+        'border-border bg-surface-raised text-fg-muted border-b px-2.5 py-1.5 text-left text-meta font-medium',
         className,
       )}
       {...dom(p)}
@@ -260,7 +260,7 @@ export const MarkdownView = ({ children }: { children: string }) => {
  */
 export const MarkdownPreview = ({ children, lines = 3 }: { children: string; lines?: number }) => (
   <div
-    className="text-fg-muted overflow-hidden text-[0.78125rem] leading-snug [&_*]:!mb-0 [&_*]:!mt-0 [&_a]:no-underline [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_h1]:text-[0.78125rem] [&_h1]:font-normal [&_h2]:text-[0.78125rem] [&_h2]:font-normal [&_h3]:text-[0.78125rem] [&_h3]:font-normal [&_li]:list-none [&_pre]:border-0 [&_pre]:bg-transparent [&_pre]:p-0 [&_ul]:ml-0"
+    className="text-fg-muted overflow-hidden text-meta leading-snug [&_*]:!mb-0 [&_*]:!mt-0 [&_a]:no-underline [&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_h1]:text-meta [&_h1]:font-normal [&_h2]:text-meta [&_h2]:font-normal [&_h3]:text-meta [&_h3]:font-normal [&_li]:list-none [&_pre]:border-0 [&_pre]:bg-transparent [&_pre]:p-0 [&_ul]:ml-0"
     style={{
       display: '-webkit-box',
       WebkitLineClamp: lines,

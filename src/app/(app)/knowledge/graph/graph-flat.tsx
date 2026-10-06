@@ -750,7 +750,7 @@ export const GraphFlat = ({ graph, focused, setFocused, spotlight }: Props) => {
           <button
             type="button"
             onClick={reset}
-            className="text-fg-subtle hover:bg-surface-raised hover:text-fg enter-pop h-7 rounded-full px-2.5 text-[0.7rem] transition-colors duration-[var(--dur-1)]"
+            className="text-fg-subtle hover:bg-surface-raised hover:text-fg enter-pop h-7 rounded-full px-2.5 text-meta transition-colors duration-[var(--dur-1)]"
             style={{ '--origin': 'right' } as React.CSSProperties}
           >
             Reset view

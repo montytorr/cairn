@@ -21,8 +21,8 @@ export const ConnectCodeForm = () => {
 
   return (
     <form onSubmit={go} className="surface-card enter-rise w-full max-w-[22rem] px-6 py-6">
-      <h1 className="text-fg text-[0.9375rem] font-medium">Connect a device</h1>
-      <p className="text-fg-subtle mt-1.5 text-[0.8125rem] leading-relaxed">
+      <h1 className="text-fg text-[1.125rem] font-medium">Connect a device</h1>
+      <p className="text-fg-subtle mt-1.5 text-ui leading-relaxed">
         Enter the code shown by the CLI.
       </p>
       <Input

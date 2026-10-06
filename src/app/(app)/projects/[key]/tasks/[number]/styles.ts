@@ -3,11 +3,11 @@
  * sidebar section. Six panels and eight sections had drifted between two sizes
  * and two greys, which read as eight different kinds of thing.
  */
-export const LABEL = 'text-fg-subtle text-[0.625rem] font-medium tracking-[0.08em] uppercase'
+export const LABEL = 'text-fg-subtle text-label font-medium tracking-[0.08em] uppercase'
 
 /** The count beside a label: a small stone of its own, not a trailing digit. */
 export const COUNT =
-  'bg-surface-raised text-fg-muted rounded-full px-1.5 py-px text-[0.625rem] leading-[1.4] font-medium tracking-normal normal-case tabular-nums'
+  'bg-surface-raised text-fg-muted rounded-full px-1.5 py-px text-meta leading-[1.4] font-medium tracking-normal normal-case tabular-nums'
 
 /** A composer's shell: a flat card whose rim turns to the accent, doubled to 2px, while typing. */
 export const COMPOSER =
@@ -29,7 +29,7 @@ export const PANE = 'bg-bg-elevated border-border border-l'
  * fixed width so every value starts at the same edge, and it never grows —
  * a long value truncates in its own column instead of pushing the row wide.
  */
-export const ROW_LABEL = 'text-fg-subtle w-[4.75rem] shrink-0 text-[0.75rem]'
+export const ROW_LABEL = 'text-fg-subtle w-[4.75rem] shrink-0 text-meta'
 
 /** A property row's shell: flat hover fill, ~28px tall, never wider than the pane. */
 export const ROW = 'row-hover -mx-1.5 flex min-w-0 min-h-[1.75rem] items-center gap-2 rounded-md px-1.5'

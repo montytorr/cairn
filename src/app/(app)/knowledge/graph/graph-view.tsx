@@ -49,7 +49,7 @@ type Props = { graph: KnowledgeGraph }
 const CHROME = 'border-border bg-surface raised border'
 
 const SEGMENT =
-  'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.7rem] transition-[color,background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]'
+  'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-meta transition-[color,background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]'
 const SEGMENT_ON = 'bg-surface-raised text-fg ring-1 ring-border-strong'
 const SEGMENT_OFF = 'text-fg-subtle hover:text-fg'
 
@@ -340,7 +340,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
         style={{ visibility: 'hidden' }}
         className={cn(
           CHROME,
-          'pointer-events-none absolute top-0 left-0 z-10 w-max max-w-[min(18rem,calc(100%-1rem))] rounded-lg px-2.5 py-2 text-[0.7rem] leading-snug',
+          'pointer-events-none absolute top-0 left-0 z-10 w-max max-w-[min(18rem,calc(100%-1rem))] rounded-lg px-2.5 py-2 text-meta leading-snug',
           !card && 'hidden',
         )}
       >
@@ -377,7 +377,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
       <div
         className={cn(
           CHROME,
-          'text-fg-subtle pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-11rem)] rounded-lg px-2.5 py-1.5 text-[0.7rem] leading-snug sm:top-2 sm:bottom-auto sm:max-w-[calc(50%-8.5rem)]',
+          'text-fg-subtle pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-11rem)] rounded-lg px-2.5 py-1.5 text-meta leading-snug sm:top-2 sm:bottom-auto sm:max-w-[calc(50%-8.5rem)]',
         )}
       >
         {spotlight ? (
@@ -507,7 +507,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
           thing asked after ten minutes of looking at this. Every mark on the
           map means something and none of it was stated where it was being
           read. */}
-      <dl className={cn(CHROME, 'text-fg-subtle pointer-events-none absolute bottom-2 left-2 hidden space-y-1 rounded-lg px-2.5 py-2 text-[0.68rem] sm:block')}>
+      <dl className={cn(CHROME, 'text-fg-subtle pointer-events-none absolute bottom-2 left-2 hidden space-y-1 rounded-lg px-2.5 py-2 text-meta sm:block')}>
         <div className="flex items-center gap-2">
           <svg width="26" height="10" aria-hidden className="shrink-0">
             <circle cx="5" cy="5" r="2" fill="var(--fg-muted)" />

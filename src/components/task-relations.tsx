@@ -10,7 +10,7 @@ const href = (ref: string) => {
   return `/projects/${ref.slice(0, at)}/tasks/${ref.slice(at + 1)}`
 }
 
-const CHIP = 'pointer-events-auto relative z-10 inline-flex shrink-0 items-center gap-1 text-[0.6875rem] tabular'
+const CHIP = 'pointer-events-auto relative z-10 inline-flex shrink-0 items-center gap-1 text-meta tabular'
 
 /**
  * Where a task sits among others, on a row or a card (CAIRN-341): whose child

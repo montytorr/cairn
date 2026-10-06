@@ -1103,7 +1103,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
         if (!span) {
           span = document.createElement('span')
           span.className =
-            'text-fg-muted absolute top-0 left-0 whitespace-nowrap text-[0.6875rem] leading-none'
+            'text-fg-muted absolute top-0 left-0 whitespace-nowrap text-meta leading-none'
           // Three stacked shadows in the ground colour, which is how a knockout
           // is done without a second element behind every title.
           span.style.textShadow = '0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 7px var(--bg)'

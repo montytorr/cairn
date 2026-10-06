@@ -40,7 +40,7 @@ export const ActivityControls = ({
   }
 
   return (
-    <div className="border-border/70 flex shrink-0 items-center gap-2 overflow-x-auto border-b px-3 py-2 [scrollbar-width:none] sm:overflow-visible sm:px-4 [&::-webkit-scrollbar]:hidden">
+    <div className="border-border/70 flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2 sm:px-4">
       <span className="text-fg-subtle grid size-[0.875rem] shrink-0 place-items-center">
         {running ? <Spinner size={13} /> : null}
       </span>

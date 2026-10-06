@@ -46,8 +46,8 @@ export const EmptyState = ({
         </g>
       </svg>
     )}
-    <Title className={cn('text-fg-muted font-medium', compact ? 'text-[0.75rem]' : 'text-[0.8125rem]')}>{title}</Title>
-    {hint ? <p className="text-fg-subtle max-w-sm text-[0.75rem] leading-relaxed">{hint}</p> : null}
+    <Title className={cn('text-fg-muted font-medium', compact ? 'text-meta' : 'text-ui')}>{title}</Title>
+    {hint ? <p className="text-fg-subtle max-w-sm text-meta leading-relaxed">{hint}</p> : null}
     {action ? <div className="mt-1 flex items-center gap-2">{action}</div> : null}
   </div>
 )

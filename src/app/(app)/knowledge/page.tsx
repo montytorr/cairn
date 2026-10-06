@@ -145,18 +145,18 @@ const KnowledgePage = async ({
         <MobileNavButton />
         <Link
           href="/"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors sm:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors sm:block"
         >
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg text-[0.8125rem]">Knowledge</span>
+        <span className="text-fg text-ui">Knowledge</span>
         {/* The size of the corpus, not the size of the fetch. When a filter or
             a search is narrowing it, say so against the whole — "12 of 381"
             answers a different question from "12" and is the one being asked.
             And if the page ever caps again, admit it rather than silently
             showing a prefix. */}
-        <span className="text-fg-subtle ml-auto hidden text-[0.75rem] tabular-nums sm:block">
+        <span className="text-fg-subtle ml-auto hidden text-meta tabular-nums sm:block">
           {narrowed
             ? `${items.length} of ${total} ${total === 1 ? 'entry' : 'entries'}`
             : `${total} ${total === 1 ? 'entry' : 'entries'}`}
@@ -170,7 +170,7 @@ const KnowledgePage = async ({
             is. */}
         <Link
           href="/knowledge/graph"
-          className="border-border bg-surface text-fg-muted hover:text-fg hover:border-border-strong hover:bg-surface-raised ml-3 flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[0.75rem] transition-colors duration-[var(--dur-1)]"
+          className="border-border bg-surface text-fg-muted hover:text-fg hover:border-border-strong hover:bg-surface-raised ml-3 flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-meta transition-colors duration-[var(--dur-1)]"
         >
           <Waypoints size={13} aria-hidden />
           Map
@@ -192,22 +192,15 @@ const KnowledgePage = async ({
           and "entity" means nothing to someone meeting it here for the first
           time. Said once, at the top, rather than in a tooltip nobody opens. */}
       {!query && (
-        <p className="border-border/70 text-fg-subtle flex items-start gap-2 border-b px-4 py-2 text-[0.71875rem] leading-relaxed">
+        <p className="border-border/70 text-fg-subtle flex items-start gap-2 border-b px-4 py-2 text-meta leading-relaxed">
           <Info size={12} className="mt-[0.1875rem] shrink-0 opacity-70" aria-hidden />
-          <span>
-            Scope is how widely a fact applies:{' '}
-            <span className="text-fg-muted">a project</span> (true of that codebase),{' '}
-            <span className="text-fg-muted">an entity</span> — a grouping a fact can be true
-            of, like a business, a stack or a subsystem — or{' '}
-            <span className="text-fg-muted">everywhere</span>. Narrower wins, so a project
-            fact is shown ahead of one that merely applies to it.
-          </span>
+          <span>A fact can apply to one project, to a group of them, or everywhere. The narrowest shows first.</span>
         </p>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {failure ? (
-          <p className="text-danger px-4 py-8 text-[0.8125rem]">{failure}</p>
+          <p className="text-danger px-4 py-8 text-ui">{failure}</p>
         ) : items.length === 0 ? (
           <EmptyState
             title={query ? `Nothing found for "${query}".` : 'No knowledge matches these filters.'}

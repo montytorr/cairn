@@ -24,9 +24,20 @@ import { useEffect, useRef } from 'react'
 type ScalarApp = { destroy: () => void }
 type ScalarGlobal = {
   Scalar?: {
-    createApiReference: (selector: string, options: { url: string }) => ScalarApp
+    createApiReference: (selector: string, options: { url: string; customCss?: string }) => ScalarApp
   }
 }
+
+// Scalar's own smallest sizes are 10 to 12px; lift them to the product's floor.
+const CUSTOM_CSS = `
+  :root, .scalar-app, .light-mode, .dark-mode {
+    --scalar-small: 14px;
+    --scalar-mini: 13px;
+    --scalar-micro: 12px;
+  }
+  .sidebar-heading-type, .text-3xs, .text-xxs { font-size: 12px !important; }
+  .scalar-app code, .scalar-app pre { font-size: 13px; }
+`
 
 const SRC =
   'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.68.0/dist/browser/standalone.js'
@@ -40,7 +51,7 @@ export const ApiReference = ({ specUrl }: { specUrl: string }) => {
     const mount = () => {
       const scalar = (window as unknown as ScalarGlobal).Scalar
       if (!scalar || cancelled) return false
-      app.current = scalar.createApiReference('#scalar', { url: specUrl })
+      app.current = scalar.createApiReference('#scalar', { url: specUrl, customCss: CUSTOM_CSS })
       return true
     }
 

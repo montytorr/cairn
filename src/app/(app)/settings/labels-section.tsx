@@ -51,13 +51,9 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
       title="Labels"
       flush
       description={
-        <>
-          Renaming onto a label that already exists merges the two. Nothing else keeps
-          <code className="mx-1">db</code>,<code className="mx-1">database</code> and
-          <code className="mx-1">postgres</code> from becoming three separate things.
-        </>
+        <>Renaming a label to one that exists merges the two.</>
       }
-      footer={message ? <p className="text-fg-muted enter-rise text-[0.75rem]">{message}</p> : undefined}
+      footer={message ? <p className="text-fg-muted enter-rise text-meta">{message}</p> : undefined}
     >
       {labels.length === 0 ? (
         <EmptyState compact title="No labels in use." />
@@ -82,20 +78,20 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
                     className="min-w-0 flex-1"
                   />
                   {existing.has(draft.trim()) && draft.trim() !== l.label && (
-                    <span className="text-fg-subtle shrink-0 text-[0.6875rem]">merges</span>
+                    <span className="text-fg-subtle shrink-0 text-meta">merges</span>
                   )}
                   <button
                     type="button"
                     disabled={busy || !draft.trim()}
                     onClick={() => void apply(l.label, draft.trim())}
-                    className="text-accent shrink-0 text-[0.75rem] disabled:opacity-40"
+                    className="text-accent shrink-0 text-meta disabled:opacity-40"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(null)}
-                    className="text-fg-subtle hover:text-fg shrink-0 text-[0.75rem] transition-colors duration-[var(--dur-1)]"
+                    className="text-fg-subtle hover:text-fg shrink-0 text-meta transition-colors duration-[var(--dur-1)]"
                   >
                     Cancel
                   </button>
@@ -103,7 +99,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
               ) : (
                 <>
                   <LabelPill>{l.label}</LabelPill>
-                  <span className="text-fg-subtle tabular ml-auto shrink-0 text-[0.6875rem]">
+                  <span className="text-fg-subtle tabular ml-auto shrink-0 text-meta">
                     {l.task_count} task{l.task_count === 1 ? '' : 's'}
                   </span>
                   {/* Quiet until the row is under the pointer; always there on
@@ -115,7 +111,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
                         setEditing(l.label)
                         setDraft(l.label)
                       }}
-                      className="text-fg-muted hover:text-fg text-[0.75rem] transition-colors duration-[var(--dur-1)]"
+                      className="text-fg-muted hover:text-fg text-meta transition-colors duration-[var(--dur-1)]"
                     >
                       Rename
                     </button>
@@ -123,7 +119,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
                       type="button"
                       disabled={busy}
                       onClick={() => void apply(l.label, null)}
-                      className="text-fg-subtle hover:text-danger text-[0.75rem] transition-colors duration-[var(--dur-1)]"
+                      className="text-fg-subtle hover:text-danger text-meta transition-colors duration-[var(--dur-1)]"
                     >
                       Remove
                     </button>

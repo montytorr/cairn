@@ -67,13 +67,13 @@ const ActivityPage = async ({
       <LiveUpdates />
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-1.5 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <Link href="/" className="text-fg-muted hover:text-fg hidden text-[0.8125rem] sm:block">
+        <Link href="/" className="text-fg-muted hover:text-fg hidden text-ui sm:block">
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg text-[0.8125rem]">Activity</span>
+        <span className="text-fg text-ui">Activity</span>
         {rows.length > 0 && (
-          <span className="text-fg-subtle ml-auto hidden text-[0.75rem] tabular-nums sm:block">
+          <span className="text-fg-subtle ml-auto hidden text-meta tabular-nums sm:block">
             {rows.length} events
           </span>
         )}
@@ -89,7 +89,7 @@ const ActivityPage = async ({
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {failure ? (
-          <p className="text-danger px-4 py-8 text-[0.8125rem]">{failure}</p>
+          <p className="text-danger px-4 py-8 text-ui">{failure}</p>
         ) : rows.length === 0 ? (
           <EmptyState title="Nothing here yet." />
         ) : (
@@ -104,7 +104,7 @@ const ActivityPage = async ({
                     link for as long as it took. */}
                 <PendingLink
                   href={withParam('before', older)}
-                  className="border-border text-fg-muted hover:text-fg hover:border-border-strong inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.75rem] transition-[color,border-color] duration-[var(--dur-2)] ease-[var(--ease-out)]"
+                  className="border-border text-fg-muted hover:text-fg hover:border-border-strong inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-meta transition-[color,border-color] duration-[var(--dur-2)] ease-[var(--ease-out)]"
                 >
                   Load older
                 </PendingLink>

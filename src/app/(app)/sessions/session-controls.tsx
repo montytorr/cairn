@@ -70,7 +70,7 @@ export const SessionControls = ({
         <button
           type="button"
           onClick={() => router.replace('/sessions')}
-          className="text-fg-subtle hover:text-fg text-[0.75rem] transition-colors"
+          className="text-fg-subtle hover:text-fg text-meta transition-colors"
         >
           Clear
         </button>

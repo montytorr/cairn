@@ -74,18 +74,18 @@ export const Shortcuts = () => {
         className="border-border bg-surface raised-lg enter-sheet relative w-full max-w-[26.25rem] overflow-hidden rounded-xl border"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="border-border text-fg border-b px-5 py-3 text-[0.8125rem] font-medium">
+        <h2 className="border-border text-fg border-b px-5 py-3 text-ui font-medium">
           Keyboard shortcuts
         </h2>
         <div className="flex flex-col gap-4 px-5 py-4">
           {GROUPS.map((group) => (
             <div key={group.title}>
-              <p className="text-fg-subtle mb-1.5 text-[0.65625rem] font-medium tracking-[0.06em] uppercase">
+              <p className="text-fg-subtle mb-1.5 text-label font-medium tracking-[0.06em] uppercase">
                 {group.title}
               </p>
               <ul className="flex flex-col gap-1">
                 {group.keys.map(([keys, label]) => (
-                  <li key={label} className="flex items-center gap-2 text-[0.78125rem]">
+                  <li key={label} className="flex items-center gap-2 text-ui">
                     <span className="text-fg-muted flex-1">{label}</span>
                     {keys.map((k) => (
                       <kbd key={k} className="kbd inline-flex">{k}</kbd>

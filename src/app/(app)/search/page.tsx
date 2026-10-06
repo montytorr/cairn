@@ -88,14 +88,14 @@ const SearchPage = async ({
         <MobileNavButton />
         <Link
           href="/"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors sm:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors sm:block"
         >
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg text-[0.8125rem]">Search</span>
+        <span className="text-fg text-ui">Search</span>
         {count > 0 && (
-          <span className="text-fg-subtle ml-auto hidden text-[0.75rem] tabular-nums sm:block">
+          <span className="text-fg-subtle ml-auto hidden text-meta tabular-nums sm:block">
             {count} {count === 1 ? 'result' : 'results'}
             {resolved > 0 ? ` · ${resolved} with a recorded answer` : ''}
             {widened ? ' · loose match' : ''}
@@ -114,7 +114,7 @@ const SearchPage = async ({
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {failure ? (
-          <p className="text-danger px-4 py-8 text-[0.8125rem]">{failure}</p>
+          <p className="text-danger px-4 py-8 text-ui">{failure}</p>
         ) : query.length < 2 ? (
           <EmptyState
             title="Search tasks, work-log notes, knowledge and past sessions at once."

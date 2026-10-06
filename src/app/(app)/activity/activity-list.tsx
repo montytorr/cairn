@@ -120,7 +120,7 @@ const Row = ({ row }: { row: ActivityGroup }) => {
 
   const body = (
     <div className="flex min-w-0 items-start gap-2.5 px-4 py-2">
-      <span className="text-fg-subtle w-[2.375rem] shrink-0 pt-[2px] text-[0.6875rem] tabular-nums">
+      <span className="text-fg-subtle w-[2.375rem] shrink-0 pt-[2px] text-meta tabular-nums">
         {time}
       </span>
 
@@ -147,9 +147,9 @@ const Row = ({ row }: { row: ActivityGroup }) => {
           same grey before saying anything, and a timeline you cannot skim by
           content is a list of timestamps. */}
       <div className="min-w-0 flex-1">
-        <p className="text-fg line-clamp-2 text-[0.8125rem] leading-snug">{titleFor(row)}</p>
+        <p className="text-fg line-clamp-2 text-ui leading-snug">{titleFor(row)}</p>
 
-        <div className="text-fg-subtle mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.6875rem]">
+        <div className="text-fg-subtle mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-meta">
           <span style={{ color }}>{label}</span>
           {row.details
             .filter((d) => d !== label)
@@ -201,7 +201,7 @@ export const ActivityList = ({ rows }: { rows: ActivityRow[] }) => {
     <div>
       {[...days].map(([day, items]) => (
         <section key={day}>
-          <h2 className="group-band border-border text-fg sticky top-0 z-10 flex items-center gap-2.5 border-b px-4 py-2 text-[0.75rem] font-medium">
+          <h2 className="group-band border-border text-fg sticky top-0 z-10 flex items-center gap-2.5 border-b px-4 py-2 text-meta font-medium">
             <span aria-hidden className="w-[2.375rem] shrink-0" />
             <DayCairn />
             {new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', {

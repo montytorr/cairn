@@ -32,7 +32,7 @@ export const MentionsPanel = ({ total, mentions }: { total: number; mentions: Me
         {mentions.map((m) => (
           <li
             key={`${m.ref}-${m.source}-${m.at}`}
-            className="row-hover -mx-2 rounded-md px-2 py-1 text-[0.78125rem]"
+            className="row-hover -mx-2 rounded-md px-2 py-1 text-ui"
           >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <StatusIcon status={m.status as TaskStatus} size={12} />
@@ -44,7 +44,7 @@ export const MentionsPanel = ({ total, mentions }: { total: number; mentions: Me
                 {m.ref}
               </Link>
               <span className="text-fg min-w-0 truncate">{m.title}</span>
-              <span className="text-fg-subtle text-[0.6875rem]">
+              <span className="text-fg-subtle text-meta">
                 {m.kind ?? m.source}
                 {m.by ? ` · ${m.by}` : ''} · <RelativeTime iso={m.at} />
               </span>

@@ -154,7 +154,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
       <section className="surface-card overflow-hidden">
         <header className="border-border flex items-center gap-2 border-b px-4 py-3">
           <UserRoundPlus size={15} className="text-fg-muted" aria-hidden />
-          <h2 className="text-[0.8125rem] font-medium">Create user</h2>
+          <h2 className="text-ui font-medium">Create user</h2>
         </header>
         <div className="grid gap-3 px-4 py-4 sm:grid-cols-2">
           <Field label="Display name">
@@ -182,18 +182,18 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
 
       <section>
         <div className="mb-3 flex items-baseline gap-2">
-          <h2 className="text-fg-muted text-[0.65625rem] font-medium tracking-[0.06em] uppercase">Workspace users</h2>
-          <span className="text-fg-subtle tabular text-[0.6875rem]">{users.length}</span>
+          <h2 className="text-fg-muted text-label font-medium tracking-[0.06em] uppercase">Workspace users</h2>
+          <span className="text-fg-subtle tabular text-meta">{users.length}</span>
           <span className="bg-border ml-1 h-px flex-1 self-center" />
         </div>
         <div className="stagger flex flex-col gap-3">
           {users.map((user) => (
             <article key={user.id} className={cn('surface-card p-4', !user.active && 'opacity-80')}>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <strong className="text-[0.8125rem] font-medium">{user.displayName}</strong>
+                <strong className="text-ui font-medium">{user.displayName}</strong>
                 <span
                   className={cn(
-                    'rounded border px-1.5 py-0.5 text-[0.625rem] uppercase tracking-wide',
+                    'rounded border px-1.5 py-0.5 text-label uppercase tracking-wide',
                     user.role === 'admin'
                       ? 'border-accent/40 bg-accent-subtle/60 text-accent'
                       : 'border-border text-fg-muted',
@@ -203,14 +203,14 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                 </span>
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 text-[0.6875rem]',
+                    'inline-flex items-center gap-1 text-meta',
                     user.active ? 'text-status-in-review' : 'text-danger',
                   )}
                 >
                   <span aria-hidden className="size-1.5 rounded-full bg-current" />
                   {user.active ? 'Active' : 'Disabled'}
                 </span>
-                <span className="text-fg-subtle tabular ml-auto flex gap-3 text-[0.6875rem]">
+                <span className="text-fg-subtle tabular ml-auto flex gap-3 text-meta">
                   <span className={cn(!user.active && user.openTaskCount > 0 && 'text-danger')}>
                     {plural(user.openTaskCount, 'open task')}
                   </span>
@@ -255,7 +255,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                   aria-label={`Hand over ${user.displayName}'s open tasks`}
                   className="border-border bg-surface-raised/30 enter-rise mt-3 rounded-md border p-3"
                 >
-                  <p className="text-[0.75rem] leading-relaxed">
+                  <p className="text-meta leading-relaxed">
                     {user.displayName} is the assignee of{' '}
                     <strong className="tabular font-medium">{plural(user.openTaskCount, 'open task')}</strong>.{' '}
                     {user.active
@@ -264,7 +264,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                   </p>
                   {successorsFor(user).length === 0 ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <p className="text-danger text-[0.6875rem]">No other active user can take them over.</p>
+                      <p className="text-danger text-meta">No other active user can take them over.</p>
                       <Button type="button" size="sm" variant="quiet" onClick={() => setHandover(null)}>Cancel</Button>
                     </div>
                   ) : (
@@ -300,7 +300,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
               {user.active && (
                 <div className="border-border mt-4 border-t pt-3">
                   <details className="group">
-                    <summary className="text-fg-muted hover:text-fg flex w-fit cursor-pointer list-none items-center gap-1.5 text-[0.75rem] font-medium transition-colors duration-[var(--dur-1)] [&::-webkit-details-marker]:hidden">
+                    <summary className="text-fg-muted hover:text-fg flex w-fit cursor-pointer list-none items-center gap-1.5 text-meta font-medium transition-colors duration-[var(--dur-1)] [&::-webkit-details-marker]:hidden">
                       <ChevronRight size={12} aria-hidden className="transition-transform duration-[var(--dur-2)] ease-[var(--ease-out)] group-open:rotate-90" />
                       Password and agent keys
                     </summary>
@@ -327,7 +327,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                                 <li><EmptyState compact title="No agent keys." /></li>
                               )}
                               {(keys[user.id] ?? []).map((key) => (
-                                <li key={key.id} className="row-hover flex min-h-[2.25rem] flex-wrap items-center gap-2 px-2.5 py-1.5 text-[0.6875rem]">
+                                <li key={key.id} className="row-hover flex min-h-[2.25rem] flex-wrap items-center gap-2 px-2.5 py-1.5 text-meta">
                                   <span className={key.revoked ? 'line-through text-fg-subtle' : 'text-fg'}>{key.agentName}</span>
                                   <code className="text-fg-subtle">{key.keyPrefix}…</code>
                                   {!key.revoked && <Button type="button" size="sm" variant="danger" className="ml-auto h-6" onClick={() => revokeKey(user.id, key)}>Revoke</Button>}
@@ -336,9 +336,9 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                             </ul>
                             {freshKey?.userId === user.id && (
                               <div className="enter-rise mb-3 rounded-md border border-[color:color-mix(in_oklab,var(--accent)_30%,transparent)] bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] p-3">
-                                <p className="mb-2 text-[0.6875rem] font-medium">New key — shown once</p>
+                                <p className="mb-2 text-meta font-medium">New key — shown once</p>
                                 <div className="flex items-center gap-2">
-                                  <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[0.6875rem]">{freshKey.key}</code>
+                                  <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-meta">{freshKey.key}</code>
                                   <Button size="sm" variant="primary" onClick={async () => {
                                     await navigator.clipboard.writeText(freshKey.key)
                                     setCopied(true)
@@ -364,7 +364,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
         </div>
       </section>
       {error && (
-        <p role="alert" className="text-danger bg-danger-subtle enter-rise rounded-md px-3 py-2 text-[0.75rem]">
+        <p role="alert" className="text-danger bg-danger-subtle enter-rise rounded-md px-3 py-2 text-meta">
           {error}
         </p>
       )}

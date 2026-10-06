@@ -57,7 +57,7 @@ export const Card = ({
         {showProjectBadge && <ProjectIcon size={11} projectKey={projectKey} />}
         <Link
           href={`/projects/${projectKey}/tasks/${task.number}`}
-          className="text-fg-subtle hover:text-accent shrink-0 font-mono text-[0.6875rem]"
+          className="text-fg-subtle hover:text-accent shrink-0 font-mono text-meta"
           onClick={(e) => e.stopPropagation()}
         >
           {projectKey}-{task.number}
@@ -80,7 +80,7 @@ export const Card = ({
 
       <Link
         href={`/projects/${projectKey}/tasks/${task.number}`}
-        className="block text-[0.8125rem] leading-snug font-medium"
+        className="block text-ui leading-snug font-medium"
         onClick={(e) => e.stopPropagation()}
       >
         {task.title}
@@ -101,13 +101,13 @@ export const Card = ({
       ) : null}
 
       {task.has_resolution ? (
-        <p className="text-status-done mt-1.5 line-clamp-2 text-[0.6875rem] leading-snug">
+        <p className="text-status-done mt-1.5 line-clamp-2 text-meta leading-snug">
           {task.resolution_kind ?? 'resolved'}
         </p>
       ) : null}
 
       {task.blocked_reason ? (
-        <p className="text-danger mt-1.5 line-clamp-1 text-[0.6875rem]">blocked: {task.blocked_reason}</p>
+        <p className="text-danger mt-1.5 line-clamp-1 text-meta">blocked: {task.blocked_reason}</p>
       ) : null}
 
       {task.labels.length > 0 && (
@@ -133,7 +133,7 @@ const Column = ({
   <section className={cn(COLUMN_PANEL, 'h-full', COLUMN_WIDTH)} style={laneTone(`var(--status-${status})`)}>
     <div className="flex h-8 items-center gap-2 px-2.5">
       <StatusIcon status={status} size={13} />
-      <span className="text-fg text-xs font-medium">{COLUMN_LABEL[status]}</span>
+      <span className="text-fg text-meta font-medium">{COLUMN_LABEL[status]}</span>
       <ColumnCount count={tasks.length} />
     </div>
     <DropList dropId={status} count={tasks.length} className="min-h-0 flex-1 overscroll-contain">

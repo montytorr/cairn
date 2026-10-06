@@ -21,7 +21,7 @@ const AppError = ({ error, reset }: { error: Error & { digest?: string }; reset:
       <EmptyState
         className={error.digest ? 'pb-5' : undefined}
         as="h1"
-        title={<span className="text-fg text-[0.9375rem]">That page did not render.</span>}
+        title={<span className="text-fg text-[1.125rem]">That page did not render.</span>}
         hint="Nothing was lost — this is a display failure, not a write. Retrying usually works."
         action={
           <>
@@ -30,7 +30,7 @@ const AppError = ({ error, reset }: { error: Error & { digest?: string }; reset:
             </Button>
             <Link
               href="/"
-              className="text-fg-muted hover:text-fg hover:bg-surface-raised inline-flex h-8 items-center rounded-md px-3.5 text-[0.8125rem] font-medium transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
+              className="text-fg-muted hover:text-fg hover:bg-surface-raised inline-flex h-8 items-center rounded-md px-3.5 text-ui font-medium transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
             >
               Back to all tasks
             </Link>
@@ -39,7 +39,7 @@ const AppError = ({ error, reset }: { error: Error & { digest?: string }; reset:
       />
 
       {error.digest && (
-        <code className="text-fg-subtle border-border bg-surface-raised/50 rounded-md border px-2 py-0.5 text-[0.6875rem]">
+        <code className="text-fg-subtle border-border bg-surface-raised/50 rounded-md border px-2 py-0.5 text-meta">
           digest {error.digest}
         </code>
       )}

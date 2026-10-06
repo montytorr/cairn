@@ -119,14 +119,14 @@ export const SearchResults = ({ rows, query = '' }: { rows: ResultRow[]; query?:
 
                 <PriorityIcon priority={row.priority as TaskPriority} />
                 <StatusIcon status={row.status as TaskStatus} />
-                <span className="text-fg min-w-0 flex-1 truncate text-[0.8125rem]">
+                <span className="text-fg min-w-0 flex-1 truncate text-ui">
                   <Highlight text={row.title} terms={terms} />
                 </span>
                 <span className="hidden shrink-0 sm:block">
                   <TypePill type={row.type as TaskType} />
                 </span>
                 <ProjectIcon size={12} projectKey={row.project_key} />
-                <code className="text-fg-subtle tabular hidden w-[5rem] shrink-0 truncate text-right text-[0.75rem] sm:block">
+                <code className="text-fg-subtle tabular hidden w-[5rem] shrink-0 truncate text-right text-meta sm:block">
                   {ref}
                 </code>
               </div>
@@ -134,14 +134,14 @@ export const SearchResults = ({ rows, query = '' }: { rows: ResultRow[]; query?:
               {/* A recorded resolution is the payload — show it here so the
                   answer can be read without opening anything. */}
               {row.resolution ? (
-                <p className="text-fg-muted pointer-events-none relative mt-1.5 line-clamp-2 pl-[3.875rem] text-[0.78125rem] leading-relaxed">
-                  <span className="text-status-done mr-1.5 text-[0.6875rem] font-medium">
+                <p className="text-fg-muted pointer-events-none relative mt-1.5 line-clamp-2 pl-[3.875rem] text-ui leading-relaxed">
+                  <span className="text-status-done mr-1.5 text-meta font-medium">
                     {RESOLUTION_LABEL[row.resolution_kind ?? ''] ?? 'Resolved'}
                   </span>
                   {row.resolution}
                 </p>
               ) : row.description ? (
-                <p className="text-fg-subtle pointer-events-none relative mt-1 line-clamp-1 pl-[3.875rem] text-[0.78125rem]">
+                <p className="text-fg-subtle pointer-events-none relative mt-1 line-clamp-1 pl-[3.875rem] text-ui">
                   {row.description}
                 </p>
               ) : null}

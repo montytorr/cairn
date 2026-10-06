@@ -34,7 +34,7 @@ const KindBadge = ({ kind }: { kind: SearchAllRow['kind'] }) => {
   const { label, color } = KIND_META[kind]
   return (
     <span
-      className="inline-flex h-[1rem] shrink-0 items-center rounded-full border px-1.5 text-[0.625rem] font-medium tracking-[0.04em] uppercase"
+      className="inline-flex h-[1rem] shrink-0 items-center rounded-full border px-1.5 text-label font-medium tracking-[0.04em] uppercase"
       style={{
         color,
         backgroundColor: `color-mix(in oklab, ${color} 10%, transparent)`,
@@ -74,7 +74,7 @@ const Row = ({ row, terms }: { row: SearchAllRow; terms: string[] }) => {
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-fg-subtle shrink-0 font-mono text-[0.6875rem]">{row.ref}</span>
+          <span className="text-fg-subtle shrink-0 font-mono text-meta">{row.ref}</span>
           {row.project_key && row.kind !== 'knowledge' && (
             <span className="flex shrink-0 items-center gap-1">
               <ProjectIcon size={11} projectKey={row.project_key} />
@@ -82,21 +82,21 @@ const Row = ({ row, terms }: { row: SearchAllRow; terms: string[] }) => {
           )}
           <KindBadge kind={row.kind} />
           {row.answered && (
-            <span className="text-status-done text-[0.6875rem]">
+            <span className="text-status-done text-meta">
               {row.kind === 'task' ? 'answered' : row.kind === 'session' ? 'has next steps' : 'verified'}
             </span>
           )}
           {row.status === 'superseded' && (
-            <span className="text-danger text-[0.6875rem]">superseded</span>
+            <span className="text-danger text-meta">superseded</span>
           )}
         </div>
 
-        <p className="text-fg mt-1 text-[0.8125rem] leading-snug">
+        <p className="text-fg mt-1 text-ui leading-snug">
           <Highlight text={row.title} terms={terms} />
         </p>
 
         {row.subtitle && (
-          <p className="text-fg-subtle mt-0.5 truncate text-[0.6875rem]">
+          <p className="text-fg-subtle mt-0.5 truncate text-meta">
             <Highlight text={row.subtitle} terms={terms} />
           </p>
         )}
@@ -106,10 +106,10 @@ const Row = ({ row, terms }: { row: SearchAllRow; terms: string[] }) => {
           bare "~19" read as a minus sign and a mystery number. */}
       {row.body_bytes > 0 && (
         <span
-          className="text-fg-subtle shrink-0 self-center text-[0.6875rem] tabular-nums"
-          title="Roughly how many tokens it takes to read this in full"
+          className="text-fg-subtle shrink-0 self-center text-meta tabular-nums"
+          title="Roughly how long it takes to read this in full"
         >
-          ~{Math.ceil(row.body_bytes / 4)} tok
+          {Math.max(1, Math.round(row.body_bytes / 1200))} min read
         </span>
       )}
     </div>

@@ -70,9 +70,9 @@ const SettingsPage = async () => {
     <div className="flex h-dvh flex-col">
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <span className="text-fg text-[0.8125rem] font-medium">Settings</span>
-        <span className="text-fg-subtle hidden text-[0.8125rem] sm:block">·</span>
-        <span className="text-fg-subtle hidden truncate text-[0.8125rem] sm:block">{user.email}</span>
+        <span className="text-fg text-ui font-medium">Settings</span>
+        <span className="text-fg-subtle hidden text-ui sm:block">·</span>
+        <span className="text-fg-subtle hidden truncate text-ui sm:block">{user.email}</span>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

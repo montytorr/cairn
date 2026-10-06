@@ -69,7 +69,7 @@ export const UserMenu = ({
   }
 
   const item =
-    'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[0.78125rem] text-fg-muted transition-colors duration-[var(--dur-1)]'
+    'flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-ui text-fg-muted transition-colors duration-[var(--dur-1)]'
 
   return (
     <div ref={wrap} className="border-border relative border-t p-1.5">
@@ -81,7 +81,7 @@ export const UserMenu = ({
         className="hover:bg-surface-hover aria-expanded:bg-surface-hover flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
       >
         <Avatar name={email} size={18} />
-        <span className="text-fg-muted min-w-0 flex-1 truncate text-left text-[0.75rem]" title={email}>
+        <span className="text-fg-muted min-w-0 flex-1 truncate text-left text-meta" title={email}>
           {email}
         </span>
         {busy ? (
@@ -165,7 +165,7 @@ export const UserMenu = ({
             <ScrollText size={13} aria-hidden />
             Changelog
             {process.env.CAIRN_VERSION ? (
-              <span className="text-fg-subtle tabular ml-auto text-[0.6875rem]">v{process.env.CAIRN_VERSION}</span>
+              <span className="text-fg-subtle tabular ml-auto text-meta">v{process.env.CAIRN_VERSION}</span>
             ) : null}
           </Link>
 

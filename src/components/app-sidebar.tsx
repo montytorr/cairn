@@ -37,7 +37,7 @@ export const AppSidebar = ({
       <Link
         href="/"
         onClick={onNavigate}
-        className="text-fg flex min-w-0 items-center gap-2 text-[0.8125rem] font-semibold tracking-tight"
+        className="text-fg flex min-w-0 items-center gap-2 text-ui font-semibold tracking-tight"
       >
         <BrandMark size={20} className="rounded-[5px]" />
         <span className="truncate">

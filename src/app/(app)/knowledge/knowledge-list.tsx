@@ -37,7 +37,7 @@ export const TintPill = ({
 }) => (
   <span
     className={cn(
-      'text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[0.6875rem] leading-none whitespace-nowrap',
+      'text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-meta leading-none whitespace-nowrap',
       className,
     )}
     style={{
@@ -109,7 +109,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
         <div className="flex h-[2.5rem] min-w-0 items-center gap-2 px-3 sm:px-4">
           <span
             className={cn(
-              'pointer-events-none min-w-0 flex-1 truncate text-[0.8125rem]',
+              'pointer-events-none min-w-0 flex-1 truncate text-ui',
               item.superseded ? 'text-fg-muted line-through decoration-1' : 'text-fg',
             )}
           >
@@ -123,7 +123,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
           )}
 
           {item.loose && (
-            <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem]">
+            <span className="text-fg-subtle pointer-events-none shrink-0 text-meta">
               loose
             </span>
           )}
@@ -134,13 +134,13 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
                 href={`/knowledge/${item.supersededByRef.slug}`}
                 prefetch
                 title={`Superseded by ${item.supersededByRef.title}`}
-                className="text-accent pointer-events-auto relative z-10 hidden shrink-0 items-center gap-1 text-[0.6875rem] hover:underline sm:flex"
+                className="text-accent pointer-events-auto relative z-10 hidden shrink-0 items-center gap-1 text-meta hover:underline sm:flex"
               >
                 <ArrowRight size={11} aria-hidden />
                 superseded
               </Link>
             ) : (
-              <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem]">
+              <span className="text-fg-subtle pointer-events-none shrink-0 text-meta">
                 superseded
               </span>
             ))}
@@ -151,7 +151,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
                 <LabelPill key={l}>{l}</LabelPill>
               ))}
               {item.labels.length > 3 && (
-                <span className="text-fg-subtle text-[0.6875rem] tabular-nums">+{item.labels.length - 3}</span>
+                <span className="text-fg-subtle text-meta tabular-nums">+{item.labels.length - 3}</span>
               )}
             </span>
           )}
@@ -163,7 +163,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
           <time
             dateTime={item.updatedAt}
             title={fullDateTime(item.updatedAt)}
-            className="text-fg-subtle tabular hidden w-[2.875rem] shrink-0 text-right text-[0.75rem] md:block"
+            className="text-fg-subtle tabular hidden w-[2.875rem] shrink-0 text-right text-meta md:block"
           >
             {shortDate(item.updatedAt)}
           </time>
