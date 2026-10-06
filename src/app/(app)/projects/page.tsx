@@ -60,8 +60,8 @@ const ProjectsPage = async () => {
       <LiveUpdates />
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <h1 className="text-fg text-[0.8125rem] font-medium">Projects</h1>
-        <span className="text-fg-subtle tabular text-[0.75rem]">
+        <h1 className="text-fg text-ui font-medium">Projects</h1>
+        <span className="text-fg-subtle tabular text-meta">
           {rows.filter((r) => r.status !== 'archived').length} active
           {rows.some((r) => r.status === 'archived')
             ? ` · ${rows.filter((r) => r.status === 'archived').length} archived`

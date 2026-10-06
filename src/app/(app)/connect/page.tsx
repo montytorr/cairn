@@ -18,7 +18,7 @@ const ConnectIndexPage = async () => {
     <div className="flex h-dvh flex-col">
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <span className="text-fg text-[0.8125rem] font-medium">Connect a device</span>
+        <span className="text-fg text-ui font-medium">Connect a device</span>
       </header>
 
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-10">

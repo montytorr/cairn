@@ -48,7 +48,7 @@ const Stat = ({
   tone?: 'good' | 'warn' | 'bad'
 }) => (
   <div className="surface-card flex flex-col gap-0.5 px-3.5 py-3">
-    <span className="text-fg-subtle text-[0.65625rem] font-medium tracking-[0.06em] uppercase">
+    <span className="text-fg-subtle text-label font-medium tracking-[0.06em] uppercase">
       {label}
     </span>
     <span
@@ -62,7 +62,7 @@ const Stat = ({
     >
       {value}
     </span>
-    {hint ? <span className="text-fg-subtle text-[0.6875rem]">{hint}</span> : null}
+    {hint ? <span className="text-fg-subtle text-meta">{hint}</span> : null}
   </div>
 )
 
@@ -78,8 +78,8 @@ const Panel = ({
 }) => (
   <section className="surface-card overflow-hidden">
     <header className="border-border flex items-baseline gap-2 border-b px-3.5 py-2">
-      <h2 className="text-fg text-[0.75rem] font-semibold">{title}</h2>
-      {note ? <span className="text-fg-subtle text-[0.6875rem]">{note}</span> : null}
+      <h2 className="text-fg text-meta font-semibold">{title}</h2>
+      {note ? <span className="text-fg-subtle text-meta">{note}</span> : null}
     </header>
     <div className="px-3.5 py-1">{children}</div>
   </section>
@@ -97,10 +97,10 @@ const Row = ({
   emphasis?: boolean
 }) => (
   <div className="border-border flex items-baseline justify-between gap-4 border-b py-2 last:border-0">
-    <span className={cn('min-w-0 truncate text-[0.78125rem]', emphasis ? 'text-fg' : 'text-fg-muted')}>
+    <span className={cn('min-w-0 truncate text-ui', emphasis ? 'text-fg' : 'text-fg-muted')}>
       {label}
     </span>
-    <span className="text-fg tabular shrink-0 text-[0.78125rem]">
+    <span className="text-fg tabular shrink-0 text-ui">
       {value}
       {hint ? <span className="text-fg-subtle"> {hint}</span> : null}
     </span>
@@ -156,8 +156,8 @@ const Verdict = ({ findings }: { findings: Finding[] }) => {
   if (findings.length === 0) {
     return (
       <Banner tone="good" icon={CheckCircle2}>
-        <p className="text-fg text-[0.84375rem] font-medium">The memory is being written</p>
-        <p className="text-fg-muted mt-0.5 text-[0.78125rem] leading-relaxed">
+        <p className="text-fg text-ui font-medium">The memory is being written</p>
+        <p className="text-fg-muted mt-0.5 text-ui leading-relaxed">
           Sessions are being recorded, work is being closed, and every agent that wrote last
           week has written today.
         </p>
@@ -173,7 +173,7 @@ const Verdict = ({ findings }: { findings: Finding[] }) => {
           tone={f.severity === 'alarm' ? 'bad' : 'warn'}
           icon={f.severity === 'alarm' ? AlertTriangle : Info}
         >
-          <p className="text-fg text-[0.78125rem] leading-relaxed">{f.message}</p>
+          <p className="text-fg text-ui leading-relaxed">{f.message}</p>
         </Banner>
       ))}
     </div>
@@ -224,14 +224,14 @@ const VitalsPage = async ({
     <div className="flex h-dvh flex-col">
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <span className="text-fg text-[0.8125rem] font-medium">Vitals</span>
+        <span className="text-fg text-ui font-medium">Vitals</span>
         <span className="border-border bg-surface-raised ml-auto flex items-center gap-0.5 rounded-md border p-0.5">
           {WINDOWS.map((w) => (
             <PendingLink
               key={w.hours}
               href={w.hours === 24 ? '/vitals' : `/vitals?hours=${w.hours}`}
               className={cn(
-                'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[0.71875rem] transition-[color,background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]',
+                'inline-flex items-center gap-1 rounded px-2 py-0.5 text-meta transition-[color,background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]',
                 w.hours === hours ? 'bg-surface text-fg ring-border ring-1' : 'text-fg-muted hover:text-fg',
               )}
             >
@@ -251,7 +251,7 @@ const VitalsPage = async ({
           <div className="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-5 md:px-6">
           {failures.map((f) => (
             <Banner key={f} tone="bad" icon={AlertTriangle}>
-              <p className="text-danger text-[0.8125rem]">
+              <p className="text-danger text-ui">
                 {f}
                 {vitals ? ' — the rest of this page is still current.' : ''}
               </p>
@@ -290,8 +290,8 @@ const VitalsPage = async ({
                   vitals.agents.map((a, i) => (
                     <div key={a.agent} className="border-border border-b py-2 last:border-0">
                       <div className="flex items-baseline justify-between gap-4">
-                        <span className="text-fg text-[0.78125rem]">{a.agent}</span>
-                        <span className="text-fg tabular shrink-0 text-[0.78125rem]">
+                        <span className="text-fg text-ui">{a.agent}</span>
+                        <span className="text-fg tabular shrink-0 text-ui">
                           {a.recent}
                           <span className="text-fg-subtle"> ({a.baseline})</span>
                         </span>
@@ -325,20 +325,20 @@ const VitalsPage = async ({
               {work ? (
                 <Panel
                   title="Where work is stuck"
-                  note="never touched is filed and not edited since; stalled is in progress with nobody on it"
+                  note="Stalled: in progress with nobody on it. Never touched: filed, not edited since."
                 >
                   {work.projects.length === 0 ? (
                     <EmptyState compact title="Nothing open." />
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-[0.78125rem]">
+                      <table className="w-full text-ui">
                         <thead>
-                          <tr className="text-fg-subtle border-border border-b text-left text-[0.65625rem] tracking-[0.05em] uppercase">
-                            <th className="py-1.5 font-medium">project</th>
-                            <th className="py-1.5 text-right font-medium">open</th>
-                            <th className="py-1.5 text-right font-medium">stalled</th>
-                            <th className="py-1.5 text-right font-medium">never touched</th>
-                            <th className="py-1.5 text-right font-medium">oldest</th>
+                          <tr className="text-fg-subtle border-border border-b text-left text-meta">
+                            <th className="py-1.5 font-medium whitespace-nowrap">Project</th>
+                            <th className="py-1.5 pl-3 text-right font-medium whitespace-nowrap">Open</th>
+                            <th className="py-1.5 pl-3 text-right font-medium whitespace-nowrap">Stalled</th>
+                            <th className="py-1.5 pl-3 text-right font-medium whitespace-nowrap">Never touched</th>
+                            <th className="py-1.5 pl-3 text-right font-medium whitespace-nowrap">Oldest</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -395,7 +395,7 @@ const VitalsPage = async ({
               {signals ? (
                 <Panel
                   title="Claims nobody is on"
-                  note="no note, checkpoint, edit or heartbeat, by the rule the reaper uses; a session-end &quot;still held&quot; checkpoint does not count"
+                  note="Held, but no note, checkpoint or edit for a while."
                 >
                   <Row
                     label="held, quiet for more than 2h"
@@ -434,14 +434,14 @@ const VitalsPage = async ({
                   note={`last ${window} against the week before; summarised is the prose half`}
                 >
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[0.78125rem]">
+                    <table className="w-full text-ui">
                       <thead>
-                        <tr className="text-fg-subtle border-border border-b text-left text-[0.65625rem] tracking-[0.05em] uppercase">
+                        <tr className="text-fg-subtle border-border border-b text-left text-meta">
                           <th className="py-1.5 font-medium">runtime</th>
                           <th className="py-1.5 font-medium">host</th>
-                          <th className="py-1.5 text-right font-medium">sessions</th>
-                          <th className="py-1.5 text-right font-medium">summarised</th>
-                          <th className="py-1.5 text-right font-medium">last seen</th>
+                          <th className="py-1.5 pl-3 text-right font-medium">sessions</th>
+                          <th className="py-1.5 pl-3 text-right font-medium">summarised</th>
+                          <th className="py-1.5 pl-3 text-right font-medium">last seen</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -495,10 +495,10 @@ const VitalsPage = async ({
                   />
                   {memory.recentMisses.length > 0 ? (
                     <div className="py-2">
-                      <p className="text-fg-subtle mb-1 text-[0.6875rem]">Asked for and not held</p>
+                      <p className="text-fg-subtle mb-1 text-meta">Asked for and not held</p>
                       <ul className="flex flex-col gap-0.5">
                         {memory.recentMisses.map((q) => (
-                          <li key={q} className="text-fg-muted truncate text-[0.75rem]">
+                          <li key={q} className="text-fg-muted truncate text-meta">
                             {q}
                           </li>
                         ))}
@@ -532,12 +532,12 @@ const VitalsPage = async ({
 
                   {(memory.recentSlugMisses ?? []).length > 0 ? (
                     <div className="py-2">
-                      <p className="text-fg-subtle mb-1 text-[0.6875rem]">
+                      <p className="text-fg-subtle mb-1 text-meta">
                         Looked up by name, no such entry
                       </p>
                       <ul className="flex flex-col gap-0.5">
                         {(memory.recentSlugMisses ?? []).map((slug) => (
-                          <li key={slug} className="text-fg-muted truncate font-mono text-[0.75rem]">
+                          <li key={slug} className="text-fg-muted truncate font-mono text-meta">
                             {slug}
                           </li>
                         ))}
@@ -604,7 +604,7 @@ const VitalsPage = async ({
                 ) : null}
               </div>
 
-              <p className="text-fg-subtle text-[0.6875rem] leading-relaxed">
+              <p className="text-fg-subtle text-meta leading-relaxed">
                 Counts cover the last {window}, against the week before it, scaled to the same
                 length — a count alone says nothing. There is deliberately no ranking of agents:
                 Cairn is their working memory, and a visible score would be something to optimise.

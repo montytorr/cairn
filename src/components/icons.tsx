@@ -244,7 +244,7 @@ const TYPE_LABEL: Record<TaskType, string> = {
  * one set of chips rather than three styles.
  */
 const PILL =
-  'inline-flex h-[1.25rem] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[0.6875rem] leading-none whitespace-nowrap ' +
+  'inline-flex h-[1.25rem] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-meta leading-none whitespace-nowrap ' +
   'transition-[color,background-color,border-color] duration-[var(--dur-2)] ease-[var(--ease-out)]'
 
 // An unsupported color-mix is simply ignored, leaving the border the class
@@ -280,14 +280,17 @@ export const LabelPill = ({ children }: { children: React.ReactNode }) => {
  * Initials avatar. Colour is derived from the name so the same actor is always
  * the same colour — which is what lets you recognise an agent without reading.
  */
-const AVATAR_COLORS = ['#5e6ad2', '#4cb782', '#f2994a', '#eb5757', '#bb87fc', '#4ea7fc', '#26b5a2']
+// Each carries white initials at 4.5:1 or better (contrast.test.ts).
+export const AVATAR_COLORS = ['#4f5bc4', '#1b7a4f', '#a8500a', '#c02f2f', '#7c3aed', '#1c6bc9', '#0f766e']
 
-export const Avatar = ({ name, size = 18 }: { name: string; size?: number }) => {
+/** Initials are never set below 13px, so the circle never goes below 22px. */
+export const Avatar = ({ name, size: requested = 18 }: { name: string; size?: number }) => {
+  const size = Math.max(22, requested)
   const initials = name
     .replace(/[^a-zA-Z0-9 -]/g, '')
     .split(/[\s-]+/)
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, size < 26 ? 1 : 2)
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
 
@@ -298,7 +301,7 @@ export const Avatar = ({ name, size = 18 }: { name: string; size?: number }) => 
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-medium text-white"
-      style={{ width: size, height: size, backgroundColor: color, fontSize: size * 0.42 }}
+      style={{ width: size, height: size, backgroundColor: color, fontSize: Math.max(13, size * 0.42) }}
       title={name}
     >
       {initials || '?'}

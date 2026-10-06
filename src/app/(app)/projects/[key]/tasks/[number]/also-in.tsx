@@ -62,12 +62,12 @@ export const AlsoIn = ({
         <span className={ROW_LABEL}>Also in</span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
           {current.length === 0 && !open ? (
-            <span className="text-fg-subtle text-[0.75rem]">Only here</span>
+            <span className="text-fg-subtle text-meta">Only here</span>
           ) : (
             current.map((key) => (
               <span
                 key={key}
-                className="border-border text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center gap-1 rounded-full border pr-2 pl-1.5 text-[0.75rem]"
+                className="border-border text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center gap-1 rounded-full border pr-2 pl-1.5 text-meta"
               >
                 <ProjectIcon size={11} projectKey={key} />
                 {key}
@@ -79,7 +79,7 @@ export const AlsoIn = ({
           type="button"
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            'text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-[0.6875rem] transition-[opacity,color,background-color] duration-[var(--dur-1)]',
+            'text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-meta transition-[opacity,color,background-color] duration-[var(--dur-1)]',
             open ? 'opacity-100' : 'opacity-0 group-hover/dep:opacity-100 focus-visible:opacity-100',
           )}
         >
@@ -105,7 +105,7 @@ export const AlsoIn = ({
                   aria-pressed={on}
                   title={p.title}
                   className={cn(
-                    'rounded-full border px-1.5 py-0.5 font-mono text-[0.6875rem] transition-[color,border-color,background-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
+                    'rounded-full border px-1.5 py-0.5 font-mono text-meta transition-[color,border-color,background-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
                     // On is marked flatly: the accent at the rim and in the
                     // text, over the accent's subtle fill.
                     on

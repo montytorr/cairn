@@ -38,7 +38,7 @@ export const CodeBlock = ({ children, ...rest }: React.ComponentProps<'pre'>) =>
     // A flat card: one hairline round it, one under the language bar.
     <div className="group surface-card relative mb-3 overflow-hidden last:mb-0">
       <div className="border-border flex h-[1.75rem] items-center gap-2 border-b px-2.5">
-        <span className="text-fg-subtle font-mono text-[0.65625rem] tracking-wide">
+        <span className="text-fg-subtle font-mono text-meta tracking-wide">
           {language ?? 'text'}
         </span>
         <button
@@ -46,7 +46,7 @@ export const CodeBlock = ({ children, ...rest }: React.ComponentProps<'pre'>) =>
           onClick={copy}
           aria-label="Copy code"
           className={cn(
-            'hover:bg-surface-hover -mr-1 ml-auto flex h-5 items-center gap-1 rounded px-1.5 text-[0.65625rem]',
+            'hover:bg-surface-hover -mr-1 ml-auto flex h-5 items-center gap-1 rounded px-1.5 text-meta',
             'opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] ease-[var(--ease-out)] group-hover:opacity-100 focus-visible:opacity-100',
             copied ? 'text-accent opacity-100' : 'text-fg-subtle hover:text-fg',
           )}
@@ -55,7 +55,7 @@ export const CodeBlock = ({ children, ...rest }: React.ComponentProps<'pre'>) =>
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <pre ref={ref} className="overflow-x-auto p-3 text-[0.78125rem] leading-relaxed" {...rest}>
+      <pre ref={ref} className="overflow-x-auto p-3 text-ui leading-relaxed" {...rest}>
         {children}
       </pre>
     </div>

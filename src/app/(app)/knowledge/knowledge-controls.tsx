@@ -71,11 +71,11 @@ export const KnowledgeControls = ({
           onKeyDown={(e) => e.key === 'Escape' && setDraft('')}
           placeholder="Search knowledge…"
           aria-label="Search knowledge"
-          className="min-w-0 flex-1 pl-7 text-[0.8125rem]"
+          className="min-w-0 flex-1 pl-7 text-ui"
         />
       </div>
 
-      <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap items-center gap-2">
         <Select
           size="sm"
           value={project}
@@ -127,7 +127,7 @@ export const KnowledgeControls = ({
           ))}
         </Select>
 
-        <label className="text-fg-muted flex shrink-0 items-center gap-1.5 text-[0.75rem] whitespace-nowrap">
+        <label className="text-fg-muted flex shrink-0 items-center gap-1.5 text-meta whitespace-nowrap">
           <input
             type="checkbox"
             checked={superseded}
@@ -145,7 +145,7 @@ export const KnowledgeControls = ({
               committed.current = ''
               router.replace('/knowledge')
             }}
-            className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-[0.75rem] transition-colors"
+            className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-meta transition-colors"
           >
             Clear
           </button>

@@ -51,7 +51,7 @@ const ColumnHeading = ({ groupBy, col }: { groupBy: GroupBy; col: ColumnDef }) =
           <Avatar name={col.value} size={14} />
         ))}
       {groupBy === 'assignee' && <Avatar name={col.label} size={14} />}
-      <span className="truncate text-xs font-medium">{col.label}</span>
+      <span className="truncate text-meta font-medium">{col.label}</span>
     </span>
   )
 }
@@ -136,14 +136,14 @@ const Lane = ({
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
-        className="text-fg-muted hover:text-fg sticky left-3 mb-1.5 flex w-fit items-center gap-1.5 rounded px-1 py-0.5 text-[0.75rem] font-medium transition-colors duration-[var(--dur-1)]"
+        className="text-fg-muted hover:text-fg sticky left-3 mb-1.5 flex w-fit items-center gap-1.5 rounded px-1 py-0.5 text-meta font-medium transition-colors duration-[var(--dur-1)]"
       >
         <ChevronRight
           size={13}
           className={cn('transition-transform duration-[var(--dur-2)] ease-[var(--ease-out)]', !collapsed && 'rotate-90')}
         />
         {lane.label}
-        <span className="text-fg-subtle tabular rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-[0.6875rem] leading-[1.125rem]">
+        <span className="text-fg-subtle tabular rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-meta leading-[1.125rem]">
           {tasks.length}
         </span>
       </button>
@@ -387,7 +387,7 @@ export const CrossProjectBoard = ({
                   onClick={() =>
                     setFilters({ ...parseFilters('?assignee=all', currentUserId), groupBy: filters.groupBy, swimlane: filters.swimlane })
                   }
-                  className="text-accent text-[0.75rem] hover:underline"
+                  className="text-accent text-meta hover:underline"
                 >
                   Clear filters
                 </button>

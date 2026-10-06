@@ -114,7 +114,7 @@ export const AttachmentsPanel = ({
           type="button"
           onClick={() => input.current?.click()}
           disabled={pending}
-          className="text-fg-muted hover:text-fg inline-flex items-center gap-1.5 text-xs transition-colors duration-[var(--dur-1)] disabled:opacity-50"
+          className="text-fg-muted hover:text-fg inline-flex items-center gap-1.5 text-meta transition-colors duration-[var(--dur-1)] disabled:opacity-50"
         >
           <Paperclip size={13} />
           {pending ? 'Uploading…' : 'Drop a file, or choose one'}
@@ -122,7 +122,7 @@ export const AttachmentsPanel = ({
       </div>
 
       {error && (
-        <p className="enter-rise text-danger bg-danger-subtle mb-2 rounded-md px-2 py-1.5 text-[0.6875rem]">{error}</p>
+        <p className="enter-rise text-danger bg-danger-subtle mb-2 rounded-md px-2 py-1.5 text-meta">{error}</p>
       )}
 
       {attachments.length > 0 && (
@@ -141,11 +141,11 @@ export const AttachmentsPanel = ({
                 <button
                   type="button"
                   onClick={() => void openSigned(a.id, a.original_name, a.mime_type)}
-                  className="hover:text-accent min-w-0 truncate text-left text-[0.78125rem] transition-colors duration-[var(--dur-1)]"
+                  className="hover:text-accent min-w-0 truncate text-left text-ui transition-colors duration-[var(--dur-1)]"
                 >
                   {a.original_name}
                 </button>
-                <span className="text-fg-subtle flex min-w-0 items-center gap-1.5 text-[0.6875rem]">
+                <span className="text-fg-subtle flex min-w-0 items-center gap-1.5 text-meta">
                   <span className="tabular shrink-0">{formatBytes(a.size_bytes)}</span>
                   <span aria-hidden>·</span>
                   <span className="truncate">{a.actor_id}</span>

@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Tasks' }
 
 const Stat = ({ label, value }: { label: string; value: number | string }) => (
-  <span className="text-fg-subtle text-[0.75rem]">
+  <span className="text-fg-subtle text-meta">
     <span className="text-fg tabular font-medium">{value}</span> {label}
   </span>
 )
@@ -44,7 +44,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string;
           title="Nothing here yet"
           hint="A cairn is built one stone at a time. Create the first project from an agent, or from the CLI."
           action={
-            <pre className="surface-card max-w-full overflow-x-auto px-3 py-2.5 text-left font-mono text-[0.75rem]">
+            <pre className="surface-card max-w-full overflow-x-auto px-3 py-2.5 text-left font-mono text-meta">
               {`cairn add "first task" --project CAI --type feature`}
             </pre>
           }
@@ -57,8 +57,8 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string;
     <div className="flex h-dvh flex-col">
       <header className="page-header border-border flex h-[2.75rem] shrink-0 items-center gap-2 border-b px-2.5 md:px-4 pr-live-status">
         <MobileNavButton />
-        <span className="text-fg shrink-0 text-[0.8125rem] font-medium">All tasks</span>
-        <span className="text-fg-subtle hidden text-[0.8125rem] sm:block">·</span>
+        <span className="text-fg shrink-0 text-ui font-medium">All tasks</span>
+        <span className="text-fg-subtle hidden text-ui sm:block">·</span>
         {/* The counts are the first thing to go on a phone — the list itself
             says more than a tally of it. */}
         <span className="hidden items-center gap-2 sm:flex">
@@ -71,7 +71,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string;
           path="/"
           includeClosed={includeClosed}
           hidden={closedHidden}
-          className="text-fg-subtle hover:text-fg ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[0.75rem] transition-colors"
+          className="text-fg-subtle hover:text-fg ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-meta transition-colors"
         />
       </header>
 
@@ -88,13 +88,13 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string;
         />
 
         <section className="border-border mt-6 border-t px-4 py-4">
-          <h2 className="text-fg-muted mb-2 text-[0.6875rem] font-medium">Projects</h2>
+          <h2 className="text-fg-muted mb-2 text-meta font-medium">Projects</h2>
           <ul className="flex flex-wrap gap-1.5">
             {projects.map((p) => (
               <li key={p.id}>
                 <Link
                   href={`/projects/${p.key}`}
-                  className="border-border text-fg-muted hover:bg-surface-hover hover:text-fg hover:border-border-strong flex h-[1.625rem] items-center gap-1.5 rounded-md border px-2 text-[0.75rem] transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
+                  className="border-border text-fg-muted hover:bg-surface-hover hover:text-fg hover:border-border-strong flex h-[1.625rem] items-center gap-1.5 rounded-md border px-2 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
                 >
                   <ProjectIcon size={12} projectKey={p.key} />
                   {p.title}

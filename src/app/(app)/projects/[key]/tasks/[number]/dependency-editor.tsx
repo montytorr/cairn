@@ -145,11 +145,11 @@ const Picker = ({
               )}
             >
               <StatusIcon status={h.status as TaskStatus} size={12} />
-              <span className="text-fg-muted min-w-0 truncate text-[0.75rem]">{h.title}</span>
+              <span className="text-fg-muted min-w-0 truncate text-meta">{h.title}</span>
             </button>
           ))}
           {visible.length === 0 && (
-            <span className="text-fg-subtle px-1.5 py-1 text-[0.75rem]">
+            <span className="text-fg-subtle px-1.5 py-1 text-meta">
               {loading ? 'Searching…' : 'No match'}
             </span>
           )}
@@ -214,7 +214,7 @@ export const DependencyEditor = ({
           <div key={direction} className="group/dep flex flex-col">
             <div className={ROW}>
               <span className={ROW_LABEL}>{TITLE[direction]}</span>
-              <span className="text-fg-subtle min-w-0 flex-1 truncate text-[0.8125rem]">
+              <span className="text-fg-subtle min-w-0 flex-1 truncate text-ui">
                 {items.length === 0 && open !== direction ? 'None' : null}
               </span>
               <button
@@ -245,7 +245,7 @@ export const DependencyEditor = ({
                   <Link
                     href={`/projects/${r.project_key}/tasks/${r.number}`}
                     prefetch
-                    className="text-fg-muted hover:text-fg min-w-0 flex-1 truncate text-[0.78125rem]"
+                    className="text-fg-muted hover:text-fg min-w-0 flex-1 truncate text-ui"
                   >
                     {r.title}
                   </Link>
@@ -280,7 +280,7 @@ export const DependencyEditor = ({
           </div>
         )
       })}
-      {error && <span className="text-danger text-[0.75rem]">{error}</span>}
+      {error && <span className="text-danger text-meta">{error}</span>}
     </div>
   )
 }

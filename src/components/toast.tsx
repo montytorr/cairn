@@ -71,7 +71,7 @@ const Row = ({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
       )}
     >
       <CircleAlert size={14} className="text-danger mt-[0.1875rem] shrink-0" aria-hidden />
-      <p className="text-fg min-w-0 flex-1 text-[0.78125rem] leading-relaxed break-words">
+      <p className="text-fg min-w-0 flex-1 text-ui leading-relaxed break-words">
         {toast.message}
       </p>
       <button

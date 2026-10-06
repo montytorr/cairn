@@ -103,7 +103,7 @@ export const ChildrenPanel = ({
         <button
           type="button"
           onClick={() => setAdding((a) => !a)}
-          className="text-fg-subtle hover:text-fg hover:bg-surface-hover -mr-1.5 ml-auto rounded px-1.5 py-px text-[0.6875rem] transition-colors duration-[var(--dur-1)]"
+          className="text-fg-subtle hover:text-fg hover:bg-surface-hover -mr-1.5 ml-auto rounded px-1.5 py-px text-meta transition-colors duration-[var(--dur-1)]"
         >
           {adding ? 'Cancel' : 'Add sub-task'}
         </button>
@@ -118,11 +118,11 @@ export const ChildrenPanel = ({
               <Link
                 href={`/projects/${c.project_key}/tasks/${c.number}`}
                 prefetch
-                className="text-fg min-w-0 flex-1 truncate text-[0.78125rem]"
+                className="text-fg min-w-0 flex-1 truncate text-ui"
               >
                 {c.title}
               </Link>
-              <code className="text-fg-subtle tabular shrink-0 text-[0.6875rem]">
+              <code className="text-fg-subtle tabular shrink-0 text-meta">
                 {c.project_key}-{c.number}
               </code>
               <button
@@ -183,7 +183,7 @@ export const ChildrenPanel = ({
         />
       )}
 
-      {error && <p className="text-danger mt-1.5 text-[0.75rem]">{error}</p>}
+      {error && <p className="text-danger mt-1.5 text-meta">{error}</p>}
     </section>
   )
 }

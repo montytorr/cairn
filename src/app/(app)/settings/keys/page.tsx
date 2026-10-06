@@ -30,17 +30,17 @@ const OwnKeysPage = async () => {
         <MobileNavButton />
         <Link
           href="/settings"
-          className="text-fg-subtle hover:text-fg text-[0.8125rem] transition-colors duration-[var(--dur-1)]"
+          className="text-fg-subtle hover:text-fg text-ui transition-colors duration-[var(--dur-1)]"
         >
           Settings
         </Link>
-        <span className="text-fg-subtle text-[0.8125rem]">/</span>
-        <span className="text-fg text-[0.8125rem] font-medium">Your agent keys</span>
+        <span className="text-fg-subtle text-ui">/</span>
+        <span className="text-fg text-ui font-medium">Your agent keys</span>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
-          <p className="text-fg-subtle mb-5 text-[0.75rem] leading-relaxed">
+          <p className="text-fg-subtle mb-5 text-meta leading-relaxed">
             New keys arrive when you run <code>cairn setup</code> on a machine and approve it — each is
             named for its runtime and host. Revoke a machine&apos;s keys when you retire or lose it: they stop
             working on their next request.

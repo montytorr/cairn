@@ -39,7 +39,7 @@ export const RedirectNotice = ({
     <div
       role="status"
       className={cn(
-        'text-fg-muted enter-rise flex items-start gap-2 rounded-lg border py-2 pr-1.5 pl-3 text-[0.78125rem] leading-relaxed',
+        'text-fg-muted enter-rise flex items-start gap-2 rounded-lg border py-2 pr-1.5 pl-3 text-ui leading-relaxed',
         'border-[color:color-mix(in_oklab,var(--accent)_30%,transparent)]',
         'bg-[color-mix(in_oklab,var(--accent)_8%,transparent)]',
         className ?? 'mb-5',

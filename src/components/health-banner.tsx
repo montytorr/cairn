@@ -33,7 +33,7 @@ export const HealthBanner = async ({ userId }: { userId: string }) => {
         className="border-border bg-bg-elevated hover:bg-surface-raised enter-rise flex shrink-0 items-center gap-2 border-b px-3 py-1 transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)] md:px-4"
       >
         <HelpCircle size={12} className="text-fg-subtle shrink-0" aria-hidden />
-        <p className="text-fg-muted min-w-0 text-[0.71875rem]">
+        <p className="text-fg-muted min-w-0 text-meta">
           Vitals unavailable — Cairn cannot currently tell whether it is working.
         </p>
       </Link>
@@ -57,7 +57,7 @@ export const HealthBanner = async ({ userId }: { userId: string }) => {
         className="text-danger mt-[2px] shrink-0"
         aria-hidden
       />
-      <p className="text-fg min-w-0 text-[0.78125rem] leading-relaxed">
+      <p className="text-fg min-w-0 text-ui leading-relaxed">
         {alarms[0]}
         {alarms.length > 1 ? (
           <span className="text-fg-muted"> · and {alarms.length - 1} more</span>

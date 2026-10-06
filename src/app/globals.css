@@ -17,6 +17,16 @@
 :root {
   --radius: 6px;
 
+  /* The type scale. Three interface sizes, set in rem on the 18px root:
+     ui    15px on a phone, 16px from 768 up: labels, rows, buttons, fields.
+     meta  13px, 13.5px from 768 up: the floor for any helper, ref or date.
+     label 12.4px, only ever uppercase and tracked: a section's micro-label.
+     Task bodies and markdown keep their own reading size. type-scale.test.ts
+     fails on a size below `meta` that is not an uppercase label. */
+  --fs-ui:    0.8333rem;
+  --fs-meta:  0.7222rem;
+  --fs-label: 0.6875rem;
+
   /* light — a faithful inverse, kept usable but not the primary target */
   --bg:             #ffffff;
   --bg-elevated:    #f9f9fa;
@@ -27,12 +37,12 @@
   --fg:             #0d0e10;
   --fg-muted:       #61656c;
   /* 3.25 against white, which is below the line for 11-13px text. */
-  --fg-subtle:      #6f747c;
+  --fg-subtle:      #686c74;
 
   --border:         #e6e7e9;
   --border-strong:  #d3d5d9;
 
-  --accent:         #5e6ad2;
+  --accent:         #525fcf;
   --accent-fg:      #ffffff;
   --accent-subtle:  #eceefb;
   --ring:           #5e6ad2;
@@ -49,27 +59,27 @@
      versions measured 2.2 to 2.6 against the ground: below the 3.0 floor for
      an icon, let alone the 4.5 for the group headings that now carry them.
      A status ring you have to hunt for is not carrying its meaning. */
-  --status-backlog:   #6f757e;
+  --status-backlog:   #676c75;
   --status-todo:      #565d68;
-  --status-doing:     #b45309;
-  --status-in-review: #15803d;
+  --status-doing:     #ad5009;
+  --status-in-review: #147c3b;
   --status-done:      #4f5bc4;
-  --status-cancelled: #697280;
+  --status-cancelled: #636c79;
 
   /* type — each reads as text, not only as a dot, so the pill on every row
      carries its colour. Chosen for 4.5 against this theme's ground, which is
      why the light set is not simply the dark set. */
   --type-feature:     #7c3aed;
   --type-bug:         #c52828;
-  --type-improvement: #1d6fd0;
+  --type-improvement: #1c6bc9;
   --type-chore:       #565d68;
-  --type-spike:       #a16207;
-  --type-docs:        #15803d;
+  --type-spike:       #9a5e07;
+  --type-docs:        #147c3b;
 
-  --priority-urgent: #d97706;
-  --priority-high:   #b45309;
+  --priority-urgent: #a25904;
+  --priority-high:   #ad5009;
   --priority-medium: #61656c;
-  --priority-low:    #8a8f98;
+  --priority-low:    #666b74;
 
   /* Row heights are applied directly in the markup: a --spacing-* theme token
      does not generate an `h-*` utility, and the silent fallback to content
@@ -131,25 +141,25 @@
      raised surface subtle fell to 3.0. Three tiers are still three tiers; they
      are just all readable now. */
   --fg-muted:       #9aa0a9;
-  --fg-subtle:      #7f848c;
+  --fg-subtle:      #82878e;
 
   --border:         #1f2023;
   --border-strong:  #2c2e33;
 
   --accent:         #7b86e8;
-  --accent-fg:      #ffffff;
+  --accent-fg:      #0b0c1f;
   --accent-subtle:  #23253a;
   --ring:           #5e6ad2;
 
   --danger:         #eb5757;
   --danger-subtle:  #2a1618;
 
-  --status-backlog:   #7c828b;
+  --status-backlog:   #80868f;
   --status-todo:      #9298a1;
   --status-doing:     #f2c94c;
   --status-in-review: #4cb782;
   --status-done:      #7b86e8;
-  --status-cancelled: #757a82;
+  --status-cancelled: #81868d;
 
   /* Darker ground, so the shadows carry further and the highlight is a
      suggestion rather than a line. */
@@ -173,10 +183,13 @@
   --priority-urgent: #f2994a;
   --priority-high:   #e8a33d;
   --priority-medium: #9aa0a9;
-  --priority-low:    #7f848c;
+  --priority-low:    #82878e;
 }
 
 @theme inline {
+  --text-ui:    var(--fs-ui);
+  --text-meta:  var(--fs-meta);
+  --text-label: var(--fs-label);
   --color-bg:             var(--bg);
   --color-bg-elevated:    var(--bg-elevated);
   --color-surface:        var(--surface);
@@ -226,6 +239,13 @@
   --font-display: var(--font-inter-tight), 'Inter Tight', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
+@media (min-width: 768px) {
+  :root {
+    --fs-ui:   0.8889rem;
+    --fs-meta: 0.75rem;
+  }
+}
+
 @layer base {
   * { border-color: var(--border); }
 
@@ -257,7 +277,7 @@
     background-color: var(--bg);
     color: var(--fg);
     font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-    font-size: 0.8125rem;
+    font-size: var(--fs-ui);
     line-height: 1.5;
     letter-spacing: -0.0025em;
     -webkit-font-smoothing: antialiased;
@@ -433,13 +453,13 @@
        device with no keyboard. Layout comes from the utility instead. */
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
+    min-width: 20px;
+    height: 20px;
     padding: 0 5px;
     border-radius: 4px;
     background: var(--surface-raised);
     color: var(--fg-muted);
-    font-size: 0.6875rem;
+    font-size: var(--fs-meta);
     line-height: 1;
   }
 
@@ -661,7 +681,7 @@
   .tiptap table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78125rem;
+    font-size: var(--fs-ui);
     font-variant-numeric: tabular-nums;
   }
 
@@ -677,7 +697,7 @@
   .tiptap th {
     background: var(--surface-raised);
     color: var(--fg-muted);
-    font-size: 0.6875rem;
+    font-size: var(--fs-meta);
     font-weight: 500;
     border-bottom-color: var(--border);
   }

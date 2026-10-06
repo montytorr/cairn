@@ -23,9 +23,9 @@ export const SettingsCard = ({
   <section className="surface-card overflow-hidden">
     <header className="border-border flex items-start gap-3 border-b px-4 py-3 md:px-5">
       <div className="min-w-0 flex-1">
-        <h2 className="text-fg text-[0.8125rem] font-medium">{title}</h2>
+        <h2 className="text-fg text-ui font-medium">{title}</h2>
         {description ? (
-          <p className="text-fg-subtle mt-1 text-[0.75rem] leading-relaxed">{description}</p>
+          <p className="text-fg-subtle mt-1 text-meta leading-relaxed">{description}</p>
         ) : null}
       </div>
       {action ? <div className="-mr-1 shrink-0">{action}</div> : null}

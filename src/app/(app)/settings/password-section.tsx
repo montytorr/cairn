@@ -52,9 +52,8 @@ export const PasswordSection = () => {
         title="Password"
         footer={
           <>
-            <p className="text-fg-subtle min-w-0 flex-1 basis-60 text-[0.6875rem] leading-relaxed">
-              There is no SMTP configured, so a forgotten password can only be reset from the host.
-              Keep this in a password manager.
+            <p className="text-fg-subtle min-w-0 flex-1 basis-60 text-meta leading-relaxed">
+              No email reset is set up, so keep this somewhere safe.
             </p>
             <Button type="submit" variant="primary" disabled={!canSubmit} className="w-auto px-4">
               {state === 'saving' ? 'Changing…' : 'Change password'}
@@ -86,16 +85,16 @@ export const PasswordSection = () => {
         {tooShort || mismatch || error || state === 'done' ? (
           <div className="mt-3 flex flex-col gap-2">
             {tooShort && (
-              <p className="text-fg-subtle text-[0.6875rem]">At least 12 characters.</p>
+              <p className="text-fg-subtle text-meta">At least 12 characters.</p>
             )}
-            {mismatch && <p className="text-danger text-[0.6875rem]">These do not match.</p>}
+            {mismatch && <p className="text-danger text-meta">These do not match.</p>}
             {error && (
-              <p className="text-danger bg-danger-subtle enter-rise rounded-md px-2.5 py-1.5 text-[0.6875rem]">
+              <p className="text-danger bg-danger-subtle enter-rise rounded-md px-2.5 py-1.5 text-meta">
                 {error}
               </p>
             )}
             {state === 'done' && (
-              <p className="text-status-done enter-rise text-[0.6875rem]">
+              <p className="text-status-done enter-rise text-meta">
                 Changed. Store it somewhere safe — there is no email recovery on this instance.
               </p>
             )}

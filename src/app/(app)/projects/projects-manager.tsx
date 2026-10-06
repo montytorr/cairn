@@ -35,7 +35,7 @@ const FormerlyLabel = ({ row }: { row: Row }) => {
   if (!last) return null
   return (
     <span
-      className="text-fg-subtle min-w-0 truncate text-[0.6875rem]"
+      className="text-fg-subtle min-w-0 truncate text-meta"
       title={renames.map((r) => renameLine(r)).join('\n')}
     >
       formerly {renames.map((r) => r.from).join(', ')} · {shortDateWithYear(last.at)}
@@ -144,16 +144,16 @@ export const ProjectsManager = ({
         ) : (
           <Link
             href={`/projects/${p.key}`}
-            className="text-fg hover:text-accent min-w-0 truncate text-[0.875rem] font-medium transition-colors duration-[var(--dur-1)]"
+            className="text-fg hover:text-accent min-w-0 truncate text-ui font-medium transition-colors duration-[var(--dur-1)]"
           >
             {p.title}
           </Link>
         )}
-        <span className="text-fg-subtle tabular shrink-0 text-[0.75rem]">{p.key}</span>
+        <span className="text-fg-subtle tabular shrink-0 text-meta">{p.key}</span>
         <FormerlyLabel row={p} />
       </div>
 
-      <span className="text-fg-subtle tabular shrink-0 text-[0.75rem]">
+      <span className="text-fg-subtle tabular shrink-0 text-meta">
         {p.open} open{p.total !== p.open ? ` · ${p.total} total` : ''}
       </span>
 
@@ -220,7 +220,7 @@ export const ProjectsManager = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-fg text-[0.875rem] font-medium">Active</h2>
+        <h2 className="text-fg text-ui font-medium">Active</h2>
         {creating ? null : (
           <Button variant="primary" onClick={() => setCreating(true)}>
             <Plus size={13} aria-hidden />
@@ -233,7 +233,7 @@ export const ProjectsManager = ({
         <div className="surface-card enter-rise flex flex-col gap-3 p-3">
           <div className="flex flex-wrap items-start gap-2">
             <label className="flex flex-col gap-1">
-              <span className="text-fg-subtle text-[0.6875rem] font-medium">Key</span>
+              <span className="text-fg-subtle text-meta font-medium">Key</span>
               <InlineInput
                 autoFocus
                 value={key}
@@ -245,7 +245,7 @@ export const ProjectsManager = ({
               />
             </label>
             <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
-              <span className="text-fg-subtle text-[0.6875rem] font-medium">Title</span>
+              <span className="text-fg-subtle text-meta font-medium">Title</span>
               <InlineInput
                 value={title}
                 placeholder="What this project is"
@@ -265,7 +265,7 @@ export const ProjectsManager = ({
             </div>
           </div>
 
-          <p className={cn('text-[0.6875rem]', keyTaken ? 'text-danger' : 'text-fg-subtle')}>
+          <p className={cn('text-meta', keyTaken ? 'text-danger' : 'text-fg-subtle')}>
             {retiredBy
               ? `${retiredBy.key} used to be ${retiredBy.current}'s key and can never be reused — every ${retiredBy.key}-n ref still leads to ${retiredBy.current}.`
               : keyTaken
@@ -287,7 +287,7 @@ export const ProjectsManager = ({
 
       {archived.length > 0 && (
         <>
-          <h2 className="text-fg-muted text-[0.875rem] font-medium">Archived</h2>
+          <h2 className="text-fg-muted text-ui font-medium">Archived</h2>
           <ul className="surface-card overflow-hidden opacity-70 transition-opacity duration-[var(--dur-2)] ease-[var(--ease-out)] hover:opacity-100">
             {archived.map(row)}
           </ul>
@@ -317,21 +317,21 @@ export const ProjectsManager = ({
             className="border-border bg-surface raised-lg enter-sheet relative flex w-full max-w-[26rem] flex-col overflow-hidden rounded-xl border"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="border-border text-fg border-b px-4 py-3 text-[0.875rem] font-medium">
+            <h3 className="border-border text-fg border-b px-4 py-3 text-ui font-medium">
               Delete {target.key}?
             </h3>
             <div className="flex flex-col gap-3 px-4 py-3.5">
-              <p className="text-fg-muted text-[0.8125rem] leading-relaxed">
+              <p className="text-fg-muted text-ui leading-relaxed">
                 This removes <strong className="text-fg">{target.total}</strong>{' '}
                 {target.total === 1 ? 'task' : 'tasks'} and everything attached to them — notes,
                 comments, attachments and history. It cannot be undone.
               </p>
-              <p className="text-fg-subtle text-[0.75rem]">
+              <p className="text-fg-subtle text-meta">
                 Archiving hides a project and keeps its tasks searchable. If you only want it out of
                 the way, close this and archive it instead.
               </p>
               <label className="flex flex-col gap-1">
-                <span className="text-fg-subtle text-[0.6875rem] font-medium">
+                <span className="text-fg-subtle text-meta font-medium">
                   Type {target.key} to confirm
                 </span>
                 <InlineInput

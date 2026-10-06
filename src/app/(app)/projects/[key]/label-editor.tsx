@@ -75,7 +75,7 @@ export const LabelEditor = ({
         <LabelPill key={l}>{l}</LabelPill>
       ))}
       {labels.length > 2 && (
-        <span className="text-fg-subtle text-[0.6875rem]">+{labels.length - 2}</span>
+        <span className="text-fg-subtle text-meta">+{labels.length - 2}</span>
       )}
 
       <button
@@ -90,7 +90,7 @@ export const LabelEditor = ({
           'text-fg-subtle hover:text-fg rounded transition-[opacity,color,background-color] duration-[var(--dur-2)] ease-[var(--ease-out)]',
           'hover:bg-[color-mix(in_oklab,var(--fg)_7%,transparent)]',
           labels.length === 0 && alwaysVisible
-            ? 'inline-flex h-[1.125rem] items-center gap-1 px-1 text-[0.75rem]'
+            ? 'inline-flex h-[1.125rem] items-center gap-1 px-1 text-meta'
             : 'grid size-[1.125rem] place-items-center',
           !alwaysVisible && labels.length === 0 && !open
             ? 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
@@ -134,7 +134,7 @@ export const LabelEditor = ({
                   checked={labels.includes(l)}
                   className="accent-accent size-[0.75rem]"
                 />
-                <span className="text-fg-muted min-w-0 truncate text-[0.75rem]">{l}</span>
+                <span className="text-fg-muted min-w-0 truncate text-meta">{l}</span>
               </button>
             ))}
             {options.length === 0 && <EmptyState compact title="No labels yet." className="py-3" />}
@@ -149,7 +149,7 @@ export const LabelEditor = ({
               }}
               placeholder="New label…"
               aria-label="New label"
-              className="h-[1.625rem] text-[0.75rem]"
+              className="h-[1.625rem] text-meta"
             />
           </div>
         </div>

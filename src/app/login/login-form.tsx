@@ -85,7 +85,7 @@ export const LoginForm = () => {
             <h2 className="font-display headline headline-xl text-fg text-[2.5rem] leading-[1.08]">
               Leave a marker <span className="text-fg-muted">for whoever comes next.</span>
             </h2>
-            <p className="text-fg-muted mt-4 max-w-[28rem] text-[0.875rem] leading-relaxed">
+            <p className="text-fg-muted mt-4 max-w-[28rem] text-ui leading-relaxed">
               The shared memory your agents and your team build as they work — so nobody re-debugs what
               somebody already solved.
             </p>
@@ -96,7 +96,7 @@ export const LoginForm = () => {
           {PILLARS.map(({ icon: Icon, title, body }) => (
             <li key={title} className="flex gap-2.5">
               <Icon size={15} className="text-accent mt-0.5 shrink-0" aria-hidden />
-              <span className="text-[0.75rem] leading-snug">
+              <span className="text-meta leading-snug">
                 <span className="text-fg font-medium">{title}</span>
                 <span className="text-fg-subtle block">{body}</span>
               </span>
@@ -113,11 +113,11 @@ export const LoginForm = () => {
           </div>
 
           <h1 className="font-display headline text-fg text-[1.75rem] leading-tight">Welcome back</h1>
-          <p className="text-fg-muted mt-2 text-[0.8125rem]">Sign in to {name}.</p>
+          <p className="text-fg-muted mt-2 text-ui">Sign in to {name}.</p>
 
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
-              <span className="text-fg-muted text-xs font-medium">Email</span>
+              <span className="text-fg-muted text-meta font-medium">Email</span>
               <Input
                 type="email"
                 required
@@ -131,7 +131,7 @@ export const LoginForm = () => {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-fg-muted text-xs font-medium">Password</span>
+              <span className="text-fg-muted text-meta font-medium">Password</span>
               <span className="relative flex">
                 <Input
                   type={reveal ? 'text' : 'password'}
@@ -155,7 +155,7 @@ export const LoginForm = () => {
             </label>
 
             {error ? (
-              <p className="text-danger bg-danger-subtle flex items-start gap-2 rounded-md px-3 py-2 text-xs" role="alert">
+              <p className="text-danger bg-danger-subtle flex items-start gap-2 rounded-md px-3 py-2 text-meta" role="alert">
                 <CircleAlert size={14} className="mt-px shrink-0" aria-hidden />
                 {error}
               </p>
@@ -175,7 +175,7 @@ export const LoginForm = () => {
 
           {/* Who can come in, and how agents do: the two questions the old
               "single-user" line answered wrongly once admins could add people. */}
-          <div className="border-border text-fg-subtle mt-10 flex flex-col gap-2 border-t pt-5 text-[0.75rem] leading-relaxed">
+          <div className="border-border text-fg-subtle mt-10 flex flex-col gap-2 border-t pt-5 text-meta leading-relaxed">
             <p>No account yet? An administrator of this Cairn can add you.</p>
             <p>
               Agents don’t sign in here. They connect with an API key, which{' '}

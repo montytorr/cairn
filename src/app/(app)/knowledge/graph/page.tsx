@@ -70,16 +70,16 @@ const KnowledgeGraphPage = async () => {
         <MobileNavButton />
         <Link
           href="/"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors sm:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors sm:block"
         >
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <Link href="/knowledge" className="text-fg-muted hover:text-fg text-[0.8125rem]">
+        <Link href="/knowledge" className="text-fg-muted hover:text-fg text-ui">
           Knowledge
         </Link>
         <ChevronRight size={13} className="text-fg-subtle" aria-hidden />
-        <span className="text-fg text-[0.8125rem]">Map</span>
+        <span className="text-fg text-ui">Map</span>
       </header>
 
       {/* Five instruments over the map: flat tiles, each a label, a reading
@@ -90,13 +90,13 @@ const KnowledgeGraphPage = async () => {
             key={label}
             className="border-border bg-surface min-w-0 rounded-lg border px-3 py-1.5"
           >
-            <dt className="text-fg-subtle truncate text-[0.625rem] font-medium tracking-[0.08em] uppercase">
+            <dt className="text-fg-subtle text-label font-medium tracking-[0.08em] uppercase">
               {label}
             </dt>
             <dd className="font-display text-fg text-[1.15rem] leading-tight font-medium tracking-tight tabular-nums">
               {value}
             </dd>
-            {note ? <p className="text-fg-subtle truncate text-[0.65rem]">{note}</p> : null}
+            {note ? <p className="text-fg-subtle text-meta">{note}</p> : null}
           </div>
         ))}
       </dl>

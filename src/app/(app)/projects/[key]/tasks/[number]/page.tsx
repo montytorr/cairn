@@ -156,14 +156,14 @@ const TaskPage = async ({
         <MobileNavButton />
         <Link
           href="/"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors lg:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors lg:block"
         >
           <BrandName />
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden lg:block" aria-hidden />
         <Link
           href={`/projects/${task.project.key}`}
-          className="text-fg-muted hover:text-fg flex min-w-0 shrink items-center gap-1.5 text-[0.8125rem] transition-colors"
+          className="text-fg-muted hover:text-fg flex min-w-0 shrink items-center gap-1.5 text-ui transition-colors"
         >
           <ProjectIcon size={13} projectKey={task.project.key} />
           <span className="truncate">{task.project.title}</span>
@@ -174,7 +174,7 @@ const TaskPage = async ({
             <Link
               href={`/projects/${parent.ref.slice(0, parent.ref.lastIndexOf('-'))}/tasks/${parent.ref.slice(parent.ref.lastIndexOf('-') + 1)}`}
               prefetch
-              className="text-fg-muted hover:text-fg hidden max-w-[22ch] truncate text-[0.8125rem] transition-colors sm:block"
+              className="text-fg-muted hover:text-fg hidden max-w-[22ch] truncate text-ui transition-colors sm:block"
               title={parent.title}
             >
               {parent.title}
@@ -182,13 +182,13 @@ const TaskPage = async ({
             <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
           </>
         ) : null}
-        <span className="text-fg-subtle shrink-0 text-[0.8125rem] tabular">{ref}</span>
+        <span className="text-fg-subtle shrink-0 text-ui tabular">{ref}</span>
         {/* Where it came from, kept visible rather than substituted for the
             ref: matching a task against the Linear export is a real need, and
             it is the only place that identifier now appears. */}
         {task.external_ref ? (
           <span
-            className="text-fg-subtle hidden shrink-0 text-[0.6875rem] tabular sm:inline"
+            className="text-fg-subtle hidden shrink-0 text-meta tabular sm:inline"
             title={`External ref ${task.external_ref}`}
           >
             ({task.external_ref})
@@ -200,7 +200,7 @@ const TaskPage = async ({
             message is no less confusing on a small screen. */}
         {formerRefs.length > 0 ? (
           <span
-            className="text-fg-subtle min-w-0 shrink truncate text-[0.6875rem] tabular"
+            className="text-fg-subtle min-w-0 shrink truncate text-meta tabular"
             title={formerRefs
               .map(({ ref: was, rename }) => `Was ${was} · ${renameLine(rename)}. ${was} still resolves here.`)
               .join('\n')}
@@ -212,7 +212,7 @@ const TaskPage = async ({
             </span>
           </span>
         ) : null}
-        <span className="text-fg hidden max-w-[38ch] truncate text-[0.8125rem] sm:block">
+        <span className="text-fg hidden max-w-[38ch] truncate text-ui sm:block">
           {task.title}
         </span>
       </header>
@@ -223,12 +223,12 @@ const TaskPage = async ({
             {/* The ref and the project, quiet above the title rather than
                 competing with it: the title is the page's one voice. */}
             <div className="mb-2 flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="border-border bg-surface-raised text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center rounded-md border px-1.5 font-mono text-[0.6875rem]">
+              <span className="border-border bg-surface-raised text-fg-muted inline-flex h-[1.25rem] shrink-0 items-center rounded-md border px-1.5 font-mono text-meta">
                 {ref}
               </span>
               <Link
                 href={`/projects/${task.project.key}`}
-                className="border-border text-fg-muted hover:text-fg hover:border-border-strong hover:bg-surface-hover inline-flex h-[1.25rem] min-w-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-[0.6875rem] transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
+                className="border-border text-fg-muted hover:text-fg hover:border-border-strong hover:bg-surface-hover inline-flex h-[1.25rem] min-w-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
               >
                 <ProjectIcon size={11} projectKey={task.project.key} />
                 <span className="truncate">{task.project.title}</span>
@@ -243,7 +243,7 @@ const TaskPage = async ({
                 duplicate wants redirecting, not reading. */}
             {duplicateOf ? (
               <Callout tone="var(--fg-subtle)">
-                <p className="text-fg-muted text-[0.78125rem]">
+                <p className="text-fg-muted text-ui">
                   Duplicate of{' '}
                   <Link
                     href={`/projects/${duplicateOf.ref.slice(0, duplicateOf.ref.lastIndexOf('-'))}/tasks/${duplicateOf.ref.slice(duplicateOf.ref.lastIndexOf('-') + 1)}`}
@@ -259,7 +259,7 @@ const TaskPage = async ({
 
             {task.blocked_reason ? (
               <Callout tone="var(--danger)">
-                <p className="text-danger text-[0.75rem]">Blocked: {task.blocked_reason}</p>
+                <p className="text-danger text-meta">Blocked: {task.blocked_reason}</p>
               </Callout>
             ) : null}
 
@@ -268,7 +268,7 @@ const TaskPage = async ({
                 the page edged in its status's colour. */}
             {task.resolution ? (
               <Callout tone={`var(--status-${task.status})`} className="mb-6 py-3 pr-4 pl-[1.125rem]">
-                <p className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[0.6875rem]">
+                <p className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta">
                   <StatusIcon status={task.status} size={12} />
                   <span className="font-medium" style={{ color: `var(--status-${task.status})` }}>
                     {isTerminal(task.status) ? 'Resolved' : 'Resolution'}
@@ -299,7 +299,7 @@ const TaskPage = async ({
             {task.checkpoint_summary && !task.resolution ? (
               <Callout tone="var(--fg-subtle)" className="mb-6 py-2.5">
                 <p className={cn(LABEL, 'mb-1')}>Last checkpoint</p>
-                <p className="text-fg-muted text-[0.8125rem]">{task.checkpoint_summary}</p>
+                <p className="text-fg-muted text-ui">{task.checkpoint_summary}</p>
               </Callout>
             ) : null}
 

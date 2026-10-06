@@ -42,7 +42,7 @@ const Preview = ({
       className="flex flex-1 flex-col gap-3 rounded-md border p-3 transition-colors duration-[var(--dur-2)] ease-[var(--ease-out)]"
       style={{ background: ground.bg, color: ground.fg, borderColor: ground.border }}
     >
-      <div className="flex items-center gap-2 text-[0.8125rem] font-semibold tracking-tight">
+      <div className="flex items-center gap-2 text-ui font-semibold tracking-tight">
         <svg viewBox="0 0 32 32" className="size-5 rounded-[5px]" aria-hidden>
           <rect width="32" height="32" rx="7" fill="#08090a" />
           <g fill={mark}>
@@ -53,14 +53,14 @@ const Preview = ({
         </svg>
         <span className="truncate">{name}</span>
       </div>
-      <div className="rounded-md px-2 py-1 text-[0.75rem]" style={{ background: tokens.accentSubtle }}>
+      <div className="rounded-md px-2 py-1 text-meta" style={{ background: tokens.accentSubtle }}>
         All tasks
       </div>
-      <p className="text-[0.75rem]" style={{ color: ground.muted }}>
+      <p className="text-meta" style={{ color: ground.muted }}>
         Nothing in progress. <span style={{ color: tokens.accent }}>See the backlog</span>
       </p>
       <span
-        className="inline-flex h-7 w-fit items-center rounded-md px-3 text-[0.75rem] font-medium"
+        className="inline-flex h-7 w-fit items-center rounded-md px-3 text-meta font-medium"
         style={{ background: tokens.accent, color: tokens.accentFg }}
       >
         New task
@@ -109,11 +109,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
     <SettingsCard
       title="Branding"
       description={
-        <>
-          What this instance is called and its colour, for everyone who signs in: the sidebar, tab titles,
-          the login page, the favicon and link previews. The mark stays the cairn, drawn in the accent, so
-          someone who uses more than one Cairn can tell at a glance which one this is.
-        </>
+        <>The name and colour people see in the sidebar, tab titles and login page.</>
       }
       footer={
         <>
@@ -121,7 +117,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
             <p
               role={message.tone === 'error' ? 'alert' : 'status'}
               className={cn(
-                'enter-rise min-w-0 flex-1 basis-60 rounded-md px-2.5 py-1.5 text-xs',
+                'enter-rise min-w-0 flex-1 basis-60 rounded-md px-2.5 py-1.5 text-meta',
                 message.tone === 'error' ? 'text-danger bg-danger-subtle' : 'text-fg-muted',
               )}
             >
@@ -143,7 +139,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
     >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">
-          <span className="text-fg-subtle text-[0.6875rem] font-medium">Name</span>
+          <span className="text-fg-subtle text-meta font-medium">Name</span>
           <Input
             value={name}
             maxLength={60}
@@ -154,7 +150,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
         </label>
 
         <div className="flex flex-col gap-1">
-          <span className="text-fg-subtle text-[0.6875rem] font-medium">Accent</span>
+          <span className="text-fg-subtle text-meta font-medium">Accent</span>
           <div className="flex flex-wrap items-center gap-2">
             {PRESETS.map((preset) => (
               <button
@@ -188,9 +184,8 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
               className={cn('w-28 font-mono', !valid && 'border-danger')}
             />
           </div>
-          <p className="text-fg-subtle text-[0.6875rem]">
-            Each theme gets a variant of it that stays readable on its background, so the colour may come out
-            a little lighter in dark mode.
+          <p className="text-fg-subtle text-meta">
+            Dark mode shows a slightly lighter shade so it stays readable.
           </p>
         </div>
 

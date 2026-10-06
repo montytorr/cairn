@@ -155,7 +155,7 @@ export const SearchControls = ({
           </button>
         )}
       </div>
-      <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap items-center gap-2">
       <Filter
         value={kind === 'all' ? '' : kind}
         onChange={(v) => push({ kind: v || 'all' })}
@@ -197,7 +197,7 @@ export const SearchControls = ({
             committed.current = ''
             router.replace('/search')
           }}
-          className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-[0.75rem] transition-colors"
+          className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-meta transition-colors"
         >
           Clear
         </button>

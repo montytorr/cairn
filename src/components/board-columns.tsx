@@ -23,7 +23,7 @@ export const laneTone = (color: string | undefined) =>
   color ? ({ '--lane': color } as React.CSSProperties) : undefined
 
 export const ColumnCount = ({ count }: { count: number }) => (
-  <span className="text-fg-subtle tabular ml-auto rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-[0.6875rem] leading-[1.125rem]">
+  <span className="text-fg-subtle tabular ml-auto rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-meta leading-[1.125rem]">
     {count}
   </span>
 )
@@ -90,6 +90,6 @@ export const DragPreview = ({ title }: { title: string }) => (
       COLUMN_WIDTH,
     )}
   >
-    <p className="text-[0.8125rem] font-medium">{title}</p>
+    <p className="text-ui font-medium">{title}</p>
   </div>
 )

@@ -304,7 +304,7 @@ const Row = ({
             it. The old identifier is kept on the element's title, so it is
             still there for anyone who has to match a task against Linear. */}
         <code
-          className="text-fg-subtle hidden w-[3.875rem] shrink-0 truncate text-[0.75rem] tabular sm:block md:w-[4.5rem]"
+          className="text-fg-subtle hidden w-[3.875rem] shrink-0 truncate text-meta tabular sm:block md:w-[4.5rem]"
           title={task.external_ref ? `${ref} · imported as ${task.external_ref}` : ref}
         >
           {ref}
@@ -350,7 +350,7 @@ const Row = ({
             />
           </button>
         ) : null}
-        <span className="text-fg min-w-0 flex-1 truncate text-[0.8125rem]">{task.title}</span>
+        <span className="text-fg min-w-0 flex-1 truncate text-ui">{task.title}</span>
 
         {/* Whose child, how far its own children have got, what it waits on.
             The parent is not repeated on a row drawn directly under it. */}
@@ -364,7 +364,7 @@ const Row = ({
         {task.guest && (
           <span
             title={`Filed in ${ownKey}, also belongs here`}
-            className="border-border text-fg-subtle pointer-events-auto hidden shrink-0 rounded border px-1.5 py-px text-[0.625rem] tracking-wide uppercase sm:inline"
+            className="border-border text-fg-subtle pointer-events-auto hidden shrink-0 rounded border px-1.5 py-px text-label tracking-wide uppercase sm:inline"
           >
             guest
           </span>
@@ -375,7 +375,7 @@ const Row = ({
             type="button"
             onClick={clearError}
             title={error}
-            className="text-danger pointer-events-auto shrink-0 text-[0.6875rem]"
+            className="text-danger pointer-events-auto shrink-0 text-meta"
           >
             refused
           </button>
@@ -383,7 +383,7 @@ const Row = ({
 
         {task.blocked_reason ? (
           <span
-            className="text-danger shrink-0 text-[0.6875rem]"
+            className="text-danger shrink-0 text-meta"
             title={`Blocked: ${task.blocked_reason}`}
           >
             blocked
@@ -404,7 +404,7 @@ const Row = ({
             labels={Object.fromEntries(projects.map((p) => [p.key, p.title]))}
             title={`Project: ${ownKey} — moving renumbers the task`}
             onChange={(next) => void patch({ project: next })}
-            className="text-fg-muted pointer-events-auto hidden items-center gap-1.5 text-[0.75rem] md:inline-flex"
+            className="text-fg-muted pointer-events-auto hidden items-center gap-1.5 text-meta md:inline-flex"
           >
             <ProjectIcon size={12} projectKey={ownKey} />
             {ownKey}
@@ -458,7 +458,7 @@ const Row = ({
         <time
           dateTime={task.updated_at}
           title={fullDateTime(task.updated_at)}
-          className="text-fg-subtle tabular hidden w-[2.875rem] shrink-0 text-right text-[0.75rem] md:block"
+          className="text-fg-subtle tabular hidden w-[2.875rem] shrink-0 text-right text-meta md:block"
         >
           {shortDate(task.updated_at)}
         </time>
@@ -676,7 +676,7 @@ export const ListView = ({
       data-pill={t}
       onClick={() => setTab(t)}
       className={cn(
-        'relative shrink-0 rounded-md px-2.5 py-1 text-[0.75rem] whitespace-nowrap',
+        'relative shrink-0 rounded-md px-2.5 py-1 text-meta whitespace-nowrap',
         'transition-colors duration-[var(--dur-2)] ease-[var(--ease-out)]',
         tab === t
           ? 'bg-surface-raised text-fg group-data-[measured]/tabs:bg-transparent'
@@ -719,9 +719,9 @@ export const ListView = ({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter…"
             aria-label="Filter tasks"
-            className="placeholder:text-fg-subtle border-border focus:border-accent min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 text-[0.75rem] outline-none transition-colors sm:border-transparent sm:px-1 sm:py-0"
+            className="placeholder:text-fg-subtle border-border focus:border-accent min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 text-meta outline-none transition-colors sm:border-transparent sm:px-1 sm:py-0"
           />
-          <span className="text-fg-subtle tabular shrink-0 text-[0.6875rem]">{filtered.length}</span>
+          <span className="text-fg-subtle tabular shrink-0 text-meta">{filtered.length}</span>
           <NewTaskButton />
         </div>
       </div>
@@ -749,7 +749,7 @@ export const ListView = ({
               <button
                 type="button"
                 onClick={() => assignees.setSelected([])}
-                className="text-accent text-[0.8125rem] hover:underline"
+                className="text-accent text-ui hover:underline"
               >
                 Show everyone’s
               </button>
@@ -759,7 +759,7 @@ export const ListView = ({
           <EmptyState
             title="Nothing is in progress."
             action={
-              <span className="text-fg-subtle flex items-center gap-1.5 text-[0.8125rem]">
+              <span className="text-fg-subtle flex items-center gap-1.5 text-ui">
                 <button type="button" onClick={() => setTab('todo')} className="text-accent hover:underline">
                   Todo
                 </button>
@@ -810,7 +810,7 @@ export const ListView = ({
                   and the eye has nothing to land on when scrolling a long
                   list. */}
               <span
-                className="text-[0.75rem] font-medium"
+                className="text-meta font-medium"
                 style={
                   group.status === 'recent'
                     ? undefined
@@ -819,7 +819,7 @@ export const ListView = ({
               >
                 {GROUP_LABEL[group.status]}
               </span>
-              <span className="text-fg-subtle tabular rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-[0.75rem] leading-[1.125rem]">
+              <span className="text-fg-subtle tabular rounded-full bg-[color-mix(in_oklab,var(--fg)_6%,transparent)] px-1.5 text-meta leading-[1.125rem]">
                 {group.items.length}
                 {group.items.length !== group.total ? ` / ${group.total}` : ''}
               </span>

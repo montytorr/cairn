@@ -101,11 +101,7 @@ export const EntitiesSection = ({
       title="Entities"
       flush
       description={
-        <>
-          A grouping a fact can be true of — a business, a stack, a subsystem. Knowledge filed
-          against one is visible from every project in it, which is how something true of a
-          whole business stops having to be filed twenty times or made global.
-        </>
+        <>A group of projects, such as a business or a stack, that share what they know.</>
       }
       action={
         <Button size="sm" variant="quiet" onClick={() => setCreating((v) => !v)}>
@@ -116,13 +112,11 @@ export const EntitiesSection = ({
         unassigned.length > 0 || message ? (
           <div className="flex min-w-0 flex-col gap-1">
             {unassigned.length > 0 && (
-              <p className="text-fg-subtle text-[0.75rem]">
-                In no entity at all:{' '}
-                <span className="text-fg-muted font-mono">{unassigned.join(' ')}</span> — these see
-                only their own knowledge and whatever is global.
+              <p className="text-fg-subtle text-meta">
+                Not in any group: <span className="text-fg-muted font-mono">{unassigned.join(' ')}</span>
               </p>
             )}
-            {message && <p className="text-fg-muted enter-rise text-[0.75rem]">{message}</p>}
+            {message && <p className="text-fg-muted enter-rise text-meta">{message}</p>}
           </div>
         ) : undefined
       }
@@ -160,13 +154,13 @@ export const EntitiesSection = ({
                   type="button"
                   onClick={() => setOpen(open === entity.key ? null : entity.key)}
                   aria-expanded={open === entity.key}
-                  className="text-fg min-w-0 text-left text-[0.8125rem]"
+                  className="text-fg min-w-0 text-left text-ui"
                 >
                   {entity.title}{' '}
-                  <span className="text-fg-subtle font-mono text-[0.6875rem]">{entity.key}</span>
+                  <span className="text-fg-subtle font-mono text-meta">{entity.key}</span>
                 </button>
 
-                <span className="text-fg-subtle ml-auto shrink-0 text-[0.6875rem] tabular-nums">
+                <span className="text-fg-subtle ml-auto shrink-0 text-meta tabular-nums">
                   {entity.projects.length} project{entity.projects.length === 1 ? '' : 's'} ·{' '}
                   {entity.knowledgeCount} scoped here
                 </span>
@@ -175,7 +169,7 @@ export const EntitiesSection = ({
                   type="button"
                   onClick={() => remove(entity)}
                   disabled={busy}
-                  className="text-fg-subtle hover:text-danger shrink-0 text-[0.6875rem] transition-[color,opacity] duration-[var(--dur-1)] ease-[var(--ease-out)] md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+                  className="text-fg-subtle hover:text-danger shrink-0 text-meta transition-[color,opacity] duration-[var(--dur-1)] ease-[var(--ease-out)] md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
                 >
                   Delete
                 </button>
@@ -186,7 +180,7 @@ export const EntitiesSection = ({
                   {entity.projects.map((key) => (
                     <span
                       key={key}
-                      className="text-fg-muted inline-flex items-center gap-1 text-[0.6875rem]"
+                      className="text-fg-muted inline-flex items-center gap-1 text-meta"
                     >
                       <ProjectIcon size={10} projectKey={key} />
                       {key}
@@ -197,9 +191,8 @@ export const EntitiesSection = ({
 
               {open === entity.key && (
                 <div className="border-border bg-surface-raised/40 enter-rise border-t px-4 py-2.5 md:px-5">
-                  <p className="text-fg-subtle mb-2 text-[0.6875rem]">
-                    Click a project to add or remove it. A project can belong to several
-                    entities at once.
+                  <p className="text-fg-subtle mb-2 text-meta">
+                    Click a project to add or remove it.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {allProjects.map((p) => {
@@ -212,7 +205,7 @@ export const EntitiesSection = ({
                           onClick={() => toggleProject(entity, p.key)}
                           aria-pressed={member}
                           className={cn(
-                            'rounded-md border px-1.5 py-0.5 font-mono text-[0.6875rem]',
+                            'rounded-md border px-1.5 py-0.5 font-mono text-meta',
                             'transition-[color,background-color,border-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
                             member
                               ? 'border-accent/60 bg-accent-subtle text-accent'

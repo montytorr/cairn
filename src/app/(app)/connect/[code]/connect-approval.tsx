@@ -39,8 +39,8 @@ const Message = ({ title, body, done = false }: { title: string; body: string; d
     ) : (
       <CircleAlert size={20} className="text-fg-subtle" aria-hidden />
     )}
-    <h1 className="text-fg text-[0.9375rem] font-medium">{title}</h1>
-    <p className="text-fg-subtle text-[0.8125rem] leading-relaxed">{body}</p>
+    <h1 className="text-fg text-[1.125rem] font-medium">{title}</h1>
+    <p className="text-fg-subtle text-ui leading-relaxed">{body}</p>
   </div>
 )
 
@@ -154,13 +154,13 @@ const PendingCard = ({
       <header className="border-border flex items-center gap-2.5 border-b px-5 py-3.5">
         <MonitorSmartphone size={16} className="text-fg-subtle shrink-0" aria-hidden />
         <div className="min-w-0">
-          <h1 className="text-fg text-[0.875rem] font-medium">Connect {view.host}</h1>
-          <p className="text-fg-subtle text-[0.75rem]">Keys will belong to {ownerName}.</p>
+          <h1 className="text-fg text-ui font-medium">Connect {view.host}</h1>
+          <p className="text-fg-subtle text-meta">Keys will belong to {ownerName}.</p>
         </div>
       </header>
 
       <div className="flex flex-col gap-4 px-5 py-4">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[0.75rem]">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-meta">
           <dt className="text-fg-subtle">Host</dt>
           <dd className="text-fg truncate" title="As the device reported it — not verified">
             {view.host} <span className="text-fg-subtle">(as reported)</span>
@@ -173,7 +173,7 @@ const PendingCard = ({
           <dd className={expired ? 'text-danger' : 'text-fg'}>{left}</dd>
         </dl>
 
-        <p className="text-fg-muted flex items-start gap-2 text-xs leading-relaxed">
+        <p className="text-fg-muted flex items-start gap-2 text-meta leading-relaxed">
           <TriangleAlert size={14} className="mt-px shrink-0 text-[var(--priority-high)]" aria-hidden />
           <span>
             Approve only if you just ran <code className="font-mono">cairn setup</code> on this machine yourself. Never
@@ -187,7 +187,7 @@ const PendingCard = ({
         </p>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-fg-muted text-xs font-medium">Runtimes</span>
+          <span className="text-fg-muted text-meta font-medium">Runtimes</span>
           {view.runtimes.map((runtime) => {
             const checked = selected.includes(runtime)
             const privileged = view.privileged.includes(runtime)
@@ -210,9 +210,9 @@ const PendingCard = ({
                 >
                   {checked ? <Check size={9} className="text-white" strokeWidth={3} /> : null}
                 </span>
-                <span className="text-fg text-[0.8125rem]">{runtime}</span>
+                <span className="text-fg text-ui">{runtime}</span>
                 {privileged ? (
-                  <span className="text-fg-subtle ml-auto text-[0.6875rem]">
+                  <span className="text-fg-subtle ml-auto text-meta">
                     {view.isAdmin ? 'acts on everyone’s claims' : 'administrators only'}
                   </span>
                 ) : null}
@@ -222,7 +222,7 @@ const PendingCard = ({
         </div>
 
         {error ? (
-          <p className="text-danger bg-danger-subtle flex items-start gap-2 rounded-md px-3 py-2 text-xs" role="alert">
+          <p className="text-danger bg-danger-subtle flex items-start gap-2 rounded-md px-3 py-2 text-meta" role="alert">
             <CircleAlert size={14} className="mt-px shrink-0" aria-hidden />
             {error}
           </p>

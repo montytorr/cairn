@@ -75,12 +75,12 @@ const KnowledgeDetailPage = async ({ params }: { params: Promise<{ slug: string 
         <MobileNavButton />
         <Link
           href="/knowledge"
-          className="text-fg-muted hover:text-fg hidden text-[0.8125rem] transition-colors sm:block"
+          className="text-fg-muted hover:text-fg hidden text-ui transition-colors sm:block"
         >
           Knowledge
         </Link>
         <ChevronRight size={13} className="text-fg-subtle hidden sm:block" aria-hidden />
-        <span className="text-fg min-w-0 truncate text-[0.8125rem]">{row.title}</span>
+        <span className="text-fg min-w-0 truncate text-ui">{row.title}</span>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

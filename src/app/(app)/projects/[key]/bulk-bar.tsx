@@ -89,7 +89,7 @@ const Action = <T extends string>({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`h-[1.625rem] rounded-md px-2.5 text-[0.75rem] transition-colors duration-[var(--dur-1)] ease-[var(--ease)] ${
+        className={`h-[1.625rem] rounded-md px-2.5 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease)] ${
           open ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'
         }`}
       >
@@ -111,7 +111,7 @@ const Action = <T extends string>({
                 setOpen(false)
                 onPick(o)
               }}
-              className="text-fg-muted hover:bg-surface-hover hover:text-fg flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[0.78125rem] transition-colors duration-[var(--dur-1)]"
+              className="text-fg-muted hover:bg-surface-hover hover:text-fg flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-ui transition-colors duration-[var(--dur-1)]"
             >
               {icon(o)}
               {labels?.[o] ?? o}
@@ -160,7 +160,7 @@ export const BulkBar = ({
         {/* Floating: it rises into place from below rather than appearing
             on top. */}
         <div className="border-border bg-surface enter-sheet pointer-events-auto relative flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-1 rounded-xl border px-2 py-1.5 raised-lg">
-          <span className="text-fg tabular px-1.5 text-[0.75rem] font-medium">
+          <span className="text-fg tabular px-1.5 text-meta font-medium">
             {progress === null
               ? `${ids.length} selected`
               : `${progress} / ${ids.length}…`}
@@ -186,13 +186,13 @@ export const BulkBar = ({
             onPick={(p) => void run({ priority: p })}
           />
 
-          {error && <span className="text-danger px-2 text-[0.75rem]">{error}</span>}
+          {error && <span className="text-danger px-2 text-meta">{error}</span>}
 
           <span className="bg-border mx-1 h-[1rem] w-px" aria-hidden />
           <button
             type="button"
             onClick={onClear}
-            className="text-fg-subtle hover:text-fg h-[1.625rem] rounded-md px-2 text-[0.75rem] transition-colors duration-[var(--dur-1)] ease-[var(--ease)]"
+            className="text-fg-subtle hover:text-fg h-[1.625rem] rounded-md px-2 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease)]"
           >
             Clear
           </button>

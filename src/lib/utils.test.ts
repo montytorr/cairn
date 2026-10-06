@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { taskRefHref } from './utils'
+import { cn, taskRefHref } from './utils'
 
 describe('taskRefHref', () => {
   it('builds a task link from a plain ref', () => {
@@ -17,5 +17,12 @@ describe('taskRefHref', () => {
     expect(taskRefHref('not a ref')).toBeNull()
     expect(taskRefHref('lowercase-9')).toBeNull()
     expect(taskRefHref('CAIRN')).toBeNull()
+  })
+})
+
+describe('cn with the type scale', () => {
+  it('keeps a scale size next to a colour, and lets a later size win', () => {
+    expect(cn('text-meta', 'text-fg-muted')).toBe('text-meta text-fg-muted')
+    expect(cn('text-ui text-fg', 'text-meta')).toBe('text-fg text-meta')
   })
 })

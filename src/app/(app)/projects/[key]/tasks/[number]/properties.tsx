@@ -135,7 +135,7 @@ const SelectRow = <T extends string>({
     }
   >
     {icon}
-    <span className="text-fg min-w-0 truncate text-[0.8125rem]">{labels?.[value] ?? value}</span>
+    <span className="text-fg min-w-0 truncate text-ui">{labels?.[value] ?? value}</span>
   </EditableRow>
 )
 
@@ -186,7 +186,7 @@ const ParentEditor = ({
           if (e.key === 'Enter') void save()
           if (e.key === 'Escape') setEditing(false)
         }}
-        className="h-[1.75rem] min-w-0 flex-1 text-[0.75rem]"
+        className="h-[1.75rem] min-w-0 flex-1 text-meta"
       />
     )
   }
@@ -196,18 +196,18 @@ const ParentEditor = ({
       {parent ? (
         <Link
           href={`/projects/${parent.ref.slice(0, parent.ref.lastIndexOf('-'))}/tasks/${parent.ref.slice(parent.ref.lastIndexOf('-') + 1)}`}
-          className="text-fg-muted hover:text-fg min-w-0 flex-1 truncate text-[0.8125rem] transition-colors"
+          className="text-fg-muted hover:text-fg min-w-0 flex-1 truncate text-ui transition-colors"
           title={parent.title}
         >
           {parent.ref}
         </Link>
       ) : (
-        <span className="text-fg-subtle min-w-0 flex-1 truncate text-[0.8125rem]">None</span>
+        <span className="text-fg-subtle min-w-0 flex-1 truncate text-ui">None</span>
       )}
       <button
         type="button"
         onClick={startEdit}
-        className="text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-[0.6875rem] opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] group-hover/row:opacity-100 focus-visible:opacity-100"
+        className="text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-meta opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] group-hover/row:opacity-100 focus-visible:opacity-100"
       >
         Edit
       </button>
@@ -262,7 +262,7 @@ const DueDateRow = ({
         type="button"
         onClick={open}
         className={cn(
-          'flex h-[1.5rem] min-w-0 flex-1 items-center rounded px-1 text-left text-[0.8125rem] transition-colors',
+          'flex h-[1.5rem] min-w-0 flex-1 items-center rounded px-1 text-left text-ui transition-colors',
           overdue ? 'text-danger' : value ? 'text-fg' : 'text-fg-subtle',
         )}
       >
@@ -275,7 +275,7 @@ const DueDateRow = ({
           type="button"
           onClick={onClear}
           aria-label="Clear due date"
-          className="text-fg-subtle hover:text-fg shrink-0 px-0.5 text-[0.8125rem] leading-none"
+          className="text-fg-subtle hover:text-fg shrink-0 px-0.5 text-ui leading-none"
         >
           ×
         </button>
@@ -488,7 +488,7 @@ export const Properties = ({
           }
         >
           <Avatar name={shown.assignee?.name ?? 'Unknown'} size={16} />
-          <span className="text-fg min-w-0 truncate text-[0.8125rem]">
+          <span className="text-fg min-w-0 truncate text-ui">
             {shown.assignee?.name ?? 'Unknown'}
             {shown.assignee && !shown.assignee.active ? (
               <span className="text-fg-subtle"> (inactive)</span>
@@ -506,7 +506,7 @@ export const Properties = ({
                 <Avatar name={task.claimed_by} size={16} />
                 <span
                   className={cn(
-                    'min-w-0 flex-1 truncate text-[0.8125rem]',
+                    'min-w-0 flex-1 truncate text-ui',
                     stale ? 'text-fg-subtle' : 'text-fg',
                   )}
                   title={stale ? `${task.claimed_by} · stale, no recent heartbeat` : task.claimed_by}
@@ -524,7 +524,7 @@ export const Properties = ({
             ) : (
               <>
                 <span className="border-border-strong size-[1rem] shrink-0 rounded-full border border-dashed" />
-                <span className="text-fg-subtle min-w-0 flex-1 truncate text-[0.8125rem]">Unclaimed</span>
+                <span className="text-fg-subtle min-w-0 flex-1 truncate text-ui">Unclaimed</span>
               </>
             )}
           </div>
@@ -566,7 +566,7 @@ export const Properties = ({
         ) : (
           <div className={ROW}>
             <span className={ROW_LABEL}>Project</span>
-            <span className="text-fg-muted flex min-w-0 flex-1 items-center gap-2 text-[0.8125rem]">
+            <span className="text-fg-muted flex min-w-0 flex-1 items-center gap-2 text-ui">
               <ProjectIcon size={13} projectKey={project.key} />
               <span className="min-w-0 truncate">{project.title}</span>
             </span>
@@ -592,17 +592,17 @@ export const Properties = ({
 
       <div className="border-border mt-4 flex flex-col gap-1 border-t pt-3">
         <p
-          className="text-fg-subtle truncate text-[0.75rem]"
+          className="text-fg-subtle truncate text-meta"
           title={`${task.actor_id} · ${fullDateTime(task.created_at)}`}
         >
           Created <RelativeTime iso={task.created_at} /> by {agentOf(task.actor_id, shown.assignee?.name)}
         </p>
-        <p className="text-fg-subtle text-[0.75rem]">
+        <p className="text-fg-subtle text-meta">
           Updated <RelativeTime iso={task.updated_at} />
         </p>
         {task.resolved_at && (
           <p
-            className="text-fg-subtle truncate text-[0.75rem]"
+            className="text-fg-subtle truncate text-meta"
             title={[task.resolved_by, fullDateTime(task.resolved_at)].filter(Boolean).join(' · ')}
           >
             Resolved <RelativeTime iso={task.resolved_at} />
@@ -610,7 +610,7 @@ export const Properties = ({
           </p>
         )}
         {task.external_ref && (
-          <p className="text-fg-subtle truncate text-[0.75rem]" title={task.external_ref}>
+          <p className="text-fg-subtle truncate text-meta" title={task.external_ref}>
             From{' '}
             {task.external_url && /^https?:\/\//i.test(task.external_url) ? (
               <a href={task.external_url} target="_blank" rel="noopener noreferrer" className="font-mono underline">
@@ -622,7 +622,7 @@ export const Properties = ({
           </p>
         )}
         {task.attempt > 1 && (
-          <p className="text-fg-subtle text-[0.75rem]">
+          <p className="text-fg-subtle text-meta">
             Attempts {task.attempt} <span>— may be thrashing</span>
           </p>
         )}

@@ -84,10 +84,10 @@ export const ResolutionDialog = ({
         className="bg-surface border-border enter-sheet relative w-full max-w-md rounded-xl border p-4 raised-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold">
+        <h2 className="text-ui font-semibold">
           {status === 'cancelled' ? 'Cancel' : 'Close'} “{taskTitle}”
         </h2>
-        <p className="text-fg-muted mt-1 text-xs leading-relaxed">
+        <p className="text-fg-muted mt-1 text-meta leading-relaxed">
           Record what was actually done, and why. This is what a future agent finds when it
           asks whether this was already solved.
         </p>
@@ -105,7 +105,7 @@ export const ResolutionDialog = ({
         />
 
         {suggestion && value === suggestion && (
-          <p className="text-fg-subtle mt-1.5 text-[0.6875rem]">
+          <p className="text-fg-subtle mt-1.5 text-meta">
             Prefilled from the last checkpoint — edit it if that is not the whole story.
           </p>
         )}
@@ -153,7 +153,7 @@ export const ResolutionDialog = ({
             </Button>
           </div>
         </div>
-        <p className="text-fg-subtle mt-2 text-[0.6875rem]">⌘↵ to save</p>
+        <p className="text-fg-subtle mt-2 text-meta">⌘↵ to save</p>
       </div>
     </div>,
     document.body,

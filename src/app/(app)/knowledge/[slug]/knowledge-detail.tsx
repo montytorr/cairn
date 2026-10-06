@@ -85,7 +85,7 @@ const ChipToggle = ({
           onClick={() => onToggle(o.key)}
           aria-pressed={active}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75rem] transition-colors',
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-meta transition-colors',
             active
               ? 'border-accent bg-accent-subtle text-accent'
               : 'border-border text-fg-muted hover:border-border-strong hover:bg-surface-hover',
@@ -96,7 +96,7 @@ const ChipToggle = ({
         </button>
       )
     })}
-    {options.length === 0 && <span className="text-fg-subtle text-[0.75rem]">None defined.</span>}
+    {options.length === 0 && <span className="text-fg-subtle text-meta">None defined.</span>}
   </div>
 )
 
@@ -224,7 +224,7 @@ export const KnowledgeDetail = ({
   return (
     <div className="mx-auto max-w-[45rem] px-4 py-6 sm:px-6">
       {current.superseded && (
-        <div className="surface-card text-fg-muted enter-rise mb-4 flex flex-wrap items-center gap-1.5 px-3 py-2 text-[0.78125rem]">
+        <div className="surface-card text-fg-muted enter-rise mb-4 flex flex-wrap items-center gap-1.5 px-3 py-2 text-ui">
           <span>This entry is superseded.</span>
           {current.supersededByRef ? (
             <Link
@@ -250,7 +250,7 @@ export const KnowledgeDetail = ({
       {error && !editing && (
         <p
           role="alert"
-          className="text-danger bg-danger-subtle mb-4 rounded-md px-3 py-2 text-[0.78125rem] whitespace-pre-line"
+          className="text-danger bg-danger-subtle mb-4 rounded-md px-3 py-2 text-ui whitespace-pre-line"
         >
           {error}
         </p>
@@ -262,7 +262,7 @@ export const KnowledgeDetail = ({
       {warnings.length > 0 && (
         <div
           role="status"
-          className="surface-card text-fg-muted enter-rise mb-4 flex items-start gap-2 px-3 py-2 text-[0.78125rem]"
+          className="surface-card text-fg-muted enter-rise mb-4 flex items-start gap-2 px-3 py-2 text-ui"
         >
           <Info size={13} className="mt-[0.1875rem] shrink-0" aria-hidden />
           <div className="min-w-0 flex-1">
@@ -303,7 +303,7 @@ export const KnowledgeDetail = ({
           {/* Everything said ABOUT the fact, in one card above it: its state
               and scope on the first line, where it came from on the second.
               The body below then reads uninterrupted. */}
-          <div className="surface-card mb-6 text-[0.75rem]">
+          <div className="surface-card mb-6 text-meta">
             <div className="text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
               {current.verified && (
                 <TintPill color="var(--status-in-review)" className="text-status-in-review">
@@ -364,7 +364,7 @@ export const KnowledgeDetail = ({
             {/* The slug is the name this fact has. It lived only in the URL,
                 while being the exact string an agent types to fetch it and the
                 one that goes inside [[...]] to reference it. */}
-            <div className="border-border/70 text-fg-subtle flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-3 py-2 text-[0.6875rem]">
+            <div className="border-border/70 text-fg-subtle flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-3 py-2 text-meta">
               <code className="bg-surface-raised text-fg-muted rounded px-1.5 py-0.5 font-mono">{slug}</code>
               {current.sourceTask && (
                 <span>
@@ -400,7 +400,7 @@ export const KnowledgeDetail = ({
 
           {revisions.length > 0 && (
             <details className="group/history border-border/70 mt-8 border-t pt-4">
-              <summary className="text-fg-muted hover:text-fg flex cursor-pointer list-none items-center gap-1.5 text-[0.75rem] transition-colors [&::-webkit-details-marker]:hidden">
+              <summary className="text-fg-muted hover:text-fg flex cursor-pointer list-none items-center gap-1.5 text-meta transition-colors [&::-webkit-details-marker]:hidden">
                 <ChevronRight
                   size={12}
                   aria-hidden
@@ -423,7 +423,7 @@ export const KnowledgeDetail = ({
                       aria-hidden
                       className="bg-fg-subtle absolute top-[0.25rem] left-0 h-1.5 w-2 rounded-full"
                     />
-                    <div className="text-fg-subtle flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem]">
+                    <div className="text-fg-subtle flex flex-wrap items-center gap-x-2 gap-y-1 text-meta">
                       <span className="text-fg-muted font-mono tabular-nums">v{r.revision}</span>
                       <span>
                         replaced{r.editedBy ? ` by ${r.editedBy}` : ''} ·{' '}
@@ -433,9 +433,9 @@ export const KnowledgeDetail = ({
                         · {r.change}
                       </span>
                     </div>
-                    {r.reason && <p className="text-fg-muted mt-1 text-[0.75rem]">{r.reason}</p>}
+                    {r.reason && <p className="text-fg-muted mt-1 text-meta">{r.reason}</p>}
                     <details className="mt-1">
-                      <summary className="text-fg hover:text-accent cursor-pointer text-[0.78125rem] transition-colors">
+                      <summary className="text-fg hover:text-accent cursor-pointer text-ui transition-colors">
                         {r.title}
                       </summary>
                       <div className="surface-card mt-2 px-3 py-2.5">
@@ -450,7 +450,7 @@ export const KnowledgeDetail = ({
 
           {!current.superseded && (
             <div className="border-border/70 mt-8 flex flex-wrap items-center gap-2 border-t pt-4">
-              <span className="text-fg-subtle text-[0.75rem]">Mark superseded by:</span>
+              <span className="text-fg-subtle text-meta">Mark superseded by:</span>
               {/* Searched, not listed. This was a select holding every current
                   entry, which is unusable at 348 and was silently capped at
                   300 — so a corrected fact could point at 300 of its possible
@@ -464,7 +464,7 @@ export const KnowledgeDetail = ({
                 }}
               />
               {supersedeTarget && (
-                <span className="text-fg enter-rise flex items-center gap-1 text-[0.75rem]">
+                <span className="text-fg enter-rise flex items-center gap-1 text-meta">
                   <span className="text-fg-subtle">→</span>
                   <span className="max-w-[16rem] truncate">{supersedeTitle || supersedeTarget}</span>
                   <button
@@ -539,14 +539,14 @@ export const KnowledgeDetail = ({
                 }
               />
               {suggestedEntities.length > 0 && (
-                <p className="text-fg-subtle mt-1.5 text-[0.6875rem]">
+                <p className="text-fg-subtle mt-1.5 text-meta">
                   Suggested, from the projects above: {suggestedEntities.join(', ')}
                 </p>
               )}
             </>
           </Field>
 
-          <label className="text-fg-muted flex items-center gap-2 text-[0.78125rem]">
+          <label className="text-fg-muted flex items-center gap-2 text-ui">
             <input
               type="checkbox"
               checked={draftVerified}
@@ -563,7 +563,7 @@ export const KnowledgeDetail = ({
           {error && (
             <p
               role="alert"
-              className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-[0.78125rem] whitespace-pre-line"
+              className="text-danger bg-danger-subtle rounded-md px-3 py-2 text-ui whitespace-pre-line"
             >
               {error}
             </p>

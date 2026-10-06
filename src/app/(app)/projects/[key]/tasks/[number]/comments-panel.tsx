@@ -64,7 +64,7 @@ export const CommentsPanel = ({
         <ul className="stagger mb-3 flex flex-col gap-2">
           {comments.map((c) => (
             <li key={c.id} className="surface-card px-3 py-2">
-              <div className="mb-1 flex items-center gap-2 text-[0.6875rem]">
+              <div className="mb-1 flex items-center gap-2 text-meta">
                 <Avatar name={c.actor_id} size={16} />
                 <span className={c.actor_type === 'agent' ? 'text-accent' : 'text-fg-muted'}>
                   {c.actor_id}
@@ -91,10 +91,10 @@ export const CommentsPanel = ({
           }}
           placeholder="Add a comment…"
           aria-label="Add a comment"
-          className="text-fg placeholder:text-fg-subtle block max-h-[40vh] min-h-[3.625rem] w-full resize-y bg-transparent px-3 py-2.5 text-[0.8125rem] leading-relaxed outline-none"
+          className="text-fg placeholder:text-fg-subtle block max-h-[40vh] min-h-[3.625rem] w-full resize-y bg-transparent px-3 py-2.5 text-ui leading-relaxed outline-none"
         />
         <div className="border-border/70 flex items-center gap-2 border-t px-2 py-1.5">
-          <span className="text-fg-subtle ml-auto hidden text-[0.6875rem] sm:block">
+          <span className="text-fg-subtle ml-auto hidden text-meta sm:block">
             <kbd className="kbd inline-flex">⌘</kbd>
             <kbd className="kbd ml-0.5 inline-flex">↵</kbd>
           </span>

@@ -80,25 +80,25 @@ export const ChangeKeyDialog = ({
       >
         <h2
           id="change-key-title"
-          className="border-border text-fg border-b px-4 py-3 text-[0.875rem] font-medium sm:px-5"
+          className="border-border text-fg border-b px-4 py-3 text-ui font-medium sm:px-5"
         >
           Change the key of {project.title}
         </h2>
         <div className="flex flex-col gap-3 px-4 py-3.5 sm:px-5">
-          <p className="text-fg-muted text-[0.8125rem] leading-relaxed">
+          <p className="text-fg-muted text-ui leading-relaxed">
             Every task here is referred to as{' '}
             <span className="text-fg font-mono">{next && !problem ? next : 'NEW'}-n</span> from now
             on. Old refs keep working: <span className="font-mono">{project.key}-42</span> in a
             commit message, a PR title or an agent&apos;s note still leads to its task, and the task
             says what it used to be called.
           </p>
-          <p className="text-fg-subtle text-[0.75rem] leading-relaxed">
+          <p className="text-fg-subtle text-meta leading-relaxed">
             {project.key} stays reserved for this project. No other project can ever take it, because
             its old refs would then lead to two tasks.
           </p>
 
           <label className="flex flex-col gap-1">
-            <span className="text-fg-subtle text-[0.6875rem] font-medium">New key</span>
+            <span className="text-fg-subtle text-meta font-medium">New key</span>
             <InlineInput
               autoFocus
               value={draft}
@@ -123,7 +123,7 @@ export const ChangeKeyDialog = ({
           <p
             id="change-key-hint"
             className={cn(
-              'text-[0.75rem]',
+              'text-meta',
               error || (draft && problem) ? 'text-danger' : 'text-fg-subtle',
             )}
           >
