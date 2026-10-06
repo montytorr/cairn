@@ -161,6 +161,42 @@ const unwrap = (text) => {
 }
 
 /**
+ * What was asked, out of OpenClaw's context block (CAIRN-355).
+ *
+ * OpenClaw sends a turn as one message: `OpenClaw runtime context for this
+ * turn:`, some 16 KB of workspace files and conversation so far, then
+ * `Current user request:` and the request itself. The context check below
+ * refused the whole message, so every OpenClaw session was recorded with no
+ * request, and one that touched no file was not recorded at all.
+ *
+ * The LAST marker, because the conversation it quotes can hold earlier turns
+ * with markers of their own. A trailing clock (`Current time: …`, `Reference
+ * UTC: …`) is OpenClaw's, not the person's.
+ */
+const OPENCLAW_CONTEXT = /^OpenClaw \w+ context for this turn/i
+const REQUEST_MARKER = '\nCurrent user request:'
+
+const openclawRequest = (text) => {
+  if (!OPENCLAW_CONTEXT.test(text)) return null
+  const at = text.lastIndexOf(REQUEST_MARKER)
+  if (at < 0) return null
+  const asked = text
+    .slice(at + REQUEST_MARKER.length)
+    .replace(/\n+Current time:[^\n]*(?:\nReference UTC:[^\n]*)?\s*$/i, '')
+    .trim()
+  return asked || null
+}
+
+/**
+ * The whole of a reply that did nothing: OpenClaw's heartbeat answers
+ * HEARTBEAT_OK every hour, a scheduled check with nothing to do answers
+ * NO_REPLY, a liveness probe gets OK. Now that a request is read out of the
+ * context block, these turns have one, and would be recorded hourly without
+ * this.
+ */
+const NOOP_REPLY = /^(?:HEARTBEAT_OK|NO_REPLY|OK)\.?$/i
+
+/**
  * Turns that are a person but not a request. Kept out of `request` only —
  * they still count as a person having been there.
  */
@@ -186,7 +222,11 @@ const isHumanTurn = (text) =>
   // instruction file being reloaded. None of it is a session anybody will ever
   // want to read, and each one crowded out the few that were.
   !/^OpenClaw \w+ context for this turn/i.test(text) &&
-  !/^Reply with exactly one word/i.test(text) &&
+  !/^Reply with exactly\b/i.test(text) &&
+  // OpenClaw's own nudges, now that its requests are read (CAIRN-355): the
+  // heartbeat's standing instruction, and a note that a reply went undelivered.
+  !/^Follow the heartbeat monitor/i.test(text) &&
+  !/^\[System\]/.test(text) &&
   !/^\[cron:[0-9a-f-]{8,}/i.test(text) &&
   !/^Conversation info:/i.test(text) &&
   !OPENCLAW_WRAPPER.test(text) &&
@@ -198,9 +238,18 @@ const isHumanTurn = (text) =>
   !text.startsWith('Caveat:') &&
   !SUMMARISER_PROMPT.test(text)
 
+/**
+ * A cron turn, whether it arrives bare or inside OpenClaw's context block,
+ * where the `[cron:…]` line is the request after the marker (CAIRN-355).
+ */
+const isScheduled = (raw) =>
+  SCHEDULED_PROMPT.test(raw) || SCHEDULED_PROMPT.test(openclawRequest(unwrap(raw)) ?? '')
+
 /** What a person typed in this turn, or null when it was machinery. */
 const humanText = (raw) => {
   const text = unwrap(raw)
+  const asked = openclawRequest(text)
+  if (asked) return isHumanTurn(asked) ? asked : null
   if (isHumanTurn(text)) return text
   return raw.includes('<command-name>') ? commandArgs(raw) : null
 }
@@ -247,7 +296,7 @@ const parseTranscript = async (path) => {
       if (row.isMeta) continue
       const raw = textOf(content).trim()
       if (!raw) continue
-      if (SCHEDULED_PROMPT.test(raw)) out.scheduled = true
+      if (isScheduled(raw)) out.scheduled = true
       const text = humanText(raw)
       // Before any person spoke, not merely first: a SessionStart hook's
       // output can land ahead of the prompt.
@@ -362,7 +411,7 @@ const parseCodexRollout = async (path) => {
       // `developer` is the skills and instructions preamble, not a person.
       const text = codexText(p.content).trim()
       if (p.role === 'user' && text) {
-        if (SCHEDULED_PROMPT.test(text)) out.scheduled = true
+        if (isScheduled(text)) out.scheduled = true
         const human = humanText(text)
         const summariser = SUMMARISER_PROMPT.test(unwrap(text))
         if (!spoke && summariser) out.summariser = true
@@ -1315,6 +1364,16 @@ const record = async (payload, opts = {}) => {
   // and no session anybody will ever want to read. Something a person asked
   // for, a file touched, or a task worked — one of those has to be true.
   if (t.prompts.length === 0 && t.files.size === 0 && t.refs.size === 0) return
+  // Every answer the no-op token, and nothing touched: a heartbeat or an idle
+  // scheduled check, however its request read (CAIRN-355).
+  if (
+    t.files.size === 0 &&
+    t.refs.size === 0 &&
+    t.assistantText.length > 0 &&
+    t.assistantText.every((reply) => NOOP_REPLY.test(reply.trim()))
+  ) {
+    return
+  }
 
   if (opts.ongoing && knownClosed(sessionId)) return { sessionId }
 
