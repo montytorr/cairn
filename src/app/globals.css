@@ -814,3 +814,16 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* iOS Safari zooms the page when a focused field's text is under 16px, and leaves it zoomed and
+   scrolling sideways. On touch screens, fields get at least 16px; desktop keeps the designed size.
+   !important because component classes and utilities set smaller sizes on these elements. Pinch-zoom
+   stays available: the fix is the font size, never maximum-scale in the viewport. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: max(16px, 1em) !important;
+  }
+}
