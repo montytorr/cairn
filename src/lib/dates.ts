@@ -66,6 +66,9 @@ const ISO_DATE = new Intl.DateTimeFormat('en-CA', {
 /** Today's calendar date in the display zone, as `2026-09-29`. */
 export const todayDate = (now: number = Date.now()) => ISO_DATE.format(new Date(now))
 
+/** `2026-09-29` for an instant, in the display zone — never `iso.slice(0, 10)`, which is the UTC day. */
+export const localDay = (iso: string) => ISO_DATE.format(new Date(iso))
+
 /**
  * The due-date row's label and tone. Pure and given "today" explicitly, for
  * the same reason `relativeTime` takes `now`: a component can gate the real

@@ -1,4 +1,5 @@
 import { admin } from '@/lib/db/client'
+import { localDay } from '@/lib/dates'
 
 /**
  * What a project used to be called.
@@ -232,7 +233,7 @@ export const issuedUnderFormerKey = (rename: Pick<KeyRename, 'at'>, createdAt: u
   typeof createdAt !== 'string' || Date.parse(rename.at) > Date.parse(createdAt)
 
 /** "2026-09-22" — a rename is a dated fact, and the time of day is noise. */
-export const renameDay = (at: string) => at.slice(0, 10)
+export const renameDay = (at: string) => localDay(at)
 
 /**
  * Several project keys at once, live or retired, keyed by the spelling asked

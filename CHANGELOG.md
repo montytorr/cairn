@@ -9,6 +9,15 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Times and days show in Paris, not UTC** (CAIRN-356). The activity page read its clock
+  from the UTC string (`at.slice(11, 16)`), so a 15:19 event showed as 13:19, and grouped
+  rows into days by the UTC date. The vitals dates, the project-rename notices, the release
+  date and the CLI's date columns (`know`, notes, entries, knowledge history, sessions, the
+  vitals auto-release line) had the same fault. They now format in the display zone, the way
+  the rest of the web app already did; the CLI is pinned to `Europe/Paris`.
+
 ## [0.20.0] — 2026-10-06
 
 ### Fixed
