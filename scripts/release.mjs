@@ -29,7 +29,8 @@ const die = (message) => {
 if (!version || version === '--help') die('usage: node scripts/release.mjs <version> [--confirm]')
 if (!/^\d+\.\d+\.\d+$/.test(version)) die(`not a semver version: ${version}`)
 
-const today = new Date().toISOString().slice(0, 10)
+// en-CA is YYYY-MM-DD; Paris, so a release cut just after midnight there is not dated the day before.
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date())
 
 // --- the two version strings -----------------------------------------------
 

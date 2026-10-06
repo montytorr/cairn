@@ -93,9 +93,9 @@ describe('know --history', () => {
     expect(seen.path).toBe('/api/v1/knowledge/a-fact/history')
     const rows = stdout.trim().split('\n').slice(2).map((line) => line.split('\t'))
     expect(rows).toEqual([
-      ['3 (live)', 'rescoped', 'claude · third', '2026-09-03 10:00', '', 'Third title'],
-      ['2', 'relearned', 'claude · second', '2026-09-02 10:00', 'was wrong', 'Second title'],
-      ['1', 'learned', 'codex · first', '2026-09-01 10:00', '', 'First title'],
+      ['3 (live)', 'rescoped', 'claude · third', '2026-09-03 12:00', '', 'Third title'],
+      ['2', 'relearned', 'claude · second', '2026-09-02 12:00', 'was wrong', 'Second title'],
+      ['1', 'learned', 'codex · first', '2026-09-01 12:00', '', 'First title'],
     ])
   })
 })

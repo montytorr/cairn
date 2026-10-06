@@ -1293,7 +1293,33 @@ const warnIfStale = (res) => {
  * are in it already as fields for anything that parses. Once per key per
  * process, because a batch touching forty old refs needs telling once.
  */
-const renameDay = (at) => (typeof at === 'string' ? at.slice(0, 10) : '?')
+// `en-CA` formats as YYYY-MM-DD. Pinned to Paris like the web UI, so a stamp
+// between 00:00 and 02:00 there is not reported as the previous (UTC) day.
+const LOCAL_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Paris',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+const localDay = (at) => LOCAL_DAY.format(new Date(at))
+
+const LOCAL_STAMP = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Paris',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+// `2026-10-06 15:19` in Paris; empty in, empty out, so a missing stamp stays blank.
+const localStamp = (at) => {
+  if (!at) return ''
+  const p = Object.fromEntries(LOCAL_STAMP.formatToParts(new Date(at)).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`
+}
+
+const renameDay = (at) => (typeof at === 'string' ? localDay(at) : '?')
 
 const renameLine = (requested, rename, ref) => {
   const by = rename.by ? ` by ${rename.by}` : ''
@@ -3724,7 +3750,7 @@ const commands = {
         d.map((n) => ({
           kind: n.kind,
           by: n.actor_id,
-          at: n.created_at.slice(0, 16).replace('T', ' '),
+          at: localStamp(n.created_at),
           note: truncate(n.note, 90),
         })),
       columns: ['kind', 'by', 'at', 'note'],
@@ -3781,7 +3807,7 @@ const commands = {
     emit(data, {
       rows: (d) =>
         d.map((e) => ({
-          when: e.created_at.slice(0, 16).replace('T', ' '),
+          when: localStamp(e.created_at),
           who: e.actor_id,
           event: e.event,
           detail: summariseEvent(e.data),
@@ -4268,8 +4294,8 @@ const commands = {
         rows: (d) =>
           d.results.map((u) => ({
             slug: u.slug,
-            'last recalled': u.lastRecalled ? u.lastRecalled.slice(0, 10) : 'never',
-            written: u.createdAt.slice(0, 10),
+            'last recalled': u.lastRecalled ? localDay(u.lastRecalled) : 'never',
+            written: localDay(u.createdAt),
             title: truncate(u.title, 60),
           })),
         columns: ['slug', 'last recalled', 'written', 'title'],
@@ -4298,7 +4324,7 @@ const commands = {
           version: `${h.version} (live)`,
           change: h.revisions[0]?.change ?? 'learned',
           by: h.revisions[0]?.edited_by ?? h.author ?? '',
-          at: (h.revisions[0]?.edited_at ?? h.createdAt ?? '').slice(0, 16).replace('T', ' '),
+          at: localStamp(h.revisions[0]?.edited_at ?? h.createdAt),
           reason: h.revisions[0]?.reason ?? '',
           title: h.title,
         },
@@ -4308,7 +4334,7 @@ const commands = {
             version: String(r.revision),
             change: older?.change ?? 'learned',
             by: older?.edited_by ?? (r.revision === 1 ? h.author ?? '' : ''),
-            at: (older?.edited_at ?? (r.revision === 1 ? h.createdAt : '') ?? '').slice(0, 16).replace('T', ' '),
+            at: localStamp(older?.edited_at ?? (r.revision === 1 ? h.createdAt : '')),
             reason: older?.reason ?? '',
             title: r.title,
           }
@@ -4714,7 +4740,7 @@ const commands = {
     const out = [`# ${r.ref} — ${r.title}`, '']
     out.push(r.decisions.length ? 'decisions' : 'decisions: none recorded on related tasks')
     for (const d of r.decisions) {
-      out.push(`  ${d.ref}  ${d.kind} · ${d.why.join(', ')} · ${d.by ?? '?'} · ${d.at.slice(0, 10)}  [${d.status}]`)
+      out.push(`  ${d.ref}  ${d.kind} · ${d.why.join(', ')} · ${d.by ?? '?'} · ${localDay(d.at)}  [${d.status}]`)
       out.push(`    ${d.text}`)
     }
     out.push('')
@@ -5455,7 +5481,7 @@ const commands = {
       const quiet = (m) => (m === null ? 'never active' : m >= 120 ? `${Math.round(m / 60)}h` : `${m}m`)
       const out = [
         `claims ${s.claims.quiet2h} of ${s.claims.held} quiet >2h, ${s.claims.quiet24h} >24h; ` +
-          `auto-released ${s.reaper.released7d} in 7d (last ${s.reaper.lastReleaseAt?.slice(0, 16) ?? 'never'})`,
+          `auto-released ${s.reaper.released7d} in 7d (last ${s.reaper.lastReleaseAt ? localStamp(s.reaper.lastReleaseAt) : 'never'})`,
       ]
       for (const c of s.claims.quietest.slice(0, 5)) {
         out.push(`  quiet ${quiet(c.quietMinutes)}: ${c.ref} ${truncate(c.title, 50)} (${c.claimedBy})`)
@@ -5599,7 +5625,7 @@ const commands = {
         // What came of it, not only what was asked. A list of requests is a
         // list of intentions; the reason to keep a session is the answer.
         rows: (d) => d.results.map((r) => ({
-          ended: (r.endedAt ?? '').slice(0, 16).replace('T', ' '),
+          ended: localStamp(r.endedAt),
           agent: r.agent ?? r.platform,
           files: r.files,
           tasks: (r.taskRefs ?? []).join(','),

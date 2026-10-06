@@ -16,6 +16,7 @@ import {
 import { MobileNavButton } from '@/components/mobile-nav-context'
 import { EmptyState } from '@/components/empty-state'
 import { cn } from '@/lib/utils'
+import { localDay } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
@@ -406,7 +407,7 @@ const VitalsPage = async ({
                     value={String(signals.reaper.released7d)}
                     hint={
                       signals.reaper.lastReleaseAt
-                        ? `(last ${signals.reaper.lastReleaseAt.slice(0, 10)})`
+                        ? `(last ${localDay(signals.reaper.lastReleaseAt)})`
                         : '(never)'
                     }
                   />
@@ -463,7 +464,7 @@ const VitalsPage = async ({
                               </span>
                             </td>
                             <td className="text-fg-muted tabular py-1.5 text-right">
-                              {r.lastSeenAt.slice(0, 10)}
+                              {localDay(r.lastSeenAt)}
                             </td>
                           </tr>
                         ))}

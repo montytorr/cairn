@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { dueDateDisplay, fullDateTime, relativeTime, shortDate, timeOfDay, todayDate } from './dates'
+import {
+  dueDateDisplay,
+  fullDateTime,
+  localDay,
+  relativeTime,
+  shortDate,
+  timeOfDay,
+  todayDate,
+} from './dates'
 
 /**
  * The bug these guard against: an unpinned `toLocaleDateString` formats in the
@@ -74,6 +82,17 @@ describe('date formatting', () => {
 
     it('resolves in the display zone, not the runtime zone', () => {
       expect(todayDate(Date.parse(nearMidnight))).toBe('2026-04-30')
+    })
+  })
+
+  describe('localDay', () => {
+    it('gives the display-zone day, not the UTC day a slice would', () => {
+      expect(nearMidnight.slice(0, 10)).toBe('2026-04-29')
+      expect(localDay(nearMidnight)).toBe('2026-04-30')
+    })
+
+    it('stays on the same day when the zones agree', () => {
+      expect(localDay('2026-09-10T12:00:00.000Z')).toBe('2026-09-10')
     })
   })
 

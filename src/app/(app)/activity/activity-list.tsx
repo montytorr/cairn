@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Avatar, ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { DISPLAY_TZ, localDay, timeOfDay } from '@/lib/dates'
 import type { ActivityRow } from '@/lib/api/activity-feed'
 import { groupActivity, type ActivityGroup } from '@/lib/activity-grouping'
 
@@ -115,7 +116,7 @@ const ROW =
 const Row = ({ row }: { row: ActivityGroup }) => {
   const { label, Icon, color } = KIND[row.kind]
   const href = hrefFor(row)
-  const time = row.at.slice(11, 16)
+  const time = timeOfDay(row.at)
 
   const body = (
     <div className="flex min-w-0 items-start gap-2.5 px-4 py-2">
@@ -192,7 +193,7 @@ export const ActivityList = ({ rows }: { rows: ActivityRow[] }) => {
   // one action, and splitting first would leave half of it in each day.
   const days = new Map<string, ActivityGroup[]>()
   for (const row of groupActivity(rows)) {
-    const day = row.at.slice(0, 10)
+    const day = localDay(row.at)
     days.set(day, [...(days.get(day) ?? []), row])
   }
 
@@ -208,7 +209,7 @@ export const ActivityList = ({ rows }: { rows: ActivityRow[] }) => {
               day: 'numeric',
               month: 'long',
               year: 'numeric',
-              timeZone: 'Europe/Paris',
+              timeZone: DISPLAY_TZ,
             })}
           </h2>
           <div className="stagger">
