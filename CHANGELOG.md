@@ -15,6 +15,13 @@ out under **Breaking** with what to do about it.
   scroll area also scrolled sideways, so on iOS the whole list could be dragged left, leaving
   a blank strip on the right while the header stayed put. Those areas now clip sideways
   overflow, and dragging the tab strip past its end no longer passes the gesture to the page.
+- **No italics in the interface.** The "No description." empty state, the "loose" and
+  "superseded" tags in the knowledge list, the scope pill on a knowledge entry and code
+  comments were set in italic; they now rely on colour alone, and an unscoped entry reads
+  "everywhere" on its page as it already did in the list. Italic stays only where it is
+  written emphasis, in task bodies, notes and knowledge, set in the platform's sans and mono,
+  which draw a true italic. A test keeps italic out of components and the stylesheet, and
+  keeps prose out of Inter Tight, which is downloaded upright only.
 
 ## [0.20.1] — 2026-10-06
 

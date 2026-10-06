@@ -123,7 +123,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
           )}
 
           {item.loose && (
-            <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem] italic">
+            <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem]">
               loose
             </span>
           )}
@@ -140,7 +140,7 @@ export const KnowledgeList = ({ items }: { items: KnowledgeListItem[] }) => (
                 superseded
               </Link>
             ) : (
-              <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem] italic">
+              <span className="text-fg-subtle pointer-events-none shrink-0 text-[0.6875rem]">
                 superseded
               </span>
             ))}
