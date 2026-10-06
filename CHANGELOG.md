@@ -9,6 +9,13 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The list no longer scrolls sideways on a phone** (CAIRN-357). Every page's vertical
+  scroll area also scrolled sideways, so on iOS the whole list could be dragged left, leaving
+  a blank strip on the right while the header stayed put. Those areas now clip sideways
+  overflow, and dragging the tab strip past its end no longer passes the gesture to the page.
+
 ## [0.20.1] — 2026-10-06
 
 ### Fixed

@@ -83,7 +83,7 @@ const KnowledgeDetailPage = async ({ params }: { params: Promise<{ slug: string 
         <span className="text-fg min-w-0 truncate text-[0.8125rem]">{row.title}</span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <KnowledgeDetail
           slug={slug}
           row={{

@@ -75,7 +75,7 @@ const Home = async ({ searchParams }: { searchParams: Promise<{ closed?: string;
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {/* Cross-project, so each row carries its project. Same component as
             the per-project list — one list implementation, not two. */}
         <ListView

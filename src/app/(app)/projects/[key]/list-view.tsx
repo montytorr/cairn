@@ -693,7 +693,7 @@ export const ListView = ({
           button does not fit in 390px, and cramming them ran the filter off
           the right edge. */}
       <div className="border-border flex flex-col gap-1.5 border-b px-3 py-2 sm:flex-row sm:items-center sm:gap-1">
-        <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-1 flex items-center gap-1 overflow-x-auto overscroll-x-contain px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {toolbarExtra}
           {toolbarExtra ? <span className="bg-border mx-1 h-[1rem] w-px shrink-0" aria-hidden /> : null}
           <div ref={tabTrack} className="group/tabs relative flex shrink-0 items-center gap-1">

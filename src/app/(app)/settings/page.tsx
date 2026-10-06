@@ -75,7 +75,7 @@ const SettingsPage = async () => {
         <span className="text-fg-subtle hidden truncate text-[0.8125rem] sm:block">{user.email}</span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {/* Centred at a form's measure, like vitals (e7e4f31). */}
         <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-8">
           <div className="flex flex-col gap-5">
