@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.20.2] — 2026-10-07
+
 ### Fixed
 
 - **Every form control is one control** (CROFT-34). Fields, selects, textareas, checkboxes,
@@ -1885,7 +1887,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.20.2...HEAD
+[0.20.2]: https://github.com/montytorr/cairn/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/montytorr/cairn/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/montytorr/cairn/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/montytorr/cairn/compare/v0.18.0...v0.19.0
