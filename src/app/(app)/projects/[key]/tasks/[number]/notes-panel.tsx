@@ -7,12 +7,12 @@ import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
-import { Button } from '@/components/ui/control'
+import { Button, Select, Textarea } from '@/components/ui/control'
 import { Spinner } from '@/components/spinner'
 import { EmptyState } from '@/components/empty-state'
 import type { Note } from '@/lib/data'
 import { useMutate } from '@/lib/api/use-mutate'
-import { COMPOSER, COUNT, LABEL } from './styles'
+import { COUNT, LABEL } from './styles'
 
 /**
  * Each kind's colour, as a token so the label and its stone share it. Dead
@@ -121,22 +121,22 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
         Work log
         <span className={COUNT}>{notes.length}</span>
         {allLong.length > 1 && (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => setExpanded(anyCollapsed ? new Set(allLong) : new Set())}
-            className="text-fg-subtle hover:text-fg hover:bg-surface-hover -mr-1.5 ml-auto rounded px-1.5 py-px text-meta font-normal tracking-normal normal-case transition-colors duration-[var(--dur-1)]"
+            className="ml-auto tracking-normal normal-case"
           >
             {anyCollapsed ? 'Expand all' : 'Collapse all'}
-          </button>
+          </Button>
         )}
       </h2>
 
-      {/* One bordered box with its own footer, rather than a textarea, a
-          select and a button sitting side by side in three different shapes.
-          The rim lives on the wrapper and lights on focus-within, so the
-          whole composer reads as a single control. */}
-      <div className={cn(COMPOSER, 'mb-4')}>
-        <textarea
+      {/* A field, with its controls on a row of their own beneath it: the same
+          textarea as everywhere else, and a compact select and button that
+          share one height. */}
+      <div className="mb-4 flex flex-col gap-2">
+        <Textarea
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -144,21 +144,23 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
           }}
           placeholder="What did you try, find, or decide? Dead ends count."
-          className="text-fg placeholder:text-fg-subtle block max-h-[40vh] min-h-[3.625rem] w-full resize-y bg-transparent px-3 py-2.5 text-ui leading-relaxed outline-none"
+          aria-label="Add a note"
+          className="max-h-[40vh] w-full"
         />
 
-        <div className="border-border/70 flex items-center gap-2 border-t px-2 py-1.5">
+        <div className="flex items-center gap-2">
           <div className="relative flex items-center">
             <span
               aria-hidden
-              className="pointer-events-none absolute left-1.5 h-[0.375rem] w-[0.5rem] rounded-full transition-colors duration-[var(--dur-1)]"
+              className="pointer-events-none absolute left-3 h-[0.375rem] w-[0.5rem] rounded-full transition-colors duration-[var(--dur-1)]"
               style={{ backgroundColor: toneOf(kind) }}
             />
-            <select
+            <Select
+              size="sm"
               value={kind}
               onChange={(e) => setKind(e.target.value as NoteKind)}
               aria-label="Note kind"
-              className="hover:bg-surface-raised focus-visible:border-accent cursor-pointer appearance-none rounded-md border border-transparent bg-transparent py-1 pr-5 pl-4 text-meta outline-none transition-colors"
+              className="pl-7"
               style={{ color: toneOf(kind) }}
             >
               {NOTE_KINDS.map((k) => (
@@ -166,16 +168,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
                   {k}
                 </option>
               ))}
-            </select>
-            <svg
-              className="text-fg-subtle pointer-events-none absolute top-1/2 right-1 -translate-y-1/2"
-              width="9"
-              height="9"
-              viewBox="0 0 9 9"
-              aria-hidden
-            >
-              <path d="M1.5 3.2L4.5 6 7.5 3.2" stroke="currentColor" strokeWidth="1.3" fill="none" />
-            </svg>
+            </Select>
           </div>
 
           <span className="text-fg-subtle ml-auto hidden text-meta sm:block">
@@ -183,13 +176,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
             <kbd className="kbd ml-0.5 inline-flex">↵</kbd>
           </span>
 
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={submit}
-            disabled={!text.trim() || pending}
-            className="w-auto px-3"
-          >
+          <Button size="sm" variant="primary" onClick={submit} disabled={!text.trim() || pending}>
             {pending ? <Spinner /> : 'Add note'}
           </Button>
         </div>

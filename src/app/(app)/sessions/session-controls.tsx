@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Select } from '@/components/ui/control'
+import { Button, Select } from '@/components/ui/control'
 import { Spinner } from '@/components/spinner'
 
 /**
@@ -34,14 +34,15 @@ export const SessionControls = ({
   }
 
   return (
-    <div className="border-border/70 flex h-[2.625rem] shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+    <div className="border-border/70 flex min-h-[2.625rem] shrink-0 flex-wrap items-center gap-2 border-b px-3 py-1.5 sm:px-4">
       {pending && <Spinner size={13} />}
       <Select
         size="sm"
         value={project}
         onChange={(e) => push({ project: e.target.value })}
         aria-label="Filter by project"
-        className="w-auto"
+        className="max-w-[14rem]"
+        emptyLabel={projects.length === 0 ? 'No projects yet' : undefined}
       >
         <option value="">All projects</option>
         {projects.map((p) => (
@@ -56,7 +57,8 @@ export const SessionControls = ({
         value={agent}
         onChange={(e) => push({ agent: e.target.value })}
         aria-label="Filter by agent"
-        className="w-auto"
+        className="max-w-[14rem]"
+        emptyLabel={agents.length === 0 ? 'No agents yet' : undefined}
       >
         <option value="">All agents</option>
         {agents.map((a) => (
@@ -67,13 +69,9 @@ export const SessionControls = ({
       </Select>
 
       {(project || agent) && (
-        <button
-          type="button"
-          onClick={() => router.replace('/sessions')}
-          className="text-fg-subtle hover:text-fg text-meta transition-colors"
-        >
+        <Button size="sm" variant="quiet" onClick={() => router.replace('/sessions')}>
           Clear
-        </button>
+        </Button>
       )}
     </div>
   )

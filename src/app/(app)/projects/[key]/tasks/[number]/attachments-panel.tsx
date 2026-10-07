@@ -8,6 +8,7 @@ import { mutate } from '@/lib/api/mutate'
 import { useMutate } from '@/lib/api/use-mutate'
 import { useNotify } from '@/components/toast'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/control'
 import { COUNT, LABEL } from './styles'
 
 const formatBytes = (bytes: number) => {
@@ -110,15 +111,15 @@ export const AttachmentsPanel = ({
             e.target.value = ''
           }}
         />
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="quiet"
           onClick={() => input.current?.click()}
           disabled={pending}
-          className="text-fg-muted hover:text-fg inline-flex items-center gap-1.5 text-meta transition-colors duration-[var(--dur-1)] disabled:opacity-50"
         >
-          <Paperclip size={13} />
+          <Paperclip size={14} aria-hidden />
           {pending ? 'Uploading…' : 'Drop a file, or choose one'}
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -151,22 +152,26 @@ export const AttachmentsPanel = ({
                   <span className="truncate">{a.actor_id}</span>
                 </span>
               </span>
-              <button
-                type="button"
+              <Button
+                icon
+                size="sm"
+                variant="ghost"
                 onClick={() => void openSigned(a.id, a.original_name, 'application/octet-stream')}
-                className="text-fg-subtle hover:text-fg hover:bg-surface-hover grid size-[1.375rem] shrink-0 place-items-center rounded opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] group-hover:opacity-100 focus-visible:opacity-100"
                 aria-label={`Download ${a.original_name}`}
+                className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <Download size={13} />
-              </button>
-              <button
-                type="button"
+                <Download size={14} aria-hidden />
+              </Button>
+              <Button
+                icon
+                size="sm"
+                variant="danger"
                 onClick={() => void remove(a.id)}
-                className="text-fg-subtle hover:text-danger hover:bg-danger-subtle grid size-[1.375rem] shrink-0 place-items-center rounded opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] group-hover:opacity-100 focus-visible:opacity-100"
                 aria-label={`Delete ${a.original_name}`}
+                className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <Trash2 size={13} />
-              </button>
+                <Trash2 size={14} aria-hidden />
+              </Button>
             </li>
           ))}
         </ul>

@@ -50,6 +50,7 @@ export const ActivityControls = ({
         value={kinds}
         onChange={(e) => push({ kinds: e.target.value })}
         aria-label="Filter by kind"
+        className="max-w-[14rem]"
       >
         <option value="">Everything</option>
         {KINDS.map((k) => (
@@ -64,6 +65,8 @@ export const ActivityControls = ({
         value={project}
         onChange={(e) => push({ project: e.target.value })}
         aria-label="Filter by project"
+        className="max-w-[14rem]"
+        emptyLabel={projects.length === 0 ? 'No projects yet' : undefined}
       >
         <option value="">All projects</option>
         {projects.map((p) => (
@@ -79,6 +82,7 @@ export const ActivityControls = ({
           value={actor}
           onChange={(e) => push({ actor: e.target.value })}
           aria-label="Filter by who"
+          className="max-w-[14rem]"
         >
           <option value="">Anyone</option>
           {actors.map((a) => (

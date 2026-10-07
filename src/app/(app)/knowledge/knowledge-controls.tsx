@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search as SearchIcon } from 'lucide-react'
 import { Spinner } from '@/components/spinner'
-import { Input, Select } from '@/components/ui/control'
+import { Button, Checkbox, Input, Select } from '@/components/ui/control'
 
 /**
  * Filters live in the URL, same as /search — a filtered view is then a link
@@ -71,7 +71,7 @@ export const KnowledgeControls = ({
           onKeyDown={(e) => e.key === 'Escape' && setDraft('')}
           placeholder="Search knowledge…"
           aria-label="Search knowledge"
-          className="min-w-0 flex-1 pl-7 text-ui"
+          className="min-w-0 flex-1 pl-8"
         />
       </div>
 
@@ -81,7 +81,8 @@ export const KnowledgeControls = ({
           value={project}
           onChange={(e) => push({ project: e.target.value })}
           aria-label="Filter by project"
-          className="w-auto"
+          className="max-w-[14rem]"
+          emptyLabel={projects.length === 0 ? 'No projects yet' : undefined}
         >
           <option value="">All projects</option>
           {projects.map((p) => (
@@ -102,9 +103,10 @@ export const KnowledgeControls = ({
           disabled={searching}
           title={searching ? 'Clear the search to filter by entity' : undefined}
           aria-label="Filter by entity"
-          className="w-auto"
+          className="max-w-[14rem]"
+          emptyLabel={entities.length === 0 ? 'No entities yet' : undefined}
         >
-          <option value="">All entities</option>
+          <option value="">{searching ? 'Not used while searching' : 'All entities'}</option>
           {entities.map((e) => (
             <option key={e.key} value={e.key}>
               {e.title}
@@ -117,7 +119,8 @@ export const KnowledgeControls = ({
           value={label}
           onChange={(e) => push({ label: e.target.value })}
           aria-label="Filter by label"
-          className="w-auto"
+          className="max-w-[14rem]"
+          emptyLabel={labels.length === 0 ? 'No labels yet' : undefined}
         >
           <option value="">Any label</option>
           {labels.map((l) => (
@@ -127,28 +130,25 @@ export const KnowledgeControls = ({
           ))}
         </Select>
 
-        <label className="text-fg-muted flex shrink-0 items-center gap-1.5 text-meta whitespace-nowrap">
-          <input
-            type="checkbox"
-            checked={superseded}
-            onChange={(e) => push({ superseded: e.target.checked })}
-            className="accent-accent size-[0.8125rem]"
-          />
-          Show superseded
-        </label>
+        <Checkbox
+          checked={superseded}
+          onChange={(e) => push({ superseded: e.target.checked })}
+          label="Show superseded"
+          labelClassName="shrink-0 whitespace-nowrap"
+        />
 
         {(q || project || entity || label || superseded) && (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="quiet"
             onClick={() => {
               setDraft('')
               committed.current = ''
               router.replace('/knowledge')
             }}
-            className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-meta transition-colors"
           >
             Clear
-          </button>
+          </Button>
         )}
       </div>
     </div>

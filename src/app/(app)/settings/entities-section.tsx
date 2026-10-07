@@ -198,22 +198,15 @@ export const EntitiesSection = ({
                     {allProjects.map((p) => {
                       const member = entity.projects.includes(p.key)
                       return (
-                        <button
+                        <Button
                           key={p.key}
-                          type="button"
+                          size="sm"
                           disabled={busy}
                           onClick={() => toggleProject(entity, p.key)}
                           aria-pressed={member}
-                          className={cn(
-                            'rounded-md border px-1.5 py-0.5 font-mono text-meta',
-                            'transition-[color,background-color,border-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
-                            member
-                              ? 'border-accent/60 bg-accent-subtle text-accent'
-                              : 'border-border text-fg-subtle hover:border-border-strong hover:text-fg',
-                          )}
                         >
                           {p.key}
-                        </button>
+                        </Button>
                       )
                     })}
                   </div>

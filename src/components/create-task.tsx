@@ -2,7 +2,7 @@
 
 import { Spinner } from '@/components/spinner'
 
-import { Button, InlineInput } from '@/components/ui/control'
+import { Button, Chip, InlineInput, Input, Textarea } from '@/components/ui/control'
 
 import { useRouter } from 'next/navigation'
 import { mutate } from '@/lib/api/mutate'
@@ -13,7 +13,6 @@ import {
   TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES,
   type TaskPriority, type TaskStatus, type TaskType,
 } from '@/schemas/task'
-import { cn } from '@/lib/utils'
 
 /**
  * Task creation.
@@ -141,13 +140,6 @@ export const CreateTask = ({
 
   if (!open) return null
 
-  // The select inside each chip is invisible, so the chip shows its focus.
-  const chip =
-    'relative flex h-[1.625rem] items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-meta ' +
-    'text-fg-muted transition-[color,background-color,border-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)] ' +
-    'hover:border-border-strong hover:bg-surface-hover hover:text-fg ' +
-    'focus-within:border-accent focus-within:text-fg focus-within:ring-2 focus-within:ring-ring/50'
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]"
@@ -163,27 +155,28 @@ export const CreateTask = ({
           <span className="text-fg-subtle text-meta">New task in {project || '—'}</span>
         </div>
 
-        <input
-          ref={titleRef}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
-              e.preventDefault()
-              void submit()
-            }
-          }}
-          placeholder="Task title"
-          className="placeholder:text-fg-subtle text-fg w-full bg-transparent px-4 pt-3 pb-1 text-[1rem] outline-none"
-        />
-
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Description — markdown, optional"
-          rows={3}
-          className="placeholder:text-fg-subtle w-full resize-none bg-transparent px-4 pb-3 text-ui leading-relaxed outline-none"
-        />
+        <div className="flex flex-col gap-2.5 px-4 pt-3.5 pb-3">
+          <Input
+            ref={titleRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
+                e.preventDefault()
+                void submit()
+              }
+            }}
+            placeholder="Task title"
+            aria-label="Task title"
+          />
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Description — markdown, optional"
+            aria-label="Description"
+            rows={3}
+          />
+        </div>
 
         {visibleSimilar.length > 0 && (
           <div className="border-border bg-surface-raised/50 enter-rise mx-4 mb-3 rounded-md border px-2.5 py-2">
@@ -200,74 +193,76 @@ export const CreateTask = ({
           </div>
         )}
 
-        <div className="border-border bg-surface-raised/40 flex flex-wrap items-center gap-1.5 border-t px-4 py-2.5">
-          <label className={chip}>
+        <div className="border-border bg-surface-raised/40 flex flex-wrap items-center gap-2 border-t px-4 py-3">
+          <Chip>
             <ProjectIcon size={12} projectKey={project || undefined} />
-            {project}
+            {project || 'No projects yet'}
             <select
               value={project}
               onChange={(e) => setProject(e.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              disabled={projects.length === 0}
+              className="select-overlay"
               aria-label="Project"
             >
+              {projects.length === 0 ? <option value="">No projects yet</option> : null}
               {projects.map((p) => (
                 <option key={p.key} value={p.key}>{p.title}</option>
               ))}
             </select>
-          </label>
+          </Chip>
 
-          <label className={cn(chip, 'pr-1')}>
+          <Chip>
             <TypePill type={type} />
             <select
               value={type}
               onChange={(e) => setType(e.target.value as TaskType)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Type"
             >
               {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
-          </label>
+          </Chip>
 
-          <label className={chip}>
+          <Chip>
             <StatusIcon status={status} size={13} />
             {status}
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Status"
             >
               {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-          </label>
+          </Chip>
 
-          <label className={chip}>
+          <Chip>
             <PriorityIcon priority={priority} size={13} />
             {priority}
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as TaskPriority)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Priority"
             >
               {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
-          </label>
+          </Chip>
 
-          <label className={chip}>
+          <Chip>
             <Avatar name={people.find((p) => p.id === assignee)?.name ?? 'You'} size={14} />
             {people.find((p) => p.id === assignee)?.name ?? 'You'}
             <select
               value={assignee}
               onChange={(e) => setAssignee(e.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Assignee"
             >
               {people.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-          </label>
+          </Chip>
 
           <label className="relative">
             <InlineInput
@@ -276,7 +271,7 @@ export const CreateTask = ({
               list="cairn-known-labels"
               placeholder="labels…"
               aria-label="Labels, comma separated"
-              className="w-[8.125rem] text-meta"
+              className="w-[8.125rem]"
             />
             <datalist id="cairn-known-labels">
               {known.map((l) => (
@@ -290,7 +285,7 @@ export const CreateTask = ({
             size="sm"
             onClick={submit}
             disabled={!title.trim() || !project || pending}
-            className="ml-auto h-[1.625rem] px-3 text-meta"
+            className="ml-auto"
           >
             {pending ? (
               <span className="inline-flex items-center gap-1.5">

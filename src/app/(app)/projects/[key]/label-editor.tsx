@@ -90,8 +90,8 @@ export const LabelEditor = ({
           'text-fg-subtle hover:text-fg rounded transition-[opacity,color,background-color] duration-[var(--dur-2)] ease-[var(--ease-out)]',
           'hover:bg-[color-mix(in_oklab,var(--fg)_7%,transparent)]',
           labels.length === 0 && alwaysVisible
-            ? 'inline-flex h-[1.125rem] items-center gap-1 px-1 text-meta'
-            : 'grid size-[1.125rem] place-items-center',
+            ? 'inline-flex h-6 items-center gap-1 px-1.5 text-meta'
+            : 'grid size-6 place-items-center',
           !alwaysVisible && labels.length === 0 && !open
             ? 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
             : 'opacity-100',
@@ -112,8 +112,9 @@ export const LabelEditor = ({
         <div
           // In the sidebar the trigger sits at the start of a narrow column that
           // clips sideways, so the menu opens rightwards into it, not out of it.
+          role="menu"
           className={cn(
-            'border-border bg-surface pop absolute top-[1.5rem] z-50 overflow-hidden rounded-lg border py-1 raised',
+            'border-border bg-surface pop absolute top-full z-50 mt-1 overflow-hidden rounded-lg border py-1 raised',
             alwaysVisible ? 'left-0 w-[10.5rem]' : 'right-0 w-[11.875rem]',
           )}
           style={{ '--origin': alwaysVisible ? 'top left' : 'top right' } as React.CSSProperties}
@@ -124,15 +125,17 @@ export const LabelEditor = ({
               <button
                 key={l}
                 type="button"
+                role="menuitemcheckbox"
+                aria-checked={labels.includes(l)}
                 onClick={() => toggle(l)}
-                className="hover:bg-surface-hover flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)]"
+                className="hover:bg-surface-hover flex min-h-8 w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)]"
               >
                 <input
                   type="checkbox"
                   readOnly
                   tabIndex={-1}
                   checked={labels.includes(l)}
-                  className="accent-accent size-[0.75rem]"
+                  className="pointer-events-none"
                 />
                 <span className="text-fg-muted min-w-0 truncate text-meta">{l}</span>
               </button>
@@ -140,7 +143,7 @@ export const LabelEditor = ({
             {options.length === 0 && <EmptyState compact title="No labels yet." className="py-3" />}
           </div>
 
-          <div className="border-border mt-1 border-t px-1.5 pt-1.5">
+          <div className="border-border mt-1 border-t p-1.5">
             <InlineInput
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -149,7 +152,6 @@ export const LabelEditor = ({
               }}
               placeholder="New label…"
               aria-label="New label"
-              className="h-[1.625rem] text-meta"
             />
           </div>
         </div>

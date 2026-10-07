@@ -2,6 +2,7 @@
 
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { Button } from '@/components/ui/control'
 
 /**
  * No `mounted` flag and no effect.
@@ -16,10 +17,12 @@ export const ThemeToggle = () => {
   const { setTheme, resolvedTheme } = useTheme()
 
   return (
-    <button
-      type="button"
+    <Button
+      icon
+      size="sm"
+      variant="ghost"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-      className="group text-fg-subtle hover:text-fg hover:bg-surface-raised grid size-6 place-items-center rounded transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
+      className="group"
       aria-label="Toggle theme"
       title="Toggle theme"
     >
@@ -33,6 +36,6 @@ export const ThemeToggle = () => {
         className="block transition-transform duration-[var(--dur-3)] ease-[var(--ease-out)] group-hover:-rotate-12 dark:hidden"
         aria-hidden
       />
-    </button>
+    </Button>
   )
 }

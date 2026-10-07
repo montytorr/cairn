@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/control'
 import { useMutate } from '@/lib/api/use-mutate'
 import { ROW, ROW_LABEL } from './styles'
 
@@ -75,21 +76,19 @@ export const AlsoIn = ({
             ))
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="ghost"
           onClick={() => setOpen((v) => !v)}
-          className={cn(
-            'text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-meta transition-[opacity,color,background-color] duration-[var(--dur-1)]',
-            open ? 'opacity-100' : 'opacity-0 group-hover/dep:opacity-100 focus-visible:opacity-100',
-          )}
+          className={open ? undefined : 'md:opacity-0 md:group-hover/dep:opacity-100 focus-visible:opacity-100'}
         >
           {open ? 'Done' : 'Edit'}
-        </button>
+        </Button>
       </div>
 
       {open && (
         <div
-          className="pop mt-1 flex flex-wrap gap-1"
+          className="pop mt-1 flex flex-wrap gap-1.5"
           style={{ '--origin': 'top left' } as React.CSSProperties}
         >
           {projects
@@ -97,24 +96,17 @@ export const AlsoIn = ({
             .map((p) => {
               const on = current.includes(p.key)
               return (
-                <button
+                <Button
                   key={p.key}
-                  type="button"
+                  size="sm"
                   disabled={busy}
                   onClick={() => void toggle(p.key)}
                   aria-pressed={on}
                   title={p.title}
-                  className={cn(
-                    'rounded-full border px-1.5 py-0.5 font-mono text-meta transition-[color,border-color,background-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
-                    // On is marked flatly: the accent at the rim and in the
-                    // text, over the accent's subtle fill.
-                    on
-                      ? 'border-accent/70 text-accent bg-accent-subtle'
-                      : 'border-border text-fg-subtle hover:text-fg hover:border-border-strong hover:bg-surface-hover',
-                  )}
+                  className="rounded-full"
                 >
                   {p.key}
-                </button>
+                </Button>
               )
             })}
         </div>

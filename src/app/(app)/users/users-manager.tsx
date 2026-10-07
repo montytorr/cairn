@@ -230,7 +230,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                 </div>
                 {user.active && (
                   <div className="mt-3">
-                    <Button size="sm" type="submit" disabled={busy === `user:${user.id}`}>Save changes</Button>
+                    <Button type="submit" disabled={busy === `user:${user.id}`}>Save changes</Button>
                   </div>
                 )}
               </form>
@@ -312,7 +312,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                         event.currentTarget.reset()
                       }}>
                         <Field label="New password"><Input name="password" type="password" minLength={12} required autoComplete="new-password" className="w-64" /></Field>
-                        <Button size="sm" type="submit" disabled={busy === `password:${user.id}`}>Reset password</Button>
+                        <Button type="submit" disabled={busy === `password:${user.id}`}>Reset password</Button>
                       </form>
 
                       <div className="mt-5">
@@ -327,10 +327,10 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                                 <li><EmptyState compact title="No agent keys." /></li>
                               )}
                               {(keys[user.id] ?? []).map((key) => (
-                                <li key={key.id} className="row-hover flex min-h-[2.25rem] flex-wrap items-center gap-2 px-2.5 py-1.5 text-meta">
+                                <li key={key.id} className="row-hover flex min-h-[2.75rem] flex-wrap items-center gap-2 px-2.5 py-1.5 text-meta">
                                   <span className={key.revoked ? 'line-through text-fg-subtle' : 'text-fg'}>{key.agentName}</span>
                                   <code className="text-fg-subtle">{key.keyPrefix}…</code>
-                                  {!key.revoked && <Button type="button" size="sm" variant="danger" className="ml-auto h-6" onClick={() => revokeKey(user.id, key)}>Revoke</Button>}
+                                  {!key.revoked && <Button type="button" size="sm" variant="danger" className="ml-auto" onClick={() => revokeKey(user.id, key)}>Revoke</Button>}
                                 </li>
                               ))}
                             </ul>
@@ -350,7 +350,7 @@ export const UsersManager = ({ users, currentUserId }: { users: AdminUser[]; cur
                             <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void createKey(user.id, event.currentTarget) }}>
                               <Field label="Agent name"><Input name="agentName" required pattern="[a-z][a-z0-9-]{1,40}" placeholder="claude-code" className="w-40" /></Field>
                               <Field label="Key label"><Input name="name" required placeholder="Workstation key" className="w-44" /></Field>
-                              <Button size="sm" type="submit" disabled={busy === `keys:${user.id}`}>Create key</Button>
+                              <Button type="submit" disabled={busy === `keys:${user.id}`}>Create key</Button>
                             </form>
                           </>
                         )}

@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/control'
 import { projectColor } from '@/components/icons'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
 import type { GraphNode, KnowledgeGraph } from '@/lib/api/knowledge-graph'
@@ -747,31 +748,36 @@ export const GraphFlat = ({ graph, focused, setFocused, spotlight }: Props) => {
           themselves are deliberately not tab stops. */}
       <div className="border-border bg-surface raised absolute right-2 bottom-2 flex items-center gap-0.5 rounded-full border p-0.5">
         {zoom !== 1 || pan.x !== 0 || pan.y !== 0 ? (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={reset}
-            className="text-fg-subtle hover:bg-surface-raised hover:text-fg enter-pop h-7 rounded-full px-2.5 text-meta transition-colors duration-[var(--dur-1)]"
+            className="enter-pop rounded-full"
             style={{ '--origin': 'right' } as React.CSSProperties}
           >
             Reset view
-          </button>
+          </Button>
         ) : null}
-        <button
-          type="button"
+        <Button
+          icon
+          size="sm"
+          variant="ghost"
           aria-label="Zoom out"
           onClick={() => zoomAt(0.8)}
-          className="text-fg-subtle hover:bg-surface-raised hover:text-fg h-7 w-7 rounded-full text-[0.9rem] leading-none transition-colors duration-[var(--dur-1)]"
+          className="rounded-full"
         >
           −
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          icon
+          size="sm"
+          variant="ghost"
           aria-label="Zoom in"
           onClick={() => zoomAt(1.25)}
-          className="text-fg-subtle hover:bg-surface-raised hover:text-fg h-7 w-7 rounded-full text-[0.9rem] leading-none transition-colors duration-[var(--dur-1)]"
+          className="rounded-full"
         >
           +
-        </button>
+        </Button>
       </div>
     </>
   )

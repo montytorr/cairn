@@ -1,6 +1,7 @@
 'use client'
 
-import { InlineInput, Select } from '@/components/ui/control'
+import { X } from 'lucide-react'
+import { Button, InlineInput, Select } from '@/components/ui/control'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -100,19 +101,15 @@ export const ChildrenPanel = ({
             />
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setAdding((a) => !a)}
-          className="text-fg-subtle hover:text-fg hover:bg-surface-hover -mr-1.5 ml-auto rounded px-1.5 py-px text-meta transition-colors duration-[var(--dur-1)]"
-        >
+        <Button size="sm" variant="quiet" onClick={() => setAdding((a) => !a)} className="ml-auto">
           {adding ? 'Cancel' : 'Add sub-task'}
-        </button>
+        </Button>
       </div>
 
       {items.length > 0 && (
         <ul className="surface-card divide-border/70 divide-y overflow-hidden">
           {items.map((c) => (
-            <li key={c.id} className="group row-hover flex h-[2rem] items-center gap-2 px-2.5">
+            <li key={c.id} className="group row-hover flex min-h-[2.5rem] items-center gap-2 px-2.5">
               <PriorityIcon priority={c.priority} />
               <StatusIcon status={c.status} size={13} />
               <Link
@@ -125,18 +122,18 @@ export const ChildrenPanel = ({
               <code className="text-fg-subtle tabular shrink-0 text-meta">
                 {c.project_key}-{c.number}
               </code>
-              <button
-                type="button"
+              <Button
+                icon
+                size="sm"
+                variant="ghost"
                 disabled={busy}
                 onClick={() => void detach(c)}
                 title="Lift it back to the top level"
                 aria-label={`Detach ${c.project_key}-${c.number}`}
-                className="text-fg-subtle hover:text-fg shrink-0 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+                className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                  <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                </svg>
-              </button>
+                <X size={14} aria-hidden />
+              </Button>
             </li>
           ))}
         </ul>

@@ -12,7 +12,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Box, Map as MapIcon } from 'lucide-react'
-import { Select } from '@/components/ui/control'
+import { Button, Select } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 import { GraphFlat } from './graph-flat'
 import { spotlightOptions, type Spotlight } from '@/lib/graph-spotlight'
@@ -48,10 +48,9 @@ type Props = { graph: KnowledgeGraph }
  */
 const CHROME = 'border-border bg-surface raised border'
 
-const SEGMENT =
-  'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-meta transition-[color,background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]'
-const SEGMENT_ON = 'bg-surface-raised text-fg ring-1 ring-border-strong'
-const SEGMENT_OFF = 'text-fg-subtle hover:text-fg'
+// A segment is a compact button in a pill: the shape is the pill's, the size
+// and type are the product's.
+const SEGMENT = 'rounded-full'
 
 
 type Mode = 'scene' | 'flat'
@@ -409,11 +408,11 @@ export const GraphView = ({ graph: incoming }: Props) => {
           same question without moving anything, which is also more honest —
           you see how scattered a project's knowledge really is rather than a
           clump the layout invented. */}
-      <div className="raised absolute top-2 left-1/2 flex -translate-x-1/2 rounded-md">
+      <div className="raised absolute top-[0.625rem] left-1/2 flex -translate-x-1/2 rounded-md">
         <Select
           size="sm"
           aria-label="Light up one project or entity"
-          className="w-auto max-w-[14rem]"
+          className="max-w-[14rem]"
           value={spotlight ? `${spotlight.kind}:${spotlight.key}` : ''}
           onChange={(e) => {
             const v = e.target.value
@@ -457,26 +456,28 @@ export const GraphView = ({ graph: incoming }: Props) => {
             aria-label="How to draw the map"
             className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
           >
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="ghost"
               aria-pressed={mode === 'scene'}
               onClick={() => choose('scene')}
               title="Spatial — drag to orbit"
-              className={cn(SEGMENT, mode === 'scene' ? SEGMENT_ON : SEGMENT_OFF)}
+              className={SEGMENT}
             >
-              <Box size={12} aria-hidden />
+              <Box size={13} aria-hidden />
               Spatial
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               aria-pressed={mode === 'flat'}
               onClick={() => choose('flat')}
               title="Flat — every entry visible at once"
-              className={cn(SEGMENT, mode === 'flat' ? SEGMENT_ON : SEGMENT_OFF)}
+              className={SEGMENT}
             >
-              <MapIcon size={12} aria-hidden />
+              <MapIcon size={13} aria-hidden />
               Flat
-            </button>
+            </Button>
           </div>
           {/* Only where it changes something: the glows are the scene's, and
               with one entity there is nothing to choose between. */}
@@ -487,16 +488,17 @@ export const GraphView = ({ graph: incoming }: Props) => {
               className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
             >
               {(['project', 'entity'] as const).map((g) => (
-                <button
+                <Button
                   key={g}
-                  type="button"
+                  size="sm"
+                  variant="ghost"
                   aria-pressed={grouping === g}
                   onClick={() => chooseGrouping(g)}
                   title={g === 'project' ? 'A glow around each project' : 'A glow around each entity'}
-                  className={cn(SEGMENT, grouping === g ? SEGMENT_ON : SEGMENT_OFF)}
+                  className={SEGMENT}
                 >
                   {g === 'project' ? 'Projects' : 'Entities'}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}

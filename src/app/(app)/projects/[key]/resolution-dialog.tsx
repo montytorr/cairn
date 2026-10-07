@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { RESOLUTION_KINDS, type ResolutionKind, type TaskStatus } from '@/schemas/task'
-import { Button, Select, Textarea, InlineInput } from '@/components/ui/control'
+import { Button, Select, Textarea, Input } from '@/components/ui/control'
 import { resolutionSuggestion } from '@/lib/checkpoint-origin'
 
 /**
@@ -110,9 +110,8 @@ export const ResolutionDialog = ({
           </p>
         )}
 
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Select
-            size="sm"
             value={kind}
             onChange={(e) => setKind(e.target.value as ResolutionKind)}
             className="w-40"
@@ -126,7 +125,7 @@ export const ResolutionDialog = ({
           </Select>
 
           {needsOriginal && (
-            <InlineInput
+            <Input
               value={duplicateOf}
               onChange={(e) => setDuplicateOf(e.target.value)}
               onKeyDown={(e) => {
@@ -139,15 +138,13 @@ export const ResolutionDialog = ({
           )}
 
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="ghost" onClick={onCancel} className="w-auto px-3">
+            <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
             <Button
-              size="sm"
               variant="primary"
               onClick={submit}
               disabled={!value.trim() || pending || !originalOk}
-              className="w-auto px-3"
             >
               {pending ? 'Saving…' : status === 'cancelled' ? 'Cancel task' : 'Close task'}
             </Button>

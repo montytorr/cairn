@@ -129,21 +129,21 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
         shouldFilter={!searchable}
         loop
       >
-        <div className="border-border flex items-center gap-2.5 border-b px-4">
-          <SearchIcon size={15} className="text-fg-subtle shrink-0" />
+        <div className="border-border relative flex items-center border-b p-2.5">
+          <SearchIcon size={15} className="text-fg-subtle pointer-events-none absolute left-5 z-10 shrink-0" />
           <Command.Input
             autoFocus
             value={query}
             onValueChange={setQuery}
             placeholder="Search tasks, or jump to a project…"
-            className="placeholder:text-fg-subtle text-fg h-[3.25rem] w-full bg-transparent text-[0.9375rem] outline-none"
+            className="w-full pr-14 pl-9"
           />
           {loading ? (
-            <span className="text-fg-subtle shrink-0">
+            <span className="text-fg-subtle pointer-events-none absolute right-5 shrink-0">
               <Spinner size={12} />
             </span>
           ) : (
-            <kbd className="kbd inline-flex shrink-0">esc</kbd>
+            <kbd className="kbd pointer-events-none absolute right-5 inline-flex shrink-0">esc</kbd>
           )}
         </div>
 

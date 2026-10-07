@@ -10,14 +10,12 @@ import { groupKeysByHost, type HostGroup } from '@/lib/agent-key-hosts'
 import { mutate } from '@/lib/api/mutate'
 import type { OwnKey } from '@/lib/api/own-keys'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/control'
 import { SettingsCard } from '../settings-card'
 
 type Pending = { kind: 'key' | 'host'; id: string } | null
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
-
-const textButton =
-  'text-meta transition-colors duration-[var(--dur-1)] disabled:pointer-events-none disabled:opacity-40'
 
 /**
  * No `<form>` anywhere (CAIRN-171): every action is a `type="button"` that
@@ -90,13 +88,9 @@ export const OwnKeysManager = ({ keys }: { keys: OwnKey[] }) => {
         ) : null}
         {refreshing ? <Spinner size={12} /> : null}
         {revokedCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowRevoked((shown) => !shown)}
-            className={cn(textButton, 'text-fg-subtle hover:text-fg ml-auto')}
-          >
+          <Button size="sm" variant="quiet" onClick={() => setShowRevoked((shown) => !shown)} className="ml-auto">
             {showRevoked ? 'Hide revoked' : `Show ${plural(revokedCount, 'revoked key')}`}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -144,8 +138,9 @@ const HostCard = ({
       confirmingHost ? (
         <span className="flex items-center gap-3">
           <span className="text-fg-muted text-meta">Revoke {plural(active.length, 'key')}?</span>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="dangerSolid"
             disabled={anyBusy}
             onClick={() =>
               void onRevoke(
@@ -154,29 +149,18 @@ const HostCard = ({
                 `every key on ${group.host}`,
               )
             }
-            className={cn(textButton, 'text-danger inline-flex items-center gap-1.5 font-medium')}
           >
             {revokingHost ? <Spinner size={11} /> : null}
             {revokingHost ? 'Revoking…' : 'Revoke all'}
-          </button>
-          <button
-            type="button"
-            disabled={revokingHost}
-            onClick={() => onConfirm(null)}
-            className={cn(textButton, 'text-fg-subtle hover:text-fg')}
-          >
+          </Button>
+          <Button size="sm" variant="quiet" disabled={revokingHost} onClick={() => onConfirm(null)}>
             Cancel
-          </button>
+          </Button>
         </span>
       ) : (
-        <button
-          type="button"
-          disabled={anyBusy}
-          onClick={() => onConfirm(hostTarget)}
-          className={cn(textButton, 'text-fg-subtle hover:text-danger')}
-        >
+        <Button size="sm" variant="quiet" disabled={anyBusy} onClick={() => onConfirm(hostTarget)}>
           Revoke all on this host
-        </button>
+        </Button>
       )
     ) : undefined
 
@@ -274,38 +258,31 @@ const KeyRow = ({
       ) : confirming ? (
         <span className="flex shrink-0 items-center gap-3">
           <span className="text-fg-muted text-meta">Revoke?</span>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="dangerSolid"
             disabled={anyBusy}
             onClick={() => void onRevoke(target, [ownKey.id], `the ${ownKey.agentName} key`)}
-            className={cn(textButton, 'text-danger inline-flex items-center gap-1.5 font-medium')}
           >
             {revoking ? <Spinner size={11} /> : null}
             {revoking ? 'Revoking…' : 'Revoke'}
-          </button>
-          <button
-            type="button"
-            disabled={revoking}
-            onClick={() => onConfirm(null)}
-            className={cn(textButton, 'text-fg-subtle hover:text-fg')}
-          >
+          </Button>
+          <Button size="sm" variant="quiet" disabled={revoking} onClick={() => onConfirm(null)}>
             Cancel
-          </button>
+          </Button>
         </span>
       ) : (
         <span className="flex shrink-0 items-center gap-3">
           <span className="text-fg-subtle text-meta">Active</span>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="quiet"
             disabled={anyBusy}
             onClick={() => onConfirm(target)}
-            className={cn(
-              textButton,
-              'text-fg-subtle hover:text-danger transition-[color,opacity] md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100',
-            )}
+            className="md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
           >
             Revoke
-          </button>
+          </Button>
         </span>
       )}
     </li>

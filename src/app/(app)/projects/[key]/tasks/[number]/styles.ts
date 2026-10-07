@@ -9,11 +9,6 @@ export const LABEL = 'text-fg-subtle text-label font-medium tracking-[0.08em] up
 export const COUNT =
   'bg-surface-raised text-fg-muted rounded-full px-1.5 py-px text-meta leading-[1.4] font-medium tracking-normal normal-case tabular-nums'
 
-/** A composer's shell: a flat card whose rim turns to the accent, doubled to 2px, while typing. */
-export const COMPOSER =
-  'surface-card overflow-hidden transition-[border-color,box-shadow] duration-[var(--dur-2)] ease-[var(--ease-out)] ' +
-  'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent'
-
 /**
  * The properties column: a solid pane beside the canvas, set off by one
  * hairline down its inner edge.
@@ -31,5 +26,5 @@ export const PANE = 'bg-bg-elevated border-border border-l'
  */
 export const ROW_LABEL = 'text-fg-subtle w-[4.75rem] shrink-0 text-meta'
 
-/** A property row's shell: flat hover fill, ~28px tall, never wider than the pane. */
-export const ROW = 'row-hover -mx-1.5 flex min-w-0 min-h-[1.75rem] items-center gap-2 rounded-md px-1.5'
+/** A property row's shell: flat hover fill, the compact control height, never wider than the pane. */
+export const ROW = 'row-hover -mx-1.5 flex min-w-0 min-h-[var(--control-h-sm)] items-center gap-2 rounded-md px-1.5'

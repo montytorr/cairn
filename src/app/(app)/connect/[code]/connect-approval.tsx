@@ -192,31 +192,24 @@ const PendingCard = ({
             const checked = selected.includes(runtime)
             const privileged = view.privileged.includes(runtime)
             return (
-              <button
+              <label
                 key={runtime}
-                type="button"
-                role="checkbox"
-                aria-checked={checked}
-                onClick={() => toggle(runtime)}
-                disabled={expired || busy !== null || locked(runtime)}
                 title={locked(runtime) ? 'Only an administrator can approve this key.' : undefined}
-                className="border-border hover:bg-surface-raised flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="hover:bg-surface-raised has-[:disabled]:bg-surface-raised flex min-h-[var(--control-h-sm)] items-center gap-2 rounded-md border border-[var(--control-border)] px-2.5 py-1 transition-colors duration-[var(--dur-1)] has-[:disabled]:cursor-not-allowed"
               >
-                <span
-                  aria-hidden
-                  className={`grid size-[0.75rem] shrink-0 place-items-center rounded-[3px] border ${
-                    checked ? 'border-accent bg-accent' : 'border-border-strong'
-                  }`}
-                >
-                  {checked ? <Check size={9} className="text-white" strokeWidth={3} /> : null}
-                </span>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(runtime)}
+                  disabled={expired || busy !== null || locked(runtime)}
+                />
                 <span className="text-fg text-ui">{runtime}</span>
                 {privileged ? (
-                  <span className="text-fg-subtle ml-auto text-meta">
+                  <span className="text-fg-muted ml-auto text-meta">
                     {view.isAdmin ? 'acts on everyone’s claims' : 'administrators only'}
                   </span>
                 ) : null}
-              </button>
+              </label>
             )
           })}
         </div>

@@ -126,7 +126,6 @@ export const LoginForm = () => {
                 disabled={busy}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-9"
               />
             </label>
 
@@ -140,14 +139,14 @@ export const LoginForm = () => {
                   disabled={busy}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-9 pr-9"
+                  className="w-full pr-11"
                 />
                 <button
                   type="button"
                   onClick={() => setReveal((shown) => !shown)}
                   aria-label={reveal ? 'Hide password' : 'Show password'}
                   aria-pressed={reveal}
-                  className="text-fg-subtle hover:text-fg absolute inset-y-0 right-0 grid w-9 place-items-center transition-colors"
+                  className="text-fg-subtle hover:text-fg absolute inset-y-0 right-0 grid w-[var(--control-h)] place-items-center transition-colors"
                 >
                   {reveal ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
                 </button>
@@ -161,7 +160,7 @@ export const LoginForm = () => {
               </p>
             ) : null}
 
-            <Button type="submit" variant="primary" disabled={busy} className="mt-2 h-9">
+            <Button type="submit" variant="primary" disabled={busy} className="mt-2">
               {busy ? (
                 <span className="inline-flex items-center gap-2">
                   <Spinner />

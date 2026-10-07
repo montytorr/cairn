@@ -31,7 +31,7 @@ export const ConnectCodeForm = () => {
         placeholder="XXXX-XXXX"
         autoFocus
         maxLength={9}
-        className="mt-4 text-center font-mono tracking-[0.2em]"
+        className="mt-4 text-center tracking-[0.2em] tabular-nums"
       />
       <Button type="submit" variant="primary" disabled={!valid} className="mt-3 w-full">
         Continue
