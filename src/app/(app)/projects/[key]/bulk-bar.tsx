@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusIcon, PriorityIcon } from '@/components/icons'
+import { Button } from '@/components/ui/control'
 import { ResolutionDialog } from './resolution-dialog'
 import { mutate } from '@/lib/api/mutate'
 import {
@@ -84,21 +85,20 @@ const Action = <T extends string>({
 
   return (
     <div ref={wrap} className="relative">
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant="ghost"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`h-[1.625rem] rounded-md px-2.5 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease)] ${
-          open ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'
-        }`}
+        className={open ? 'bg-surface-hover text-fg' : undefined}
       >
         {label}
-      </button>
+      </Button>
       {open && (
         <div
           role="menu"
-          className="border-border bg-surface pop absolute bottom-[2rem] left-0 z-50 w-[10.5rem] overflow-hidden rounded-lg border py-1 raised"
+          className="border-border bg-surface pop absolute bottom-[2.25rem] left-0 z-50 w-[10.5rem] overflow-hidden rounded-lg border py-1 raised"
           // It opens upwards, so it grows from the corner nearest its button.
           style={{ '--origin': 'bottom left' } as React.CSSProperties}
         >
@@ -111,7 +111,7 @@ const Action = <T extends string>({
                 setOpen(false)
                 onPick(o)
               }}
-              className="text-fg-muted hover:bg-surface-hover hover:text-fg flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-ui transition-colors duration-[var(--dur-1)]"
+              className="text-fg-muted hover:bg-surface-hover hover:text-fg flex min-h-8 w-full items-center gap-2 px-2.5 py-1.5 text-left text-ui transition-colors duration-[var(--dur-1)]"
             >
               {icon(o)}
               {labels?.[o] ?? o}
@@ -189,13 +189,9 @@ export const BulkBar = ({
           {error && <span className="text-danger px-2 text-meta">{error}</span>}
 
           <span className="bg-border mx-1 h-[1rem] w-px" aria-hidden />
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-fg-subtle hover:text-fg h-[1.625rem] rounded-md px-2 text-meta transition-colors duration-[var(--dur-1)] ease-[var(--ease)]"
-          >
+          <Button size="sm" variant="ghost" onClick={onClear}>
             Clear
-          </button>
+          </Button>
 
           {/* How far a run has got, as a line along the bar's foot. */}
           {progress !== null && (

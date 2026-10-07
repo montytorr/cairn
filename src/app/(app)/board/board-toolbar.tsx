@@ -76,7 +76,7 @@ export const BoardToolbar = ({
         size="sm"
         value={filters.groupBy}
         onChange={(e) => onChange({ ...filters, groupBy: e.target.value as GroupBy })}
-        className="w-[8.125rem]"
+        className="w-[9.5rem]"
         aria-label="Group columns by"
       >
         {GROUP_BY_VALUES.map((g) => (
@@ -90,7 +90,7 @@ export const BoardToolbar = ({
         size="sm"
         value={filters.swimlane}
         onChange={(e) => onChange({ ...filters, swimlane: e.target.value as Swimlane })}
-        className="w-[8.125rem]"
+        className="w-[9.5rem]"
         aria-label="Swimlanes"
       >
         {SWIMLANE_VALUES.filter((s) => s === 'none' || s !== filters.groupBy).map((s) => (

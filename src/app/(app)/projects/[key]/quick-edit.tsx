@@ -32,7 +32,7 @@ export const QuickSelect = <T extends string>({
 }) => (
   <span
     className={cn(
-      'relative z-10 -mx-1 inline-flex shrink-0 items-center rounded px-1',
+      'relative z-10 -mx-1 inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded px-1',
       'transition-[background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease)]',
       // A wash of the foreground rather than the hover fill: it has to show
       // on a row that is itself already hovered.
@@ -49,7 +49,7 @@ export const QuickSelect = <T extends string>({
       onClick={(e) => e.stopPropagation()}
       aria-label={title}
       title={title}
-      className="absolute inset-0 cursor-pointer opacity-0"
+      className="select-overlay"
     >
       {options.map((o) => (
         <option key={o} value={o}>

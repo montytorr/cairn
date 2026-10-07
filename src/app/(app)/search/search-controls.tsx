@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 import { Spinner } from '@/components/spinner'
 import { Search as SearchIcon, X } from 'lucide-react'
-import { Input, Select } from '@/components/ui/control'
+import { Button, Input, Select } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -33,7 +33,7 @@ const Filter = ({
     value={value}
     onChange={(e) => onChange(e.target.value)}
     aria-label={placeholder}
-    className={cn('w-auto', value ? 'text-fg' : 'text-fg-subtle')}
+    className={cn('max-w-[14rem]', value ? 'text-fg' : 'text-fg-subtle')}
   >
     <option value="">{placeholder}</option>
     {options.map((o) => (
@@ -124,7 +124,7 @@ export const SearchControls = ({
       {/* The one field on the page that matters, so it is drawn as a field:
           a well whose rim turns to the accent on focus, rather than bare text on the
           bar that only a blinking caret distinguished from a label. */}
-      <div className="relative flex min-w-0 flex-1 items-center">
+      <div className="relative flex min-w-0 flex-1 items-center sm:min-w-[16rem]">
         <span
           className={cn(
             'pointer-events-none absolute left-2.5 z-10 grid size-[0.875rem] place-items-center transition-colors duration-[var(--dur-1)]',
@@ -135,6 +135,7 @@ export const SearchControls = ({
         </span>
         <Input
           ref={inputRef}
+          size="sm"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -142,17 +143,19 @@ export const SearchControls = ({
           }}
           placeholder="Has this already been done or debugged?"
           aria-label="Search tasks"
-          className="min-w-0 flex-1 pr-8 pl-8 sm:pr-2.5"
+          className="min-w-0 flex-1 pr-10 pl-8 sm:pr-2.5"
         />
         {draft && (
-          <button
-            type="button"
+          <Button
+            icon
+            size="sm"
+            variant="ghost"
             onClick={() => setDraft('')}
             aria-label="Clear the search"
-            className="text-fg-subtle hover:text-fg absolute right-2 z-10 shrink-0 sm:hidden"
+            className="absolute right-0 z-10 sm:hidden"
           >
-            <X size={13} aria-hidden />
-          </button>
+            <X size={14} aria-hidden />
+          </Button>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -190,17 +193,17 @@ export const SearchControls = ({
         </>
       )}
       {!cleared && (
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="quiet"
           onClick={() => {
             setDraft('')
             committed.current = ''
             router.replace('/search')
           }}
-          className="text-fg-subtle hover:text-fg shrink-0 whitespace-nowrap text-meta transition-colors"
         >
           Clear
-        </button>
+        </Button>
       )}
       </div>
     </div>

@@ -7,7 +7,7 @@ import { editorExtensions, richEditLoss } from '@/lib/editor/markdown'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { mutate } from '@/lib/api/mutate'
-import { Button } from '@/components/ui/control'
+import { Button, Textarea } from '@/components/ui/control'
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
@@ -119,8 +119,8 @@ export const MarkdownEditor = ({
         ) : (
           <p className="text-fg-subtle text-ui">No description.</p>
         )}
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => {
             // Seed from the current prop at the moment editing starts.
             setValue(initial)
@@ -128,12 +128,12 @@ export const MarkdownEditor = ({
             setSourceReason(richEditLoss(initial))
             setEditing(true)
           }}
-          className="text-fg-subtle hover:text-fg border-border hover:border-border-strong bg-surface-raised absolute -top-1 right-0 rounded-md border px-2 py-0.5 text-meta opacity-0 transition-[opacity,color,border-color] duration-[var(--dur-1)] ease-[var(--ease-out)] group-hover:opacity-100 focus-visible:opacity-100"
+          className="mt-2 md:absolute md:-top-1 md:right-0 md:mt-0 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
         >
           Edit
-        </button>
+        </Button>
         {state === 'saved' && (
-          <span className="enter-rise text-status-done absolute -top-1 right-14 text-meta">saved</span>
+          <span className="enter-rise text-status-done absolute -top-1 right-16 text-meta">saved</span>
         )}
       </div>
     )
@@ -141,29 +141,24 @@ export const MarkdownEditor = ({
 
   return (
     <div>
-      <div
-        className={cn(
-          'surface-card p-3 transition-[border-color,box-shadow] duration-[var(--dur-2)] ease-[var(--ease-out)]',
-          'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent',
-          state === 'error' && 'border-danger focus-within:border-danger focus-within:ring-danger',
-        )}
-      >
-        {sourceReason ? (
-          <textarea
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value)
-              setState('dirty')
-            }}
-            autoFocus
-            spellCheck
-            aria-label="Description, as markdown"
-            className="text-fg block min-h-32 w-full resize-y bg-transparent font-mono text-ui leading-relaxed outline-none [field-sizing:content]"
-          />
-        ) : (
+      {sourceReason ? (
+        <Textarea
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value)
+            setState('dirty')
+          }}
+          autoFocus
+          spellCheck
+          aria-label="Description, as markdown"
+          aria-invalid={state === 'error'}
+          className="min-h-32 w-full [field-sizing:content]"
+        />
+      ) : (
+        <div className="field-shell" data-invalid={state === 'error' ? '' : undefined}>
           <EditorContent editor={editor} />
-        )}
-      </div>
+        </div>
+      )}
       {sourceReason && (
         <p className="text-fg-subtle mt-1.5 text-meta">Editing as markdown. {sourceReason}</p>
       )}
@@ -173,7 +168,6 @@ export const MarkdownEditor = ({
           variant="primary"
           onClick={() => void save()}
           disabled={state === 'saving'}
-          className="px-3"
         >
           {state === 'saving' ? 'Saving…' : 'Save'}
         </Button>
@@ -184,7 +178,6 @@ export const MarkdownEditor = ({
             setEditing(false)
             setState('idle')
           }}
-          className="px-3 font-normal"
         >
           Cancel
         </Button>

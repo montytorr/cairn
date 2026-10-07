@@ -1,6 +1,6 @@
 'use client'
 
-import { InlineInput } from '@/components/ui/control'
+import { Button, Input, InlineInput } from '@/components/ui/control'
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -74,7 +74,7 @@ const DeleteDialog = ({
         <label className="text-fg-subtle mt-4 block text-meta font-medium">
           Type {projectKey} to confirm
         </label>
-        <InlineInput
+        <Input
           autoFocus
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
@@ -82,26 +82,17 @@ const DeleteDialog = ({
             if (e.key === 'Enter') void submit()
             if (e.key === 'Escape') onClose()
           }}
-          className="focus:border-danger focus:ring-danger/25 mt-1.5 h-[1.875rem] text-ui"
+          className="focus:border-danger mt-1.5"
           aria-label={`Type ${projectKey} to confirm deletion`}
         />
         {error && <p className="text-danger mt-2 text-meta">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-fg-muted hover:text-fg hover:bg-surface-hover h-[1.75rem] rounded-md px-3 text-ui transition-colors duration-[var(--dur-1)] ease-[var(--ease)]"
-          >
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!armed || busy}
-            onClick={() => void submit()}
-            className="bg-danger h-[1.75rem] rounded-md px-3 text-ui font-medium text-white transition-[opacity,filter] duration-[var(--dur-1)] ease-[var(--ease)] hover:brightness-110 disabled:opacity-40"
-          >
+          </Button>
+          <Button variant="dangerSolid" disabled={!armed || busy} onClick={() => void submit()}>
             {busy ? 'Deleting…' : 'Delete project'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -191,27 +182,27 @@ export const ProjectMenu = ({
           }
         }}
         aria-label="Project name"
-        className="w-[13.75rem] text-ui"
+        className="w-[13.75rem]"
       />
     )
   }
 
   return (
     <div ref={wrap} className="relative">
-      <button
-        type="button"
+      <Button
+        icon
+        size="sm"
+        variant="ghost"
         onClick={() => setOpen((o) => !o)}
         aria-label="Project actions"
         aria-expanded={open}
-        className={`grid size-[1.5rem] place-items-center rounded-md transition-colors duration-[var(--dur-1)] ease-[var(--ease)] ${
-          open ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:text-fg hover:bg-surface-hover'
-        }`}
+        className={open ? 'bg-surface-hover text-fg' : undefined}
       >
-        <MoreHorizontal size={15} aria-hidden />
-      </button>
+        <MoreHorizontal size={16} aria-hidden />
+      </Button>
       {open && (
         <div
-          className="border-border bg-surface pop absolute right-0 top-[1.75rem] z-40 w-[11.25rem] overflow-hidden rounded-lg border py-1 raised"
+          className="border-border bg-surface pop absolute right-0 top-full z-40 mt-1 w-[11.25rem] overflow-hidden rounded-lg border py-1 raised"
           style={{ '--origin': 'top right' } as React.CSSProperties}
         >
           <button

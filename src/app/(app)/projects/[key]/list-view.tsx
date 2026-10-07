@@ -29,6 +29,7 @@ import { ResolutionDialog } from './resolution-dialog'
 import { applySelection } from '@/lib/selection'
 import { QuickSelect, useQuickPatch } from './quick-edit'
 import { LabelEditor } from './label-editor'
+import { Input } from '@/components/ui/control'
 
 /** A group is a status, or the synthetic bucket the Recent tab renders into. */
 type GroupKey = TaskStatus | 'recent'
@@ -676,7 +677,7 @@ export const ListView = ({
       data-pill={t}
       onClick={() => setTab(t)}
       className={cn(
-        'relative shrink-0 rounded-md px-2.5 py-1 text-meta whitespace-nowrap',
+        'relative inline-flex h-[var(--control-h-sm)] shrink-0 items-center rounded-md px-3 text-ui whitespace-nowrap',
         'transition-colors duration-[var(--dur-2)] ease-[var(--ease-out)]',
         tab === t
           ? 'bg-surface-raised text-fg group-data-[measured]/tabs:bg-transparent'
@@ -713,13 +714,14 @@ export const ListView = ({
             overflow container is clipped (src/lib/overflow-guard.test.ts). */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <AssigneeFilter filter={assignees} tasks={tasks} />
-          <input
+          <Input
             ref={filterRef}
+            size="sm"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter…"
             aria-label="Filter tasks"
-            className="placeholder:text-fg-subtle border-border focus:border-accent min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 text-meta outline-none transition-colors sm:border-transparent sm:px-1 sm:py-0"
+            className="min-w-0 flex-1"
           />
           <span className="text-fg-subtle tabular shrink-0 text-meta">{filtered.length}</span>
           <NewTaskButton />

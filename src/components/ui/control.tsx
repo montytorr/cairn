@@ -1,159 +1,151 @@
 'use client'
 
-import { ChevronDown } from 'lucide-react'
 import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
  * Form controls.
  *
- * Native selects cannot be styled beyond a point — the browser draws the
- * chevron and the control's metrics itself, which is why an unstyled `select`
- * looks foreign next to everything around it. `appearance-none` removes the
- * native chrome so the sizing, border and focus ring match the inputs, and the
- * chevron is drawn as an overlay. The dropdown list itself is still the OS
- * widget; that is the trade for keeping keyboard behaviour and accessibility
- * for free, and it is the right trade here.
+ * The look lives in globals.css: the base layer styles the bare elements
+ * (input, select, textarea, file, checkbox, radio) and `.btn` / `.chip` style
+ * the rest. So a plain <select> someone forgot to wrap already matches, and
+ * these components only add what CSS cannot know: which size, which variant,
+ * a label around a checkbox.
+ *
+ * There are two sizes and no others. `md` is the standard 42px, for forms.
+ * `sm` is the compact 36px, for toolbars and popovers. A height written as an
+ * h-* class on a control is the bug this exists to stop.
  */
 
-// Flat: focus turns the rim to the accent and doubles it to 2px, no halo.
-const base =
-  'w-full rounded-md border border-border bg-surface text-fg ' +
-  'transition-[color,background-color,border-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease)] ' +
-  'placeholder:text-fg-subtle ' +
-  'hover:border-border-strong hover:bg-surface-raised ' +
-  'focus:border-accent focus:bg-surface focus:outline-none focus:shadow-[0_0_0_1px_var(--accent)] ' +
-  'disabled:cursor-not-allowed disabled:opacity-50'
-
-const sizes = {
-  sm: 'h-7 px-2 text-meta',
-  md: 'h-8 px-2.5 text-ui',
-} as const
-
-type Size = keyof typeof sizes
+export type ControlSize = 'sm' | 'md'
 
 // `size` is a native numeric attribute on input and select, so it has to be
 // omitted before being redefined as a variant name.
-type WithSize<T> = Omit<T, 'size'> & { size?: Size }
+type WithSize<T> = Omit<T, 'size'> & { size?: ControlSize }
+
+const sizeAttr = (size: ControlSize) => (size === 'sm' ? 'sm' : undefined)
 
 export const Input = forwardRef<HTMLInputElement, WithSize<React.ComponentProps<'input'>>>(
-  ({ className, size = 'md', ...props }, ref) => (
-    <input ref={ref} className={cn(base, sizes[size], className)} {...props} />
-  ),
+  ({ size = 'md', ...props }, ref) => <input ref={ref} data-size={sizeAttr(size)} {...props} />,
 )
 Input.displayName = 'Input'
 
-export const Textarea = forwardRef<HTMLTextAreaElement, React.ComponentProps<'textarea'>>(
-  ({ className, ...props }, ref) => (
-    <textarea
-      ref={ref}
-      className={cn(base, 'resize-y px-2.5 py-2 text-ui leading-relaxed', className)}
-      {...props}
-    />
-  ),
+export const Textarea = forwardRef<HTMLTextAreaElement, WithSize<React.ComponentProps<'textarea'>>>(
+  ({ size = 'md', ...props }, ref) => <textarea ref={ref} data-size={sizeAttr(size)} {...props} />,
 )
 Textarea.displayName = 'Textarea'
 
 /**
- * The wrapper sizes to the select, and never shrinks below it.
+ * A native select. The chevron, right padding, ellipsis and option colours
+ * are the base layer's, so there is no wrapper to size or to misplace a
+ * chevron against.
  *
- * It carried `w-full`, so a select given an explicit width — w-36, w-40,
- * w-[130px]; every caller passes one — sat at its stated width inside a
- * full-width box, and the absolutely positioned chevron rendered against the
- * far edge of the row instead of against the control.
- *
- * `shrink-0` is the other half of the same problem: inside a flex row that
- * scrolls horizontally, a select with no minimum was squeezed narrower than its
- * own label, so "All projects" wrapped to two lines inside a 26px-tall control
- * and the second line was clipped. The row scrolls precisely so controls do not
- * have to shrink.
+ * A select that can have nothing to offer should say so in its one option and
+ * be disabled, rather than render as an empty box: see `emptyLabel`.
  */
-export const Select = forwardRef<HTMLSelectElement, WithSize<React.ComponentProps<'select'>>>(({ className, size = 'md', children, ...props }, ref) => (
-  <div className="relative inline-flex shrink-0 items-center">
-    <select
-      ref={ref}
-      className={cn(
-        base,
-        sizes[size],
-        // The WebKit prefix lives in a base rule in globals.css: written as a
-        // class, Tailwind reads the leading dash as a negative utility and
-        // emits nothing, so WebKit kept drawing its own arrow beside ours.
-        'cursor-pointer appearance-none pr-7',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </select>
-    <ChevronDown
-      size={13}
-      aria-hidden
-      className="text-fg-subtle pointer-events-none absolute right-2"
-    />
-  </div>
+export const Select = forwardRef<
+  HTMLSelectElement,
+  WithSize<React.ComponentProps<'select'>> & { emptyLabel?: string }
+>(({ size = 'md', emptyLabel, children, disabled, ...props }, ref) => (
+  <select ref={ref} data-size={sizeAttr(size)} disabled={disabled || Boolean(emptyLabel)} {...props}>
+    {emptyLabel ? <option value="">{emptyLabel}</option> : children}
+  </select>
 ))
 Select.displayName = 'Select'
 
-const buttonVariants = {
+/** A checkbox with its label. The label is what makes the hit area 24px or more. */
+export const Checkbox = forwardRef<
+  HTMLInputElement,
+  Omit<React.ComponentProps<'input'>, 'type' | 'size'> & { label: React.ReactNode; labelClassName?: string }
+>(({ label, labelClassName, ...props }, ref) => (
+  <label className={cn('inline-flex min-h-6 items-center gap-2', labelClassName)}>
+    <input ref={ref} type="checkbox" {...props} />
+    <span className="text-fg-muted text-ui">{label}</span>
+  </label>
+))
+Checkbox.displayName = 'Checkbox'
+
+export const Radio = forwardRef<
+  HTMLInputElement,
+  Omit<React.ComponentProps<'input'>, 'type' | 'size'> & { label: React.ReactNode; labelClassName?: string }
+>(({ label, labelClassName, ...props }, ref) => (
+  <label className={cn('inline-flex min-h-6 items-center gap-2', labelClassName)}>
+    <input ref={ref} type="radio" {...props} />
+    <span className="text-fg-muted text-ui">{label}</span>
+  </label>
+))
+Radio.displayName = 'Radio'
+
+export const buttonVariants = {
   // Flat fill. Brightening on hover, not fading: on the dark ground a faded
   // accent looks disabled.
-  primary: 'bg-accent text-accent-fg hover:brightness-110',
-  secondary: 'border border-border bg-surface text-fg hover:bg-surface-raised hover:border-border-strong',
-  ghost: 'text-fg-muted hover:bg-surface-raised hover:text-fg',
-  quiet:
-    'border border-transparent text-fg-muted hover:border-border hover:bg-surface-raised hover:text-fg',
-  danger: 'text-danger hover:bg-danger-subtle',
+  primary: 'btn-primary',
+  secondary: 'btn-secondary',
+  ghost: 'btn-ghost',
+  quiet: 'btn-quiet',
+  danger: 'btn-danger',
+  dangerSolid: 'btn-danger-solid',
 } as const
+
+export type ButtonVariant = keyof typeof buttonVariants
+
+/** The classes of a button, for the anchor or label that has to look like one. */
+export const buttonClass = (variant: ButtonVariant = 'secondary', icon = false) =>
+  cn('btn', buttonVariants[variant], icon && 'btn-icon')
 
 export const Button = forwardRef<
   HTMLButtonElement,
-  WithSize<React.ComponentProps<'button'>> & { variant?: keyof typeof buttonVariants }
->(({ className, variant = 'secondary', size = 'md', ...props }, ref) => (
+  WithSize<React.ComponentProps<'button'>> & { variant?: ButtonVariant; icon?: boolean }
+>(({ className, variant = 'secondary', size = 'md', icon = false, type = 'button', ...props }, ref) => (
   <button
     ref={ref}
-    type="button"
-    className={cn(
-      'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium',
-      'transition-[background-color,border-color,color,box-shadow,filter,transform] duration-[var(--dur-1)] ease-[var(--ease)]',
-      'focus-visible:ring-ring/40 focus-visible:outline-none focus-visible:ring-2',
-      'disabled:pointer-events-none disabled:opacity-50',
-      'active:scale-[0.98]',
-      sizes[size],
-      buttonVariants[variant],
-      className,
-    )}
+    type={type}
+    data-size={sizeAttr(size)}
+    className={cn(buttonClass(variant, icon), className)}
     {...props}
   />
 ))
 Button.displayName = 'Button'
 
-/** Label above a control, used down the task-detail sidebar. */
-export const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <label className="flex flex-col gap-1">
-    <span className="text-fg-subtle text-meta font-medium">{label}</span>
+/** Label above a control, used down the task-detail sidebar and in forms. */
+export const Field = ({
+  label,
+  hint,
+  children,
+  className,
+}: {
+  label: string
+  hint?: React.ReactNode
+  children: React.ReactNode
+  className?: string
+}) => (
+  <label className={cn('flex flex-col gap-1.5', className)}>
+    <span className="text-fg-muted text-meta font-medium">{label}</span>
     {children}
+    {hint ? <span className="text-fg-subtle text-meta">{hint}</span> : null}
   </label>
 )
 
 /**
- * The small inline input used inside popovers, pickers and rows.
- *
- * The same class string was hand-written in seven places, so they had drifted
- * apart on height, radius and focus treatment. One definition means one look.
+ * The small input used inside popovers, pickers and rows: the compact size of
+ * the same field. Kept as a name because seven places already import it.
  */
-export const InlineInput = forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
-  ({ className, ...props }, ref) => (
-    <input
-      ref={ref}
-      className={cn(
-        'border-border bg-bg text-fg placeholder:text-fg-subtle h-[1.75rem] w-full rounded-md border px-2 text-ui outline-none',
-        'transition-[border-color,box-shadow] duration-100',
-        'hover:border-border-strong focus:border-accent focus:shadow-[0_0_0_1px_var(--accent)]',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        className,
-      )}
-      {...props}
-    />
-  ),
+export const InlineInput = forwardRef<HTMLInputElement, Omit<React.ComponentProps<'input'>, 'size'>>(
+  (props, ref) => <Input ref={ref} size="sm" {...props} />,
 )
 InlineInput.displayName = 'InlineInput'
+
+/**
+ * A picker's face with a native select over it, invisible. The platform opens
+ * the list, so keyboard and touch behave as for any select; the face is a
+ * compact box that shows the value with its icon. Pass the select as children.
+ */
+export const Chip = ({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<'label'>) => (
+  <label className={cn('chip', className)} {...props}>
+    {children}
+  </label>
+)

@@ -138,8 +138,8 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
       }
     >
       <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1">
-          <span className="text-fg-subtle text-meta font-medium">Name</span>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-fg-muted text-meta font-medium">Name</span>
           <Input
             value={name}
             maxLength={60}
@@ -150,7 +150,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
         </label>
 
         <div className="flex flex-col gap-1">
-          <span className="text-fg-subtle text-meta font-medium">Accent</span>
+          <span className="text-fg-muted text-meta font-medium">Accent</span>
           <div className="flex flex-wrap items-center gap-2">
             {PRESETS.map((preset) => (
               <button
@@ -160,7 +160,7 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
                 aria-label={preset === STOCK_ACCENT ? 'Stock indigo' : preset}
                 title={preset === STOCK_ACCENT ? 'Stock indigo' : preset}
                 className={cn(
-                  'inset-ring-black/12 size-6 rounded-full inset-ring',
+                  'inset-ring-black/12 size-[var(--control-h-sm)] rounded-full inset-ring',
                   'transition-[box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]',
                   (accent || STOCK_ACCENT) === preset
                     ? 'ring-fg ring-offset-surface ring-2 ring-offset-2'
@@ -174,14 +174,15 @@ export const BrandingSection = ({ initial }: { initial: BrandingValue }) => {
               value={valid && accent ? accent : STOCK_ACCENT}
               onChange={(e) => setAccent(e.target.value)}
               aria-label="Pick any colour"
-              className="border-border size-6 cursor-pointer rounded-full border bg-transparent p-0"
+              className="size-[var(--control-h-sm)] cursor-pointer rounded-full"
             />
             <Input
+              size="sm"
               value={accent}
               onChange={(e) => setAccent(e.target.value.trim())}
               placeholder={STOCK_ACCENT}
               aria-invalid={!valid}
-              className={cn('w-28 font-mono', !valid && 'border-danger')}
+              className="w-32"
             />
           </div>
           <p className="text-fg-subtle text-meta">

@@ -4,11 +4,12 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useMutate } from '@/lib/api/use-mutate'
 import { cn } from '@/lib/utils'
+import { Textarea } from '@/components/ui/control'
 
 /**
- * Shared by the heading and the textarea that replaces it, so clicking to edit
- * does not move a single glyph. The display face at a confident size: this is
- * the one voice on the page.
+ * The heading: the display face at a confident size, the one voice on the
+ * page. Editing swaps it for the standard textarea rather than a copy of the
+ * heading's type, so the field is the same field as every other.
  */
 const TITLE =
   'font-display headline text-fg -mx-1.5 mb-5 rounded-md border px-1.5 text-[1.5rem] leading-[1.2] sm:text-[1.75rem] ' +
@@ -83,10 +84,11 @@ export const EditableTitle = ({ taskId, initial }: { taskId: string; initial: st
   }
 
   return (
-    <textarea
+    <Textarea
       ref={ref}
       value={value}
       disabled={saving}
+      aria-label="Task title"
       maxLength={300}
       onChange={(e) => {
         setValue(e.target.value)
@@ -104,10 +106,7 @@ export const EditableTitle = ({ taskId, initial }: { taskId: string; initial: st
           setEditing(false)
         }
       }}
-      className={cn(
-        TITLE,
-        'border-accent bg-surface ring-accent block w-[calc(100%+0.75rem)] resize-none ring-1 outline-none',
-      )}
+      className="mb-5 block w-full resize-none"
       rows={1}
     />
   )

@@ -43,14 +43,14 @@ const ViewToggle = ({
       aria-pressed={view === value}
       title={label}
       className={cn(
-        'relative grid size-[1.375rem] place-items-center rounded',
+        'relative grid size-[var(--control-h-sm)] place-items-center rounded',
         'transition-colors duration-[var(--dur-2)] ease-[var(--ease-out)]',
         view === value
           ? 'bg-surface text-fg ring-border ring-1 group-data-[measured]/view:bg-transparent group-data-[measured]/view:ring-0'
           : 'text-fg-subtle hover:text-fg',
       )}
     >
-      <Icon size={13} />
+      <Icon size={14} />
     </button>
   )
 

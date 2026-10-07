@@ -1,6 +1,6 @@
 'use client'
 
-import { InlineInput } from '@/components/ui/control'
+import { Button, InlineInput } from '@/components/ui/control'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -62,7 +62,7 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
           {labels.map((l) => (
             <li
               key={l.label}
-              className="row-hover group flex min-h-[2.375rem] items-center gap-2 px-4 py-1.5 md:px-5"
+              className="row-hover group flex min-h-[2.75rem] flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 md:px-5"
             >
               {editing === l.label ? (
                 <>
@@ -80,21 +80,17 @@ export const LabelsSection = ({ labels }: { labels: LabelRow[] }) => {
                   {existing.has(draft.trim()) && draft.trim() !== l.label && (
                     <span className="text-fg-subtle shrink-0 text-meta">merges</span>
                   )}
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="primary"
                     disabled={busy || !draft.trim()}
                     onClick={() => void apply(l.label, draft.trim())}
-                    className="text-accent shrink-0 text-meta disabled:opacity-40"
                   >
                     Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(null)}
-                    className="text-fg-subtle hover:text-fg shrink-0 text-meta transition-colors duration-[var(--dur-1)]"
-                  >
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => setEditing(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>

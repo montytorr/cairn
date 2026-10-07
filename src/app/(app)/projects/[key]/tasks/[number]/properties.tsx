@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ChevronsUpDown } from 'lucide-react'
+import { ChevronsUpDown, X } from 'lucide-react'
 import { Avatar, PriorityIcon, ProjectIcon, StatusIcon, TypePill } from '@/components/icons'
 import { usePeople } from '@/components/people-context'
-import { InlineInput } from '@/components/ui/control'
+import { Button, InlineInput } from '@/components/ui/control'
 import { ResolutionDialog } from '../../resolution-dialog'
 import { LabelEditor } from '../../label-editor'
 import { AlsoIn } from './also-in'
@@ -56,7 +56,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
  * pane into a horizontal scrollbar.
  */
 const EDITABLE =
-  'row-hover group/edit relative -mx-1.5 flex h-[1.75rem] items-center gap-2 overflow-hidden rounded-md px-1.5 ' +
+  'row-hover group/edit relative -mx-1.5 flex h-[var(--control-h-sm)] items-center gap-2 overflow-hidden rounded-md px-1.5 ' +
   'has-[:focus-visible]:bg-surface-hover has-[:focus-visible]:shadow-[inset_2px_0_0_var(--accent)]'
 
 const Affordance = () => (
@@ -123,7 +123,7 @@ const SelectRow = <T extends string>({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value as T)}
-        className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        className="select-overlay"
         aria-label={labels?.[value] ?? value}
       >
         {options.map((o) => (
@@ -186,7 +186,7 @@ const ParentEditor = ({
           if (e.key === 'Enter') void save()
           if (e.key === 'Escape') setEditing(false)
         }}
-        className="h-[1.75rem] min-w-0 flex-1 text-meta"
+        className="min-w-0 flex-1"
       />
     )
   }
@@ -204,13 +204,14 @@ const ParentEditor = ({
       ) : (
         <span className="text-fg-subtle min-w-0 flex-1 truncate text-ui">None</span>
       )}
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant="ghost"
         onClick={startEdit}
-        className="text-fg-subtle hover:text-fg hover:bg-surface-hover shrink-0 rounded px-1.5 py-px text-meta opacity-0 transition-[opacity,color,background-color] duration-[var(--dur-1)] group-hover/row:opacity-100 focus-visible:opacity-100"
+        className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
       >
         Edit
-      </button>
+      </Button>
     </div>
   )
 }
@@ -262,7 +263,7 @@ const DueDateRow = ({
         type="button"
         onClick={open}
         className={cn(
-          'flex h-[1.5rem] min-w-0 flex-1 items-center rounded px-1 text-left text-ui transition-colors',
+          'flex h-[var(--control-h-sm)] min-w-0 flex-1 items-center rounded px-1 text-left text-ui transition-colors',
           overdue ? 'text-danger' : value ? 'text-fg' : 'text-fg-subtle',
         )}
       >
@@ -271,14 +272,9 @@ const DueDateRow = ({
         </span>
       </button>
       {value && (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="Clear due date"
-          className="text-fg-subtle hover:text-fg shrink-0 px-0.5 text-ui leading-none"
-        >
-          ×
-        </button>
+        <Button icon size="sm" variant="ghost" onClick={onClear} aria-label="Clear due date">
+          <X size={14} aria-hidden />
+        </Button>
       )}
       <input
         ref={inputRef}
@@ -287,7 +283,7 @@ const DueDateRow = ({
         onChange={(e) => onPick(e.target.value || null)}
         aria-label="Due date"
         tabIndex={-1}
-        className="pointer-events-none absolute inset-0 opacity-0"
+        className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
       />
     </div>
   )
@@ -445,7 +441,7 @@ export const Properties = ({
             <select
               value={shown.type}
               onChange={(e) => void patch({ type: e.target.value as TaskType })}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Type"
             >
               {TASK_TYPES.map((t) => (
@@ -469,7 +465,7 @@ export const Properties = ({
             <select
               value={shown.assignee_user_id}
               onChange={(e) => onAssignee(e.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="select-overlay"
               aria-label="Assignee"
             >
               {/* The current assignee may have gone inactive since —

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/control'
 
 /**
  * Says where an old address brought you, once.
@@ -47,14 +48,10 @@ export const RedirectNotice = ({
     >
       <ArrowRightLeft size={13} className="text-accent mt-[3px] shrink-0" aria-hidden />
       <p className="min-w-0 flex-1">{shown}</p>
-      <button
-        type="button"
-        onClick={() => setShown(null)}
-        className="text-fg-subtle hover:text-fg hover:bg-surface-hover grid size-[1.375rem] shrink-0 place-items-center rounded-md transition-colors duration-[var(--dur-1)] ease-[var(--ease-out)]"
-      >
-        <X size={12} aria-hidden />
+      <Button icon size="sm" variant="ghost" onClick={() => setShown(null)} className="-my-1.5 -mr-1.5">
+        <X size={14} aria-hidden />
         <span className="sr-only">Dismiss</span>
-      </button>
+      </Button>
     </div>
   )
 }

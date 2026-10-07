@@ -9,10 +9,10 @@ import { useState } from 'react'
 import { MarkdownView } from '@/components/markdown'
 import type { Comment } from '@/lib/data'
 import { Avatar } from '@/components/icons'
-import { Button } from '@/components/ui/control'
+import { Button, Textarea } from '@/components/ui/control'
 import { useMutate } from '@/lib/api/use-mutate'
 import { cn } from '@/lib/utils'
-import { COMPOSER, COUNT, LABEL } from './styles'
+import { COUNT, LABEL } from './styles'
 
 /** Conversation aimed at the human, kept separate from the agent work log. */
 export const CommentsPanel = ({
@@ -79,10 +79,10 @@ export const CommentsPanel = ({
         </ul>
       )}
 
-      {/* The same shell as the work log's composer, so the page has one way
-          of writing into it. */}
-      <div className={COMPOSER}>
-        <textarea
+      {/* The same field and footer as the work log's composer, so the page has
+          one way of writing into it. */}
+      <div className="flex flex-col gap-2">
+        <Textarea
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -91,20 +91,14 @@ export const CommentsPanel = ({
           }}
           placeholder="Add a comment…"
           aria-label="Add a comment"
-          className="text-fg placeholder:text-fg-subtle block max-h-[40vh] min-h-[3.625rem] w-full resize-y bg-transparent px-3 py-2.5 text-ui leading-relaxed outline-none"
+          className="max-h-[40vh] w-full"
         />
-        <div className="border-border/70 flex items-center gap-2 border-t px-2 py-1.5">
+        <div className="flex items-center gap-2">
           <span className="text-fg-subtle ml-auto hidden text-meta sm:block">
             <kbd className="kbd inline-flex">⌘</kbd>
             <kbd className="kbd ml-0.5 inline-flex">↵</kbd>
           </span>
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={submit}
-            disabled={!text.trim() || pending}
-            className="w-auto px-3"
-          >
+          <Button size="sm" variant="primary" onClick={submit} disabled={!text.trim() || pending}>
             {pending ? <Spinner /> : 'Post'}
           </Button>
         </div>

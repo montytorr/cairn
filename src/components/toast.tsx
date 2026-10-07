@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { CircleAlert, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/control'
 
 /**
  * Where a failed write goes when the control that made it has nowhere to put
@@ -74,14 +75,9 @@ const Row = ({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
       <p className="text-fg min-w-0 flex-1 text-ui leading-relaxed break-words">
         {toast.message}
       </p>
-      <button
-        type="button"
-        onClick={leave}
-        aria-label="Dismiss"
-        className="text-fg-subtle hover:text-fg hover:bg-surface-hover -mr-1 grid size-5 shrink-0 place-items-center rounded transition-colors duration-[var(--dur-1)]"
-      >
-        <X size={13} />
-      </button>
+      <Button icon size="sm" variant="ghost" onClick={leave} aria-label="Dismiss" className="-my-1.5 -mr-1.5">
+        <X size={14} aria-hidden />
+      </Button>
     </div>
   )
 }

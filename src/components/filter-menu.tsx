@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { EmptyState } from '@/components/empty-state'
+import { Button } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 
 /**
@@ -48,28 +49,22 @@ export const FilterMenu = ({
 
   return (
     <div ref={wrap} className="relative">
-      <button
-        type="button"
+      <Button
+        size="sm"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Filter by ${label}`}
-        className={cn(
-          'flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-meta',
-          'transition-[color,background-color,border-color] duration-[var(--dur-1)] ease-[var(--ease-out)]',
-          selected.length > 0
-            ? 'border-accent/70 text-accent bg-accent-subtle'
-            : 'border-border text-fg-muted hover:bg-surface-hover hover:text-fg hover:border-border-strong',
-        )}
+        className={cn(selected.length > 0 && 'border-accent/70 text-accent bg-accent-subtle hover:bg-accent-subtle')}
       >
         {summary ?? label}
         {!summary && selected.length > 0 && <span className="tabular">{selected.length}</span>}
-      </button>
+      </Button>
 
       {open && (
         <div
           role="menu"
-          className="border-border bg-surface pop absolute top-[2rem] left-0 z-50 max-h-[15rem] w-[12.5rem] overflow-y-auto rounded-lg border py-1 raised"
+          className="border-border bg-surface pop absolute top-[2.25rem] left-0 z-50 max-h-[15rem] w-[12.5rem] overflow-y-auto rounded-lg border py-1 raised"
           style={{ '--origin': 'top left' } as React.CSSProperties}
         >
           {reset && (
@@ -78,14 +73,14 @@ export const FilterMenu = ({
               role="menuitemradio"
               aria-checked={selected.length === 0}
               onClick={() => onChange([])}
-              className="hover:bg-surface-hover border-border mb-1 flex w-full items-center gap-2 border-b px-2.5 pt-1 pb-1.5 text-left transition-colors duration-[var(--dur-1)]"
+              className="hover:bg-surface-hover border-border mb-1 flex min-h-8 w-full items-center gap-2 border-b px-2.5 pt-1 pb-1.5 text-left transition-colors duration-[var(--dur-1)]"
             >
               <input
                 type="checkbox"
                 readOnly
                 tabIndex={-1}
                 checked={selected.length === 0}
-                className="accent-accent size-[0.75rem]"
+                className="pointer-events-none"
               />
               <span className="text-fg-muted min-w-0 truncate text-meta">{reset}</span>
             </button>
@@ -97,14 +92,14 @@ export const FilterMenu = ({
               role="menuitemcheckbox"
               aria-checked={selected.includes(o.value)}
               onClick={() => toggle(o.value)}
-              className="hover:bg-surface-hover flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)]"
+              className="hover:bg-surface-hover flex min-h-8 w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[var(--dur-1)]"
             >
               <input
                 type="checkbox"
                 readOnly
                 tabIndex={-1}
                 checked={selected.includes(o.value)}
-                className="accent-accent size-[0.75rem]"
+                className="pointer-events-none"
               />
               <span className="text-fg-muted min-w-0 truncate text-meta">{o.label}</span>
             </button>

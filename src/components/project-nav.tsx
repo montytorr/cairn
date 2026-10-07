@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
+import { Button, Input } from '@/components/ui/control'
 import { Activity, BookOpen, Columns3, FolderKanban, HeartPulse, History, Inbox, Search, Waypoints, X } from 'lucide-react'
 
 /**
@@ -115,26 +116,29 @@ export const ProjectNav = ({
       {projects.length > 8 && (
         <div className="relative mb-1">
           <Search
-            size={11}
+            size={13}
             aria-hidden
-            className="text-fg-subtle pointer-events-none absolute top-1/2 left-2 -translate-y-1/2"
+            className="text-fg-subtle pointer-events-none absolute top-1/2 left-2.5 z-10 -translate-y-1/2"
           />
-          <input
+          <Input
+            size="sm"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find a project…"
             aria-label="Filter projects"
-            className="placeholder:text-fg-subtle hover:bg-surface focus:bg-surface focus:ring-ring/30 w-full rounded-md border border-transparent bg-transparent py-1 pr-2 pl-6 text-meta outline-none transition-colors focus:ring-2"
+            className="pr-9 pl-8"
           />
           {query && (
-            <button
-              type="button"
+            <Button
+              icon
+              size="sm"
+              variant="ghost"
               onClick={() => setQuery('')}
               aria-label="Clear the project filter"
-              className="text-fg-subtle hover:text-fg absolute top-1/2 right-1.5 -translate-y-1/2"
+              className="absolute top-0 right-0"
             >
-              <X size={11} aria-hidden />
-            </button>
+              <X size={13} aria-hidden />
+            </Button>
           )}
         </div>
       )}

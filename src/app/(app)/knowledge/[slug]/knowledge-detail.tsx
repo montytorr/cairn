@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowRight, ChevronRight, Info, ShieldCheck, Undo2, X } from 'lucide-react'
 import { MarkdownView } from '@/components/markdown'
 import { LabelPill, ProjectIcon, entityColor, projectColor } from '@/components/icons'
-import { Button, Field, Input, Select, Textarea } from '@/components/ui/control'
+import { Button, Checkbox, Field, Input, Select, Textarea } from '@/components/ui/control'
 import { LabelEditor } from '../../projects/[key]/label-editor'
 import { fullDateTime, shortDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -79,21 +79,16 @@ const ChipToggle = ({
     {options.map((o) => {
       const active = selected.includes(o.key)
       return (
-        <button
+        <Button
           key={o.key}
-          type="button"
+          size="sm"
           onClick={() => onToggle(o.key)}
           aria-pressed={active}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-meta transition-colors',
-            active
-              ? 'border-accent bg-accent-subtle text-accent'
-              : 'border-border text-fg-muted hover:border-border-strong hover:bg-surface-hover',
-          )}
+          className="rounded-full"
         >
           {render?.(o.key)}
           {o.title}
-        </button>
+        </Button>
       )
     })}
     {options.length === 0 && <span className="text-fg-subtle text-meta">None defined.</span>}
@@ -235,15 +230,10 @@ export const KnowledgeDetail = ({
               {current.supersededByRef.title}
             </Link>
           ) : null}
-          <button
-            type="button"
-            onClick={unsupersede}
-            disabled={supersedeBusy}
-            className="text-fg-subtle hover:text-fg ml-auto inline-flex items-center gap-1 transition-colors disabled:opacity-50"
-          >
-            <Undo2 size={12} aria-hidden />
+          <Button size="sm" variant="quiet" onClick={unsupersede} disabled={supersedeBusy} className="ml-auto">
+            <Undo2 size={13} aria-hidden />
             Undo
-          </button>
+          </Button>
         </div>
       )}
 
@@ -273,14 +263,9 @@ export const KnowledgeDetail = ({
               ))}
             </ul>
           </div>
-          <button
-            type="button"
-            onClick={() => setWarnings([])}
-            aria-label="Dismiss"
-            className="text-fg-subtle hover:text-fg -mr-1 grid size-5 shrink-0 place-items-center rounded transition-colors"
-          >
-            <X size={13} />
-          </button>
+          <Button icon size="sm" variant="ghost" onClick={() => setWarnings([])} aria-label="Dismiss">
+            <X size={14} aria-hidden />
+          </Button>
         </div>
       )}
 
@@ -467,17 +452,18 @@ export const KnowledgeDetail = ({
                 <span className="text-fg enter-rise flex items-center gap-1 text-meta">
                   <span className="text-fg-subtle">→</span>
                   <span className="max-w-[16rem] truncate">{supersedeTitle || supersedeTarget}</span>
-                  <button
-                    type="button"
+                  <Button
+                    icon
+                    size="sm"
+                    variant="ghost"
                     onClick={() => {
                       setSupersedeTarget('')
                       setSupersedeTitle('')
                     }}
-                    className="text-fg-subtle hover:text-fg"
                     aria-label="Clear the chosen entry"
                   >
-                    ×
-                  </button>
+                    <X size={14} aria-hidden />
+                  </Button>
                 </span>
               )}
               <Button
@@ -546,15 +532,11 @@ export const KnowledgeDetail = ({
             </>
           </Field>
 
-          <label className="text-fg-muted flex items-center gap-2 text-ui">
-            <input
-              type="checkbox"
-              checked={draftVerified}
-              onChange={(e) => setDraftVerified(e.target.checked)}
-              className="accent-accent size-[0.875rem]"
-            />
-            Verified — this has been checked, not just recorded
-          </label>
+          <Checkbox
+            checked={draftVerified}
+            onChange={(e) => setDraftVerified(e.target.checked)}
+            label="Verified — this has been checked, not just recorded"
+          />
 
           {/* A refused save is said beside the button that was pressed. At the
               top of the page it sat a full editor's height above the click,

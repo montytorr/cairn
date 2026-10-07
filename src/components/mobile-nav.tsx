@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
 import { AppSidebar } from '@/components/app-sidebar'
+import { Button } from '@/components/ui/control'
 
 /**
  * The whole of navigation on a narrow screen. Until this existed the sidebar
@@ -37,15 +38,17 @@ export const MobileNav = ({
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        icon
+        size="sm"
+        variant="ghost"
         onClick={() => setOpen(true)}
         aria-label="Open navigation"
         aria-expanded={open}
-        className="text-fg-muted hover:text-fg hover:bg-surface-hover grid size-[1.875rem] shrink-0 place-items-center rounded-md transition-colors md:hidden"
+        className="md:hidden"
       >
         <Menu size={16} aria-hidden />
-      </button>
+      </Button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex md:hidden">
@@ -66,14 +69,15 @@ export const MobileNav = ({
               projects={projects}
               onNavigate={() => setOpen(false)}
               trailing={
-                <button
-                  type="button"
+                <Button
+                  icon
+                  size="sm"
+                  variant="ghost"
                   onClick={() => setOpen(false)}
                   aria-label="Close navigation"
-                  className="text-fg-subtle hover:text-fg hover:bg-surface-raised grid size-6 place-items-center rounded transition-colors"
                 >
                   <X size={14} aria-hidden />
-                </button>
+                </Button>
               }
             />
           </aside>

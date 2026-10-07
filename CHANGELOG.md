@@ -11,6 +11,20 @@ out under **Breaking** with what to do about it.
 
 ### Fixed
 
+- **Every form control is one control** (CROFT-34). Fields, selects, textareas, checkboxes,
+  buttons and the pickers had drifted to nine heights, three borders and two fonts, with a
+  bare native select arrow, select text sliced mid-word, and disabled buttons faded to a ghost.
+  There are now two sizes, 42px and one compact 36px, written once in the stylesheet for the bare
+  elements (so a control nobody remembered to style still matches) and as `.btn`, `.chip` and
+  the `Input`, `Select`, `Textarea`, `Checkbox` and `Button` components. A select draws its own
+  theme chevron, truncates with an ellipsis and hands its option list the theme's colour scheme.
+  A field's rim is held at 3:1 on its ground. Disabled is solid and readable (4.5:1), never faded
+  or dashed, and a select with nothing to offer is disabled and says so ("No projects yet").
+  Checkboxes are one box with a 24px hit area; rows of controls share a height and a centre line
+  and wrap on a phone. `npm run audit:controls` measures every page, popover and dialog in both
+  themes at 1440 and 375 and fails on a control off the standard; `controls.test.ts` keeps the
+  stylesheet and the markup from drifting back.
+
 - **The list no longer scrolls sideways on a phone** (CAIRN-357). Every page's vertical
   scroll area also scrolled sideways, so on iOS the whole list could be dragged left, leaving
   a blank strip on the right while the header stayed put. Those areas now clip sideways

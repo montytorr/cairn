@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Button, InlineInput } from '@/components/ui/control'
+import { Button, Input } from '@/components/ui/control'
 import { mutate } from '@/lib/api/mutate'
 import { keyChangeProblem } from '@/lib/project-rename'
 import { cn } from '@/lib/utils'
@@ -99,7 +99,7 @@ export const ChangeKeyDialog = ({
 
           <label className="flex flex-col gap-1">
             <span className="text-fg-subtle text-meta font-medium">New key</span>
-            <InlineInput
+            <Input
               autoFocus
               value={draft}
               placeholder={project.key}
@@ -117,7 +117,7 @@ export const ChangeKeyDialog = ({
               }}
               aria-invalid={Boolean(draft && problem)}
               aria-describedby="change-key-hint"
-              className="w-[8rem] font-mono uppercase"
+              className="w-[8rem] uppercase"
             />
           </label>
           <p

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Archive, ArchiveRestore, Check, KeyRound, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { Button, InlineInput } from '@/components/ui/control'
+import { Button, InlineInput, Input } from '@/components/ui/control'
 import { ProjectIcon } from '@/components/icons'
 import { EmptyState } from '@/components/empty-state'
 import { ChangeKeyDialog, type RetiredKeyOwner } from '@/components/change-key-dialog'
@@ -124,11 +124,11 @@ export const ProjectsManager = ({
   const row = (p: Row) => (
     <li
       key={p.id}
-      className="border-border row-hover group flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+      className="border-border row-hover group flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-2.5 last:border-b-0"
     >
       <ProjectIcon size={15} projectKey={p.key} />
 
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-[12rem] flex-1 items-center gap-3">
         {editing === p.id ? (
           <InlineInput
             autoFocus
@@ -159,8 +159,9 @@ export const ProjectsManager = ({
 
       {/* Visible on hover at a pointer, always visible on touch, where there
           is no hover and an invisible control is an absent one. */}
-      <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity duration-[var(--dur-1)] ease-[var(--ease-out)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity duration-[var(--dur-1)] ease-[var(--ease-out)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <Button
+          icon
           size="sm"
           variant="ghost"
           title="Rename"
@@ -174,6 +175,7 @@ export const ProjectsManager = ({
         </Button>
 
         <Button
+          icon
           size="sm"
           variant="ghost"
           title="Change key — old refs keep working"
@@ -184,6 +186,7 @@ export const ProjectsManager = ({
         </Button>
 
         <Button
+          icon
           size="sm"
           variant="ghost"
           title={p.status === 'archived' ? 'Restore' : 'Archive — hides it, tasks stay searchable'}
@@ -198,9 +201,9 @@ export const ProjectsManager = ({
         </Button>
 
         <Button
+          icon
           size="sm"
-          variant="ghost"
-          className="hover:bg-danger-subtle hover:text-danger"
+          variant="danger"
           title="Delete"
           onClick={() => {
             setConfirming(p.id)
@@ -232,9 +235,9 @@ export const ProjectsManager = ({
       {creating && (
         <div className="surface-card enter-rise flex flex-col gap-3 p-3">
           <div className="flex flex-wrap items-start gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-fg-subtle text-meta font-medium">Key</span>
-              <InlineInput
+            <label className="flex flex-col gap-1.5">
+              <span className="text-fg-muted text-meta font-medium">Key</span>
+              <Input
                 autoFocus
                 value={key}
                 placeholder="ACME"
@@ -244,9 +247,9 @@ export const ProjectsManager = ({
                 className="w-[7rem] uppercase"
               />
             </label>
-            <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
-              <span className="text-fg-subtle text-meta font-medium">Title</span>
-              <InlineInput
+            <label className="flex min-w-[14rem] flex-1 flex-col gap-1.5">
+              <span className="text-fg-muted text-meta font-medium">Title</span>
+              <Input
                 value={title}
                 placeholder="What this project is"
                 onChange={(e) => setTitle(e.target.value)}
@@ -258,8 +261,8 @@ export const ProjectsManager = ({
                 <Check size={13} aria-hidden />
                 Create
               </Button>
-              <Button variant="ghost" onClick={() => setCreating(false)}>
-                <X size={13} aria-hidden />
+              <Button icon variant="ghost" onClick={() => setCreating(false)}>
+                <X size={14} aria-hidden />
                 <span className="sr-only">Cancel</span>
               </Button>
             </div>
@@ -330,11 +333,11 @@ export const ProjectsManager = ({
                 Archiving hides a project and keeps its tasks searchable. If you only want it out of
                 the way, close this and archive it instead.
               </p>
-              <label className="flex flex-col gap-1">
-                <span className="text-fg-subtle text-meta font-medium">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-fg-muted text-meta font-medium">
                   Type {target.key} to confirm
                 </span>
-                <InlineInput
+                <Input
                   autoFocus
                   value={confirmKey}
                   onChange={(e) => setConfirmKey(e.target.value.toUpperCase())}
@@ -347,7 +350,7 @@ export const ProjectsManager = ({
                 Cancel
               </Button>
               <Button
-                variant="danger"
+                variant="dangerSolid"
                 disabled={confirmKey !== target.key}
                 onClick={() => remove(target)}
               >

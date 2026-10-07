@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
-import { InlineInput } from '@/components/ui/control'
+import { Button, InlineInput } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '@/components/empty-state'
 
@@ -93,9 +93,9 @@ export const KnowledgePicker = ({
   return (
     <div ref={box} className="relative w-full max-w-[20rem]">
       <Search
-        size={12}
+        size={13}
         aria-hidden
-        className="text-fg-subtle pointer-events-none absolute top-1/2 left-2 -translate-y-1/2"
+        className="text-fg-subtle pointer-events-none absolute top-1/2 left-2.5 z-10 -translate-y-1/2"
       />
       <InlineInput
         value={query}
@@ -106,20 +106,22 @@ export const KnowledgePicker = ({
           setQuery(e.target.value)
           setTouched(true)
         }}
-        className="pr-6 pl-6"
+        className="pr-10 pl-8"
       />
       {query && (
-        <button
-          type="button"
+        <Button
+          icon
+          size="sm"
+          variant="ghost"
           onClick={() => {
             setQuery('')
             setHits([])
           }}
-          className="text-fg-subtle hover:text-fg absolute top-1/2 right-1.5 -translate-y-1/2"
+          className="absolute top-0 right-0"
           aria-label="Clear"
         >
-          <X size={12} />
-        </button>
+          <X size={14} aria-hidden />
+        </Button>
       )}
 
       {touched && query.trim().length >= 2 && (

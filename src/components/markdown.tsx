@@ -205,7 +205,7 @@ const components: Components = {
     // GFM task list checkboxes. Read-only here: the body is edited in the
     // editor, not by clicking through the rendered view.
     <input
-      className="accent-accent mr-1.5 translate-y-[1px]"
+      className="mr-1.5 translate-y-[3px]"
       disabled
       readOnly
       {...dom(p)}

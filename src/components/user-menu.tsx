@@ -178,7 +178,7 @@ export const UserMenu = ({
             onClick={() => void signOut()}
             className={cn(
               item,
-              'text-danger hover:bg-danger-subtle hover:text-danger hover:shadow-[inset_2px_0_0_var(--danger)] disabled:opacity-60',
+              'text-danger hover:bg-danger-subtle hover:text-danger hover:shadow-[inset_2px_0_0_var(--danger)] disabled:text-fg-muted disabled:hover:bg-transparent disabled:hover:shadow-none',
             )}
           >
             {busy ? <Spinner size={13} /> : <LogOut size={13} aria-hidden />}

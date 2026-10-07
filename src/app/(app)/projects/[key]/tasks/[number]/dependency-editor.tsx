@@ -1,6 +1,7 @@
 'use client'
 
-import { InlineInput } from '@/components/ui/control'
+import { Plus, X } from 'lucide-react'
+import { Button, InlineInput } from '@/components/ui/control'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -126,7 +127,6 @@ const Picker = ({
         }}
         placeholder={PLACEHOLDER[direction]}
         aria-label={PLACEHOLDER[direction]}
-        className=""
       />
       {q.length >= 2 && (
         <div className="flex flex-col">
@@ -217,29 +217,24 @@ export const DependencyEditor = ({
               <span className="text-fg-subtle min-w-0 flex-1 truncate text-ui">
                 {items.length === 0 && open !== direction ? 'None' : null}
               </span>
-              <button
-                type="button"
+              <Button
+                icon
+                size="sm"
+                variant="ghost"
                 disabled={busy}
                 onClick={() => setOpen(open === direction ? null : direction)}
                 aria-label={`Add a task that ${direction === 'blocked-by' ? 'blocks' : 'is blocked by'} this one`}
-                className="text-fg-subtle hover:text-fg hover:bg-surface-hover grid size-[1.125rem] place-items-center rounded opacity-0 transition group-hover/dep:opacity-100 focus-visible:opacity-100"
+                className="md:opacity-0 md:group-hover/dep:opacity-100 focus-visible:opacity-100"
               >
-                <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden>
-                  <path
-                    d="M5.5 1.5v8M1.5 5.5h8"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
+                <Plus size={14} aria-hidden />
+              </Button>
             </div>
 
             <div className="flex flex-col gap-0.5 pl-[calc(4.75rem+0.5rem)]">
               {items.map((r) => (
                 <div
                   key={r.id}
-                  className="row-hover group/row -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1"
+                  className="row-hover group/row -mx-1.5 flex min-h-[var(--control-h-sm)] items-center gap-2 rounded-md px-1.5"
                 >
                   <StatusIcon status={r.status as TaskStatus} size={13} />
                   <Link
@@ -249,22 +244,17 @@ export const DependencyEditor = ({
                   >
                     {r.title}
                   </Link>
-                  <button
-                    type="button"
+                  <Button
+                    icon
+                    size="sm"
+                    variant="ghost"
                     disabled={busy}
                     onClick={() => void mutate('DELETE', direction, refOf(r))}
                     aria-label={`Remove ${refOf(r)}`}
-                    className="text-fg-subtle hover:text-fg shrink-0 opacity-0 transition group-hover/row:opacity-100 focus-visible:opacity-100"
+                    className="md:opacity-0 md:group-hover/row:opacity-100 focus-visible:opacity-100"
                   >
-                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                      <path
-                        d="M1.5 1.5l7 7M8.5 1.5l-7 7"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
+                    <X size={14} aria-hidden />
+                  </Button>
                 </div>
               ))}
             </div>
