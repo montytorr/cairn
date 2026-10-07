@@ -136,7 +136,7 @@ const Column = ({
       <span className="text-fg text-meta font-medium">{COLUMN_LABEL[status]}</span>
       <ColumnCount count={tasks.length} />
     </div>
-    <DropList dropId={status} count={tasks.length} className="min-h-0 flex-1 overscroll-contain">
+    <DropList dropId={status} count={tasks.length} className="min-h-0 flex-1 overscroll-y-contain">
       {tasks.map((task) => (
         <Card key={task.id} task={task} projectKey={projectKey} />
       ))}
@@ -240,7 +240,7 @@ export const BoardView = ({
         onDragEnd={onDragEnd}
         onDragCancel={() => setDragging(null)}
       >
-        <div className="h-full snap-x scroll-px-3 overflow-auto md:snap-none">
+        <div className="scroll-visible h-full snap-x scroll-px-3 overflow-auto md:snap-none">
           <div className="flex h-full w-max gap-2.5 p-3">
             {TASK_STATUSES.map((status) => (
               <Column

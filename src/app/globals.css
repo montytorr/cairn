@@ -331,6 +331,16 @@
 }
 
 @layer utilities {
+  /* A scroller that has to be seen to be used. The thin scrollbar above hands
+     the bar to the OS, and on a Mac it is an overlay that stays hidden until
+     you scroll — so a board wider than the window looks cut off, with nothing
+     to say it moves sideways. Both properties back to `auto` lets the styled
+     ::-webkit-scrollbar above draw an always-visible bar instead. */
+  .scroll-visible {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
   /* ---------------------------------------------------------------------------
      Shell (CAIRN-308) — flat.
 

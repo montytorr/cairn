@@ -33,8 +33,10 @@ export const ColumnCount = ({ count }: { count: number }) => (
  * the visible rect of that node, so a list scrolled halfway still takes a
  * drop anywhere it is on screen, and cards scroll inside it rather than
  * stretching the page. Only a full-height column should contain its
- * overscroll (pass `overscroll-contain`): a capped lane cell has to hand the
- * wheel back so the board scrolls on to the next lane.
+ * overscroll, and only the vertical kind (pass `overscroll-y-contain`): a
+ * capped lane cell has to hand the wheel back so the board scrolls on to the
+ * next lane, and `overscroll-contain` on both axes also swallowed a sideways
+ * swipe made over a card, so the board would not scroll with the pointer on one.
  *
  * `overflow-y-auto` makes overflow-x compute to `auto` too (the
  * overflow-auto-forces-both-axes trap), so this box clips anything a card
