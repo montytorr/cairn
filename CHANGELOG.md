@@ -9,6 +9,15 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The board scrolls sideways with the pointer over a card, and shows a scrollbar to do it
+  with** (CAIRN-360). The column lists contained their overscroll on both axes, so a sideways
+  swipe made over a card stopped at the column instead of moving the board; they now contain
+  it vertically only. And the board's own scrollbar was the Mac overlay, hidden until you
+  scroll, so a board wider than the window looked cut off with nothing to say it moves: both
+  boards now draw a visible bar along the bottom.
+
 ## [0.20.2] — 2026-10-07
 
 ### Fixed

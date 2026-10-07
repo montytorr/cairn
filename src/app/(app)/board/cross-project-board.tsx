@@ -108,7 +108,7 @@ const FlatBoard = ({
           style={laneTone(columnTone(groupBy, col.value))}
         >
           <ColumnHeader groupBy={groupBy} col={col} count={cards.length} />
-          <CardList dropId={`all${SEP}${col.value}`} tasks={cards} className="min-h-0 flex-1 overscroll-contain" />
+          <CardList dropId={`all${SEP}${col.value}`} tasks={cards} className="min-h-0 flex-1 overscroll-y-contain" />
         </section>
       )
     })}
@@ -377,7 +377,7 @@ export const CrossProjectBoard = ({
         onDragEnd={onDragEnd}
         onDragCancel={() => setDragging(null)}
       >
-        <div className="min-h-0 flex-1 snap-x scroll-px-3 overflow-auto md:snap-none">
+        <div className="scroll-visible min-h-0 flex-1 snap-x scroll-px-3 overflow-auto md:snap-none">
           {visible.length === 0 ? (
             <EmptyState
               title="Nothing matches these filters."
