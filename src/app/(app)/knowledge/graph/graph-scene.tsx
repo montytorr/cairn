@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { entityColor, projectColor } from '@/components/icons'
-import { groupsOf, layout3D } from '@/lib/graph-3d'
+import { groupsOf, layout3D, type Arrange } from '@/lib/graph-3d'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
 import { mapNow, nodeColour, type ColourBy } from '@/lib/graph-colour'
 import type { KnowledgeGraph, GraphNode } from '@/lib/api/knowledge-graph'
@@ -47,6 +47,8 @@ type Props = {
   grouping: Grouping
   /** What the dots' colour says. Changing it rebuilds the scene with the camera kept. */
   colourBy?: ColourBy
+  /** Whether projects get a place of their own or the links decide. */
+  arrange?: Arrange
 }
 
 export type Grouping = 'project' | 'entity'
@@ -196,7 +198,7 @@ const spriteMaterial = (map: THREE.Texture, additive: boolean, opacity: number) 
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   })
 
-export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project' }: Props) => {
+export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project', arrange = 'clusters' }: Props) => {
   const host = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -218,7 +220,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     onHoverRef.current = onHover
   }, [onHover])
 
-  const place = useMemo(() => layout3D(graph), [graph])
+  const place = useMemo(() => layout3D(graph, arrange), [graph, arrange])
   /** The layout's own worlds are its entities; a project grouping is worked out over the same positions. */
   const groups = useMemo(
     () => (grouping === 'entity' ? place.worlds : groupsOf(place, graph.nodes, (n) => n.project)),
@@ -318,7 +320,9 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
      * narrow one.
      */
     const FOV = 46
-    const half = place.shell * 1.05
+    // The orphan shell is the periphery, so in clusters it may run past the glass a little
+    // rather than shrinking every project to fit it.
+    const half = place.shell * (arrange === 'clusters' ? 0.8 : 1.05)
     const TARGET = new THREE.Vector3(0, 0, 0)
     const fitFor = (aspect: number) => {
       const vertical = half / Math.tan((FOV * Math.PI) / 360)
@@ -542,7 +546,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
       worldPos.set([w.x, w.y, w.z], i * 3)
       const c = new THREE.Color(worldHue.get(w.key) ?? entityColor(w.key))
       worldCol.set([c.r, c.g, c.b], i * 3)
-      worldSize[i] = w.spread * 5
+      worldSize[i] = w.spread * (arrange === 'clusters' ? 3.4 : 5)
     })
     worldGeometry.setAttribute('position', new THREE.BufferAttribute(worldPos, 3))
     worldGeometry.setAttribute('color', new THREE.BufferAttribute(worldCol, 3))
@@ -801,7 +805,10 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
         const ib = rowOf.get(e.target)
         const ca = ia === undefined ? palette.muted : (base[ia] as THREE.Color)
         const cb = ib === undefined ? palette.muted : (base[ib] as THREE.Color)
-        const k = on ? (slug ? 1.4 : 0.8) : 0.09
+        // A link inside a project is the structure; one that crosses between
+        // projects is context. Equally bright, the long arcs drown the clusters.
+        const across = arrange === 'clusters' && byslug.get(e.source)?.project !== byslug.get(e.target)?.project
+        const k = on ? (slug ? 1.4 : across ? 0.3 : 0.9) : 0.09
         // Each segment takes the colour of the end it is nearer, so a link
         // reads as leaving one project and arriving at another.
         for (let seg = 0; seg < BOW; seg += 1) {
@@ -1312,7 +1319,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
       renderer.dispose()
       canvas.remove()
     }
-  }, [graph, place, groups, grouping, colourBy, neighbours, open])
+  }, [graph, place, groups, grouping, colourBy, arrange, neighbours, open])
 
   return (
     <div className="absolute inset-0">

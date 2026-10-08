@@ -73,7 +73,55 @@ const SPREAD = 100
  */
 const ITERATIONS = 90
 
-export const layout3D = (graph: KnowledgeGraph): Layout3D => {
+/**
+ * How the cloud is arranged (CAIRN-361).
+ *
+ * `links` lets the references decide, which is the honest picture of how the
+ * corpus is wired and the unreadable one: projects share the middle and their
+ * names and glows land on top of each other. `clusters` gives every project a
+ * place of its own on a sphere and lets the links work inside it, so a project
+ * reads as one constellation and a cross-project reference reads as an arc
+ * between two of them.
+ */
+export type Arrange = 'clusters' | 'links'
+
+/** Room a cluster needs, from how many entries it holds: volume goes as n, radius as n^(1/3). */
+const roomFor = (count: number): number => 16 + 11 * Math.cbrt(count)
+
+/**
+ * Where each project with company sits, on a flattened sphere.
+ *
+ * Largest first and spread by a stride coprime to the count, so consecutive
+ * (and therefore similar-sized) projects are never neighbours on the spiral:
+ * the big ones end up evenly apart instead of crowding one side.
+ */
+const anchorsFor = (counts: Map<string, number>): Map<string, Point3> => {
+  const keys = [...counts.entries()]
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .map(([key]) => key)
+  const n = keys.length
+  const out = new Map<string, Point3>()
+  if (n === 0) return out
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
+  let stride = Math.max(1, Math.round(n * 0.618))
+  while (gcd(stride, n) !== 1) stride += 1
+  // Big clusters push the sphere out: the sphere's surface must hold their
+  // combined cross-sections with air between them.
+  const area = keys.reduce((sum, key) => sum + roomFor(counts.get(key) ?? 0) ** 2, 0)
+  const radius = Math.max(SPREAD * 0.9, Math.sqrt(area) * 1.75)
+  const golden = Math.PI * (3 - Math.sqrt(5))
+  keys.forEach((key, rank) => {
+    const slot = (rank * stride) % n
+    const up = n === 1 ? 0 : 1 - (2 * (slot + 0.5)) / n
+    const ring = Math.sqrt(Math.max(0, 1 - up * up))
+    const a = slot * golden
+    out.set(key, { x: Math.cos(a) * ring * radius, y: up * radius * 0.8, z: Math.sin(a) * ring * radius })
+  })
+  return out
+}
+
+export const layout3D = (graph: KnowledgeGraph, arrange: Arrange = 'links'): Layout3D => {
   /**
    * Sorted, and that is not cosmetic.
    *
@@ -111,9 +159,25 @@ export const layout3D = (graph: KnowledgeGraph): Layout3D => {
   const spanX = Math.max(1, Math.max(...xs) - minX)
   const spanY = Math.max(1, Math.max(...ys) - minY)
 
+  const clustered = arrange === 'clusters'
+  const projectCounts = new Map<string, number>()
+  for (const n of connected) if (n.project) projectCounts.set(n.project, (projectCounts.get(n.project) ?? 0) + 1)
+  const anchors = clustered ? anchorsFor(projectCounts) : new Map<string, Point3>()
+  const home: (Point3 | undefined)[] = connected.map((n) => (n.project ? anchors.get(n.project) : undefined))
+
   for (let i = 0; i < count; i += 1) {
     const n = connected[i]
     if (!n) continue
+    const anchor = home[i]
+    if (anchor && n.project) {
+      // Born inside its own cluster: the relaxation then tidies a cluster
+      // instead of having to haul entries across the cloud to it.
+      const room = roomFor(projectCounts.get(n.project) ?? 1)
+      px[i] = anchor.x + (unit(n.slug, 1) - 0.5) * room
+      py[i] = anchor.y + (unit(n.slug, 2) - 0.5) * room
+      pz[i] = anchor.z + (unit(n.slug, 3) - 0.5) * room
+      continue
+    }
     // Seeded FROM the flat layout, not from nothing. The server has already
     // done the work of pulling islands apart; starting from a random cloud
     // throws that away and lets the relaxation find a different, equally valid
@@ -200,7 +264,10 @@ export const layout3D = (graph: KnowledgeGraph): Layout3D => {
           dz = unit(pair, 4) - 0.5
           d2 = 0.01
         }
-        const force = repulsion / d2
+        // Inside a cluster the entries may sit closer than the cloud as a
+        // whole would let them: the anchors keep the clusters apart.
+        const same = clustered && connected[i]?.project && connected[i]?.project === connected[j]?.project
+        const force = (repulsion * (same ? 0.35 : 1)) / d2
         const d = Math.sqrt(d2)
         const ux = (dx / d) * force
         const uy = (dy / d) * force
@@ -216,7 +283,16 @@ export const layout3D = (graph: KnowledgeGraph): Layout3D => {
 
     // Each world gathers toward its own centre of mass, recomputed every
     // step so the regions form rather than being decided in advance.
-    if (worldN > 0) {
+    if (clustered) {
+      for (let i = 0; i < count; i += 1) {
+        const a = home[i]
+        if (!a) continue
+        const K = 0.35
+        fx[i] = (fx[i] as number) + (a.x - (px[i] as number)) * K
+        fy[i] = (fy[i] as number) + (a.y - (py[i] as number)) * K
+        fz[i] = (fz[i] as number) + (a.z - (pz[i] as number)) * K
+      }
+    } else if (worldN > 0) {
       wx.fill(0); wy.fill(0); wz.fill(0); wc.fill(0)
       for (let i = 0; i < count; i += 1) {
         const w = worldOf[i] as number
@@ -263,7 +339,7 @@ export const layout3D = (graph: KnowledgeGraph): Layout3D => {
     for (let i = 0; i < count; i += 1) {
       // Pulled gently home, or the repulsion inflates the cloud without limit
       // and the islands drift off the far side of the camera.
-      const gravity = 0.012
+      const gravity = clustered ? 0.002 : 0.012
       const vx = (fx[i] as number) * heat - (px[i] as number) * gravity
       const vy = (fy[i] as number) * heat - (py[i] as number) * gravity
       const vz = (fz[i] as number) * heat - (pz[i] as number) * gravity

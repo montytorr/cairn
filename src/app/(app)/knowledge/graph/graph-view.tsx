@@ -20,6 +20,7 @@ import { COLOUR_MODES, type ColourBy } from '@/lib/graph-colour'
 import { hoverAnnouncement, hoverCardFor, placeCard } from '@/lib/graph-hover'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 import type { Grouping } from './graph-scene'
+import type { Arrange } from '@/lib/graph-3d'
 
 /**
  * The map, and the choice of how to draw it.
@@ -204,6 +205,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const [colourBy, setColourBy] = useState<ColourBy>('project')
+  const [arrange, setArrange] = useState<Arrange>('clusters')
   const search = useCallback((text: string) => {
     setQuery(text)
     setSpotlight(text.trim() ? { kind: 'find', key: text.trim() } : null)
@@ -335,6 +337,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
           spotlight={spotlight}
           grouping={grouping}
           colourBy={colourBy}
+          arrange={arrange}
         />
       ) : (
         <GraphFlat
@@ -563,6 +566,27 @@ export const GraphView = ({ graph: incoming }: Props) => {
         </div>
         {able ? (
           <>
+          {mode === 'scene' ? (
+            <div
+              role="group"
+              aria-label="How the spatial map is arranged"
+              className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
+            >
+              {(['clusters', 'links'] as const).map((a) => (
+                <Button
+                  key={a}
+                  size="sm"
+                  variant="ghost"
+                  aria-pressed={arrange === a}
+                  onClick={() => setArrange(a)}
+                  title={a === 'clusters' ? 'Every project gets a place of its own' : 'Let the links decide where things sit'}
+                  className={SEGMENT}
+                >
+                  {a === 'clusters' ? 'Clusters' : 'Links'}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           {/* Only where it changes something: the glows are the scene's, and
               with one entity there is nothing to choose between. */}
           {mode === 'scene' && canGroupByEntity ? (
