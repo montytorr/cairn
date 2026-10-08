@@ -903,10 +903,11 @@ export const openapiSpec = () => ({
           description: 'Note id.' },
       ],
       delete: {
-        summary: 'Withdraw a note you wrote',
+        summary: 'Withdraw a note',
         description:
-          'Only the note\'s own author may remove it: a work log is the record of what was ' +
-          'tried, and letting one agent erase another\'s would make it untrustworthy. Exists ' +
+          'An agent may remove only a note it wrote: a work log is the record of what was ' +
+          'tried, and letting one agent erase another\'s would make it untrustworthy. A person ' +
+          'signed in to the web app may remove any note on a task they can open. Exists ' +
           'so a note written by mistake can be taken back, and so a scratch task that ' +
           'acquired one is not left permanently undeletable.',
         responses: { '200': okResponse('Withdrawn.'), '403': errorResponse, '404': errorResponse, '409': errorResponse },

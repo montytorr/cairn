@@ -369,3 +369,79 @@ describe('the named glows, grouped by project (CAIRN-340)', () => {
     expect(JSON.stringify([...layout3D(g).at])).toBe(before)
   })
 })
+
+describe('clusters arrangement (CAIRN-361)', () => {
+  const project = (key: string, n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      slug: `${key}-${i}`,
+      title: `${key} ${i}`,
+      project: key,
+      entity: null,
+      degree: 2,
+      island: 0,
+      x: i * 10,
+      y: i * 7,
+    }))
+  const nodes = [...project('aa', 12), ...project('bb', 12), ...project('cc', 8)]
+  const edges = nodes.slice(1).map((n, i) => ({ source: nodes[i]!.slug, target: n.slug }))
+  const graph = {
+    nodes,
+    entities: [],
+    edges,
+    missing: [],
+    islands: [nodes.length],
+    width: 200,
+    height: 200,
+    isolatedFrom: nodes.length,
+    stats: { entries: nodes.length, withReferences: 0, references: 0, resolved: 0, dangling: 0, isolated: 0, islands: 1 },
+  } as unknown as Parameters<typeof layout3D>[0]
+
+  it('is deterministic', () => {
+    const a = layout3D(graph, 'clusters')
+    const b = layout3D(graph, 'clusters')
+    expect([...a.at.entries()]).toEqual([...b.at.entries()])
+  })
+
+  it('keeps each project closer to itself than to the others', () => {
+    const { at } = layout3D(graph, 'clusters')
+    const centre = (key: string) => {
+      const ps = nodes.filter((n) => n.project === key).map((n) => at.get(n.slug)!)
+      return {
+        x: ps.reduce((s, p) => s + p.x, 0) / ps.length,
+        y: ps.reduce((s, p) => s + p.y, 0) / ps.length,
+        z: ps.reduce((s, p) => s + p.z, 0) / ps.length,
+        ps,
+      }
+    }
+    for (const key of ['aa', 'bb', 'cc']) {
+      const c = centre(key)
+      const reach = c.ps.reduce((s, p) => s + Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z), 0) / c.ps.length
+      for (const other of ['aa', 'bb', 'cc'].filter((k) => k !== key)) {
+        const o = centre(other)
+        expect(Math.hypot(o.x - c.x, o.y - c.y, o.z - c.z)).toBeGreaterThan(reach * 2)
+      }
+    }
+  })
+
+  it('leaves the links arrangement as it was', () => {
+    expect([...layout3D(graph).at.entries()]).toEqual([...layout3D(graph, 'links').at.entries()])
+  })
+})
+
+describe('group cores (CAIRN-361)', () => {
+  it('aims a camera at the bulk of a group, not at the one entry that wandered off', () => {
+    const near = Array.from({ length: 9 }, (_, i) => ({ slug: `n${i}`, x: 0, y: 0, z: 0 }))
+    const stray = { slug: 'far', x: 1000, y: 0, z: 0 }
+    const nodes = [...near, stray].map((n) => ({
+      slug: n.slug, title: n.slug, project: 'p', entity: null, degree: 1, island: 0, x: 0, y: 0,
+    }))
+    const place = {
+      at: new Map([...near, stray].map((n) => [n.slug, { x: n.x, y: n.y, z: n.z }])),
+      radius: 100, shell: 130, worlds: [],
+    }
+    const [group] = groupsOf(place, nodes as never, (n) => n.project)
+    expect(group!.x).toBeGreaterThan(50)
+    expect(group!.core!.x).toBe(0)
+    expect(group!.core!.reach).toBeLessThan(100)
+  })
+})

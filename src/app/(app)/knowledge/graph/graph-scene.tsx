@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { entityColor, projectColor } from '@/components/icons'
-import { groupsOf, layout3D } from '@/lib/graph-3d'
+import { groupsOf, layout3D, type Arrange } from '@/lib/graph-3d'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
-import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
+import { mapNow, nodeColour, type ColourBy } from '@/lib/graph-colour'
+import type { KnowledgeGraph, GraphNode } from '@/lib/api/knowledge-graph'
 
 /**
  * The map as a place you can move through.
@@ -44,6 +45,14 @@ type Props = {
   spotlight: Spotlight
   /** What the named glows are drawn around: each project, or each entity. */
   grouping: Grouping
+  /** What the dots' colour says. Changing it rebuilds the scene with the camera kept. */
+  colourBy?: ColourBy
+  /** Whether projects get a place of their own or the links decide. */
+  arrange?: Arrange
+  /** Fly from cluster to cluster, naming each as it goes; any touch ends it. */
+  tour?: boolean
+  onTourStep?: (key: string) => void
+  onTourStop?: () => void
 }
 
 export type Grouping = 'project' | 'entity'
@@ -193,7 +202,7 @@ const spriteMaterial = (map: THREE.Texture, additive: boolean, opacity: number) 
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   })
 
-export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Props) => {
+export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project', arrange = 'clusters', tour = false, onTourStep, onTourStop }: Props) => {
   const host = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -210,12 +219,22 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     spotRef.current = spotlight
   }, [spotlight])
 
+  /** Read by the loop, which is built once and must not be rebuilt to start a tour. */
+  const tourRef = useRef(tour)
+  const onTourStepRef = useRef(onTourStep)
+  const onTourStopRef = useRef(onTourStop)
+  useEffect(() => {
+    tourRef.current = tour
+    onTourStepRef.current = onTourStep
+    onTourStopRef.current = onTourStop
+  }, [tour, onTourStep, onTourStop])
+
   const onHoverRef = useRef(onHover)
   useEffect(() => {
     onHoverRef.current = onHover
   }, [onHover])
 
-  const place = useMemo(() => layout3D(graph), [graph])
+  const place = useMemo(() => layout3D(graph, arrange), [graph, arrange])
   /** The layout's own worlds are its entities; a project grouping is worked out over the same positions. */
   const groups = useMemo(
     () => (grouping === 'entity' ? place.worlds : groupsOf(place, graph.nodes, (n) => n.project)),
@@ -315,7 +334,9 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
      * narrow one.
      */
     const FOV = 46
-    const half = place.shell * 1.05
+    // The orphan shell is the periphery, so in clusters it may run past the glass a little
+    // rather than shrinking every project to fit it.
+    const half = arrange === 'clusters' ? place.radius * 1.15 : place.shell * 1.05
     const TARGET = new THREE.Vector3(0, 0, 0)
     const fitFor = (aspect: number) => {
       const vertical = half / Math.tan((FOV * Math.PI) / 360)
@@ -325,7 +346,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     }
     const reach = fitFor(1.8)
     /** Off-axis, because straight-on hides the depth this view exists for. */
-    const HOME = new THREE.Vector3(0.42, 0.34, 0.84).normalize().multiplyScalar(reach)
+    const HOME = (arrange === 'clusters' ? new THREE.Vector3(0.25, 0.9, 0.55) : new THREE.Vector3(0.42, 0.34, 0.84)).normalize().multiplyScalar(reach)
     camera.position.copy(TARGET).add(HOME)
     const resumed = kept.current
     if (resumed) camera.position.copy(resumed.position)
@@ -354,7 +375,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     // two buttons, and a camera that can be walked far enough from the cloud
     // that there is no way back but the reset.
     controls.enablePan = false
-    controls.minDistance = reach * 0.3
+    controls.minDistance = reach * 0.14
     controls.maxDistance = reach * 3
     // Clamped off both poles: straight down the Y axis the cloud collapses to
     // a disc and the floor of orphans disappears edge-on, which are the two
@@ -382,6 +403,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     let touched = resumed?.touched ?? false
     controls.addEventListener('start', () => {
       touched = true
+      if (tourRef.current) onTourStopRef.current?.()
     })
 
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -410,9 +432,12 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     const slugAt = [...linked.map((n) => n.slug), ...adrift.map((n) => n.slug)]
     const byslug = new Map(all.map((n) => [n.slug, n]))
     const rowOf = new Map(linked.map((n, i) => [n.slug, i]))
-    const colourOf = (project: string | null) =>
-      project ? new THREE.Color(projectColor(project)) : palette.muted.clone()
-    let base = linked.map((n) => colourOf(n.project))
+    const now = mapNow()
+    const colourOf = (n: GraphNode) => {
+      const css = nodeColour(n, colourBy, now)
+      return css ? new THREE.Color(css) : palette.muted.clone()
+    }
+    let base = linked.map((n) => colourOf(n))
 
     const sphere = new THREE.SphereGeometry(1, 18, 14)
     const material = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 })
@@ -536,7 +561,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       worldPos.set([w.x, w.y, w.z], i * 3)
       const c = new THREE.Color(worldHue.get(w.key) ?? entityColor(w.key))
       worldCol.set([c.r, c.g, c.b], i * 3)
-      worldSize[i] = w.spread * 5
+      worldSize[i] = w.spread * (arrange === 'clusters' ? 3.4 : 5)
     })
     worldGeometry.setAttribute('position', new THREE.BufferAttribute(worldPos, 3))
     worldGeometry.setAttribute('color', new THREE.BufferAttribute(worldCol, 3))
@@ -795,7 +820,10 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
         const ib = rowOf.get(e.target)
         const ca = ia === undefined ? palette.muted : (base[ia] as THREE.Color)
         const cb = ib === undefined ? palette.muted : (base[ib] as THREE.Color)
-        const k = on ? (slug ? 1.4 : 0.8) : 0.09
+        // A link inside a project is the structure; one that crosses between
+        // projects is context. Equally bright, the long arcs drown the clusters.
+        const across = arrange === 'clusters' && byslug.get(e.source)?.project !== byslug.get(e.target)?.project
+        const k = on ? (slug ? 1.4 : across ? 0.3 : 0.9) : 0.09
         // Each segment takes the colour of the end it is nearer, so a link
         // reads as leaving one project and arriving at another.
         for (let seg = 0; seg < BOW; seg += 1) {
@@ -939,7 +967,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       palette = readPalette()
       scene.background = palette.bg.clone()
       if (scene.fog) (scene.fog as THREE.Fog).color = palette.bg.clone()
-      base = linked.map((n) => colourOf(n.project))
+      base = linked.map((n) => colourOf(n))
       adriftColour.copy(palette.muted)
       for (const [m, op] of [
         [glowMat, palette.dark ? 0.5 : 0.16],
@@ -999,7 +1027,31 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
      * It is the only place the entity is written down, and without it the
      * coloured regions are a mood rather than a fact.
      */
+    // Biggest first: when two names would land on each other the larger
+    // project keeps its name and the smaller waits until the camera is close
+    // enough for them to part.
+    const labelOrder = groups.map((_, i) => i).sort((a, b) => (groups[b]?.count ?? 0) - (groups[a]?.count ?? 0) || a - b)
+    const crowded = new Set<number>()
     const drawWorlds = (w: number, h: number) => {
+      crowded.clear()
+      const taken: { x: number; y: number; w: number; h: number }[] = []
+      for (const i of labelOrder) {
+        const g = groups[i]
+        if (!g) continue
+        projected.set(g.x, g.y, g.z).project(camera)
+        if (projected.z <= -1 || projected.z >= 1) continue
+        const box = {
+          x: (projected.x * 0.5 + 0.5) * w,
+          y: (-projected.y * 0.5 + 0.5) * h,
+          w: ((titleOf.get(g.key) ?? g.key).length * 13 + String(g.count).length * 9 + 14),
+          h: 22,
+        }
+        if (taken.some((t) => Math.abs(t.x - box.x) < (t.w + box.w) / 2 && Math.abs(t.y - box.y) < (t.h + box.h) / 2)) {
+          crowded.add(i)
+        } else {
+          taken.push(box)
+        }
+      }
       groups.forEach((world, i) => {
         projected.set(world.x, world.y, world.z).project(camera)
         let span = worldPool[i]
@@ -1007,15 +1059,22 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
           span = document.createElement('span')
           span.className =
             'absolute top-0 left-0 whitespace-nowrap text-[0.9375rem] font-semibold uppercase leading-none tracking-[0.22em]'
+          span.appendChild(document.createTextNode(''))
+          const tally = document.createElement('i')
+          tally.className = 'ml-1.5 text-meta font-medium not-italic tracking-normal opacity-60'
+          span.appendChild(tally)
           overlay.appendChild(span)
           worldPool[i] = span
         }
-        if (projected.z <= -1 || projected.z >= 1) {
+        if (projected.z <= -1 || projected.z >= 1 || crowded.has(i)) {
           span.style.display = 'none'
           return
         }
         const name = titleOf.get(world.key) ?? world.key
-        if (span.textContent !== name) span.textContent = name
+        const [text, tally] = [span.firstChild as Text, span.lastChild as HTMLElement]
+        if (text.data !== name) text.data = name
+        const count = String(world.count)
+        if (tally.textContent !== count) tally.textContent = count
         span.style.color = worldInk(world.key)
         // Knocked out of the ground, like the titles — a coloured word over a
         // coloured haze is the one place on this map contrast can vanish.
@@ -1148,6 +1207,13 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     resize()
 
     const _home = new THREE.Vector3()
+    const TOUR_MS = 4800
+    const tourOrder = [...groups].sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1))
+    const tourDest = new THREE.Vector3()
+    const tourEye = new THREE.Vector3()
+    let tourAt = 0
+    let tourClock = 0
+    let tourIdx = -1
     let raf = 0
     let frame = 0
     let alive = true
@@ -1175,6 +1241,33 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
         controls.target.lerp(TARGET, e * 0.35)
         camera.position.lerp(_home.copy(TARGET).add(HOME), e * 0.35)
         if (k >= 1) homing = 0
+      }
+
+      // The tour: ease to the next cluster every few seconds, closer for a
+      // small one than a large, keeping the heading the reader is orbiting on.
+      if (tourRef.current && tourOrder.length > 0) {
+        const now = performance.now()
+        // Eased by elapsed time, not by frame: the same glide on a 60Hz laptop,
+        // a 120Hz display and a tab the browser is throttling.
+        const dt = Math.min(0.25, Math.max(0, (now - (tourClock || now)) / 1000))
+        tourClock = now
+        const ease = 1 - Math.exp(-dt * 2.6)
+        if (!tourAt || now - tourAt > TOUR_MS) {
+          tourIdx = (tourIdx + 1) % tourOrder.length
+          tourAt = now
+          onTourStepRef.current?.((tourOrder[tourIdx] as (typeof tourOrder)[number]).key)
+        }
+        const g = tourOrder[tourIdx] as (typeof tourOrder)[number]
+        const c = g.core ?? { x: g.x, y: g.y, z: g.z, reach: g.spread }
+        controls.target.lerp(tourDest.set(c.x, c.y, c.z), ease)
+        const want = Math.min(reach * 0.8, Math.max(reach * 0.12, c.reach * 2.1))
+        tourEye.copy(camera.position).sub(controls.target)
+        tourEye.setLength(tourEye.length() + (want - tourEye.length()) * ease)
+        camera.position.copy(controls.target).add(tourEye)
+      } else {
+        tourAt = 0
+        tourClock = 0
+        tourIdx = -1
       }
 
       const age = performance.now() - born
@@ -1306,7 +1399,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       renderer.dispose()
       canvas.remove()
     }
-  }, [graph, place, groups, grouping, neighbours, open])
+  }, [graph, place, groups, grouping, colourBy, arrange, neighbours, open])
 
   return (
     <div className="absolute inset-0">

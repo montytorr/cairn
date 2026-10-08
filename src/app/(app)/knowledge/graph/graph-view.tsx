@@ -11,14 +11,16 @@ import {
   useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { Box, Map as MapIcon } from 'lucide-react'
-import { Button, Select } from '@/components/ui/control'
+import { Box, Map as MapIcon, Play, Search, Square, X } from 'lucide-react'
+import { Button, Select, Input } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 import { GraphFlat } from './graph-flat'
-import { spotlightOptions, type Spotlight } from '@/lib/graph-spotlight'
+import { inSpotlight, spotlightName, spotlightOptions, type Spotlight } from '@/lib/graph-spotlight'
+import { COLOUR_MODES, type ColourBy } from '@/lib/graph-colour'
 import { hoverAnnouncement, hoverCardFor, placeCard } from '@/lib/graph-hover'
 import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
 import type { Grouping } from './graph-scene'
+import type { Arrange } from '@/lib/graph-3d'
 
 /**
  * The map, and the choice of how to draw it.
@@ -156,6 +158,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
   /** One project or one world, lit against everything else. */
   const [spotlight, setSpotlight] = useState<Spotlight>(null)
 
+  const [touring, setTouring] = useState(false)
   const { able, mode: preferred } = useSyncExternalStore(noSubscribe, capability, onServer)
   /** What the toggle was last set to, which outranks the remembered answer. */
   const [chosen, setChosen] = useState<Mode | null>(null)
@@ -179,9 +182,15 @@ export const GraphView = ({ graph: incoming }: Props) => {
     }
   }, [])
 
+  const stopTour = useCallback(() => {
+    setTouring(false)
+    setSpotlight(null)
+  }, [])
+
   const choose = useCallback((next: Mode) => {
     setChosen(next)
     setFocused(null)
+    setTouring(false)
     try {
       window.localStorage.setItem(STORAGE, next)
     } catch {
@@ -196,11 +205,30 @@ export const GraphView = ({ graph: incoming }: Props) => {
     [graph.entities],
   )
   const options = useMemo(() => spotlightOptions(graph.nodes, titles), [graph.nodes, titles])
-  const litCount = spotlight
-    ? ((spotlight.kind === 'project' ? options.projects : options.entities).find(
-        (o) => o.key === spotlight.key,
-      )?.count ?? 0)
-    : 0
+  const litCount = useMemo(
+    () => (spotlight ? graph.nodes.filter((n) => inSpotlight(n, spotlight)).length : 0),
+    [graph.nodes, spotlight],
+  )
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [colourBy, setColourBy] = useState<ColourBy>('project')
+  const [arrange, setArrange] = useState<Arrange>('clusters')
+  const search = useCallback((text: string) => {
+    setQuery(text)
+    setSpotlight(text.trim() ? { kind: 'find', key: text.trim() } : null)
+  }, [])
+  // `/` is the search box, unless a field already has the keys.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+      if (target && /^(input|textarea|select)$/i.test(target.tagName)) return
+      event.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const card = useMemo(
     () => hoverCardFor(focused, at, graph.missing, titles),
     [focused, at, graph.missing, titles],
@@ -315,6 +343,14 @@ export const GraphView = ({ graph: incoming }: Props) => {
           onHover={setFocused}
           spotlight={spotlight}
           grouping={grouping}
+          colourBy={colourBy}
+          arrange={arrange}
+          tour={touring}
+          onTourStep={(key) => {
+            setQuery('')
+            setSpotlight({ kind: grouping === 'entity' ? 'entity' : 'project', key })
+          }}
+          onTourStop={stopTour}
         />
       ) : (
         <GraphFlat
@@ -322,6 +358,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
           focused={focused}
           setFocused={setFocused}
           spotlight={spotlight}
+          colourBy={colourBy}
         />
       )}
 
@@ -381,7 +418,8 @@ export const GraphView = ({ graph: incoming }: Props) => {
       >
         {spotlight ? (
           <span className="text-fg">
-            {litCount} {litCount === 1 ? 'entry' : 'entries'} in {spotlight.key}
+            {litCount} {litCount === 1 ? 'entry' : 'entries'}{' '}
+            {spotlight.kind === 'find' ? 'match' : 'in'} {spotlightName(spotlight)}
             <span className="text-fg-subtle"> · everything else dimmed</span>
           </span>
         ) : (
@@ -408,17 +446,47 @@ export const GraphView = ({ graph: incoming }: Props) => {
           same question without moving anything, which is also more honest —
           you see how scattered a project's knowledge really is rather than a
           clump the layout invented. */}
-      <div className="raised absolute top-[0.625rem] left-1/2 flex -translate-x-1/2 rounded-md">
+      <div className="absolute top-[0.625rem] left-1/2 flex -translate-x-1/2 items-center gap-1.5">
+        <div className={cn(CHROME, 'relative flex items-center rounded-md')}>
+          <Search size={13} aria-hidden className="text-fg-subtle pointer-events-none absolute left-2" />
+          <Input
+            ref={searchRef}
+            size="sm"
+            value={query}
+            onChange={(e) => search(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                search('')
+                e.currentTarget.blur()
+              }
+            }}
+            placeholder="Find an entry  /"
+            aria-label="Find an entry by title or slug"
+            className="w-36 pl-7 sm:w-48"
+          />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => search('')}
+              className="text-fg-subtle hover:text-fg absolute right-1.5"
+            >
+              <X size={12} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        <div className="raised flex rounded-md">
         <Select
           size="sm"
           aria-label="Light up one project or entity"
           className="max-w-[14rem]"
-          value={spotlight ? `${spotlight.kind}:${spotlight.key}` : ''}
+          value={spotlight && spotlight.kind !== 'find' ? `${spotlight.kind}:${spotlight.key}` : ''}
           onChange={(e) => {
             const v = e.target.value
+            setQuery('')
             if (!v) return setSpotlight(null)
             const [kind, key] = v.split(':')
-            setSpotlight({ kind: kind as 'project' | 'entity', key: key as string })
+            setSpotlight({ kind: kind as 'project' | 'entity' | 'island', key: key as string })
           }}
         >
           <option value="">Everything</option>
@@ -440,7 +508,17 @@ export const GraphView = ({ graph: incoming }: Props) => {
               ))}
             </optgroup>
           ) : null}
+          {options.islands.length > 0 ? (
+            <optgroup label="Islands">
+              {options.islands.map((o) => (
+                <option key={`island:${o.key}`} value={`island:${o.key}`}>
+                  {o.label} ({o.count})
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </Select>
+        </div>
       </div>
 
       {/* Flat or spatial. Offered rather than decided, because the two are
@@ -449,8 +527,8 @@ export const GraphView = ({ graph: incoming }: Props) => {
           able to hide behind anything else. Hidden entirely where WebGL is
           unavailable — a toggle to something that cannot be drawn is worse
           than no toggle. */}
-      {able ? (
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+      <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+        {able ? (
           <div
             role="group"
             aria-label="How to draw the map"
@@ -479,6 +557,62 @@ export const GraphView = ({ graph: incoming }: Props) => {
               Flat
             </Button>
           </div>
+        ) : null}
+        <div
+          role="group"
+          aria-label="What the colour says"
+          className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
+        >
+          {COLOUR_MODES.map((m) => (
+            <Button
+              key={m.key}
+              size="sm"
+              variant="ghost"
+              aria-pressed={colourBy === m.key}
+              onClick={() => setColourBy(m.key)}
+              title={m.hint}
+              className={SEGMENT}
+            >
+              {m.label}
+            </Button>
+          ))}
+        </div>
+        {able ? (
+          <>
+          {mode === 'scene' ? (
+            <div
+              role="group"
+              aria-label="How the spatial map is arranged"
+              className={cn(CHROME, 'flex items-center gap-0.5 rounded-full p-0.5')}
+            >
+              {(['clusters', 'links'] as const).map((a) => (
+                <Button
+                  key={a}
+                  size="sm"
+                  variant="ghost"
+                  aria-pressed={arrange === a}
+                  onClick={() => setArrange(a)}
+                  title={a === 'clusters' ? 'Every project gets a place of its own' : 'Let the links decide where things sit'}
+                  className={SEGMENT}
+                >
+                  {a === 'clusters' ? 'Clusters' : 'Links'}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          {mode === 'scene' ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={touring}
+              onClick={() => (touring ? stopTour() : setTouring(true))}
+              title={touring ? 'Stop the tour' : 'Fly from project to project'}
+              className={cn(CHROME, SEGMENT)}
+            >
+              {touring ? <Square size={12} aria-hidden /> : <Play size={12} aria-hidden />}
+              {touring ? 'Stop' : 'Tour'}
+            </Button>
+          ) : null}
           {/* Only where it changes something: the glows are the scene's, and
               with one entity there is nothing to choose between. */}
           {mode === 'scene' && canGroupByEntity ? (
@@ -502,8 +636,9 @@ export const GraphView = ({ graph: incoming }: Props) => {
               ))}
             </div>
           ) : null}
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </div>
 
       {/* The legend, because "what are the dotted red circles?" was the first
           thing asked after ten minutes of looking at this. Every mark on the
@@ -522,7 +657,11 @@ export const GraphView = ({ graph: incoming }: Props) => {
             <circle cx="6" cy="5" r="3.5" fill="var(--accent)" />
             <circle cx="18" cy="5" r="3.5" fill="var(--fg-subtle)" />
           </svg>
-          <dd>coloured by project · grey is global</dd>
+          <dd>
+            {colourBy === 'project'
+              ? 'coloured by project · grey is global'
+              : COLOUR_MODES.find((m) => m.key === colourBy)?.hint}
+          </dd>
         </div>
         <div className="flex items-center gap-2">
           <svg width="26" height="10" aria-hidden className="shrink-0">

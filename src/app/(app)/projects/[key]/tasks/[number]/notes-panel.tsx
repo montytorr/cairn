@@ -3,7 +3,8 @@
 import { RelativeTime } from '@/components/relative-time'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { MarkdownView } from '@/components/markdown'
 import { cn } from '@/lib/utils'
 import { NOTE_KINDS, type NoteKind } from '@/schemas/task'
@@ -50,6 +51,44 @@ const Stone = ({ kind }: { kind: string }) => (
 )
 
 /**
+ * Withdraw one note: a trash icon that becomes "Delete?" on the first click
+ * and asks once, then reverts on its own. A browser confirm() would block the
+ * page, and a one-click delete on a record people rely on is a slip waiting
+ * to happen.
+ */
+const WithdrawNote = ({ onConfirm, busy }: { onConfirm: () => void; busy: boolean }) => {
+  const [asking, setAsking] = useState(false)
+  useEffect(() => {
+    if (!asking) return
+    const timer = setTimeout(() => setAsking(false), 4000)
+    return () => clearTimeout(timer)
+  }, [asking])
+
+  return asking ? (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onConfirm}
+      onBlur={() => setAsking(false)}
+      autoFocus
+      className="text-danger shrink-0 font-medium hover:underline"
+    >
+      Delete?
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setAsking(true)}
+      aria-label="Delete this note"
+      title="Delete this note"
+      className="text-fg-subtle hover:text-danger shrink-0 opacity-0 transition-opacity duration-[var(--dur-1)] group-hover/note:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+    >
+      <Trash2 size={13} aria-hidden />
+    </button>
+  )
+}
+
+/**
  * The work log, rendered dense and collapsed by default. This is the debugging
  * trail — attempts and dead ends included, because "tried X, no difference" is
  * what stops the next agent repeating it.
@@ -77,6 +116,7 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
   const [text, setText] = useState('')
   const [kind, setKind] = useState<NoteKind>('note')
   const [pending, setPending] = useState(false)
+  const [withdrawing, setWithdrawing] = useState<string | null>(null)
   // A set, not one id. Holding a single id meant expanding one entry
   // collapsed whichever was already open — reading two findings side by side
   // was impossible, which is the main thing anyone does with a work log.
@@ -113,6 +153,14 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
     } else {
       router.refresh() // unexpected shape; fall back to a reload
     }
+  }
+
+  const withdraw = async (id: string) => {
+    setWithdrawing(id)
+    const result = await request(`/api/v1/tasks/${taskId}/notes/${id}`, { method: 'DELETE' })
+    setWithdrawing(null)
+    if (!result.ok) return
+    setNotes((current) => current.filter((n) => n.id !== id))
   }
 
   return (
@@ -218,6 +266,10 @@ export const NotesPanel = ({ taskId, notes: initial }: { taskId: string; notes: 
                       #{ordinal}
                     </span>
                     <RelativeTime iso={note.created_at} className="text-fg-subtle tabular shrink-0" />
+                    <WithdrawNote
+                      busy={withdrawing === note.id}
+                      onConfirm={() => withdraw(note.id)}
+                    />
                   </div>
 
                   <div

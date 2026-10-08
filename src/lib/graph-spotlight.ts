@@ -16,11 +16,41 @@ import type { GraphNode } from '@/lib/api/knowledge-graph'
  * because you see how scattered a project's knowledge actually is against the
  * real structure rather than artificially clumped together.
  */
-export type Spotlight = { kind: 'project' | 'entity'; key: string } | null
+export type Spotlight =
+  | { kind: 'project' | 'entity' | 'island' | 'find'; key: string }
+  | null
 
-/** Whether an entry belongs to whatever is currently being picked out. */
-export const inSpotlight = (node: Pick<GraphNode, 'project' | 'entity'>, lit: Spotlight): boolean =>
-  !lit || (lit.kind === 'project' ? node.project === lit.key : node.entity === lit.key)
+const fold = (text: string): string => text.toLowerCase().replace(/[\s_-]+/g, ' ').trim()
+
+/**
+ * Whether an entry belongs to whatever is currently being picked out.
+ *
+ * `island` is the connected group (-1 is everything joined to nothing) and
+ * `find` is what somebody typed, matched against title and slug with
+ * separators folded so "map flat" finds `knowledge-map-flat` (CAIRN-361).
+ */
+export const inSpotlight = (
+  node: Pick<GraphNode, 'project' | 'entity'> & Partial<Pick<GraphNode, 'island' | 'title' | 'slug'>>,
+  lit: Spotlight,
+): boolean => {
+  if (!lit) return true
+  if (lit.kind === 'project') return node.project === lit.key
+  if (lit.kind === 'entity') return node.entity === lit.key
+  if (lit.kind === 'island') return String(node.island ?? -1) === lit.key
+  const words = fold(lit.key).split(' ').filter(Boolean)
+  const haystack = fold(`${node.title ?? ''} ${node.slug ?? ''}`)
+  return words.every((word) => haystack.includes(word))
+}
+
+/** What the caption says is lit: "N entries in X". */
+export const spotlightName = (lit: NonNullable<Spotlight>): string =>
+  lit.kind === 'island'
+    ? lit.key === '-1'
+      ? 'the entries joined to nothing'
+      : 'this island'
+    : lit.kind === 'find'
+      ? `“${lit.key}”`
+      : lit.key
 
 /**
  * What is actually ON the map, which is not the same as what exists.
@@ -33,7 +63,11 @@ export const inSpotlight = (node: Pick<GraphNode, 'project' | 'entity'>, lit: Sp
 export const spotlightOptions = (
   nodes: readonly GraphNode[],
   titles: ReadonlyMap<string, string>,
-): { projects: { key: string; label: string; count: number }[]; entities: { key: string; label: string; count: number }[] } => {
+): {
+  projects: { key: string; label: string; count: number }[]
+  entities: { key: string; label: string; count: number }[]
+  islands: { key: string; label: string; count: number }[]
+} => {
   const projects = new Map<string, number>()
   const entities = new Map<string, number>()
   for (const n of nodes) {
@@ -46,5 +80,16 @@ export const spotlightOptions = (
       // By name, because this is a list somebody reads down looking for one
       // they already have in mind — not a ranking.
       .sort((a, b) => a.label.localeCompare(b.label))
-  return { projects: shape(projects, false), entities: shape(entities, true) }
+  const sizes = new Map<number, number>()
+  for (const n of nodes) sizes.set(n.island, (sizes.get(n.island) ?? 0) + 1)
+  // Largest first: unlike projects this is a ranking, and the big ones are
+  // the ones worth walking into. A pair is not worth a menu entry.
+  const islands = [...sizes.entries()]
+    .filter(([island, count]) => island >= 0 && count >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([island, count]) => ({ key: String(island), label: `Island of ${count}`, count }))
+  const adrift = sizes.get(-1) ?? 0
+  if (adrift > 0) islands.push({ key: '-1', label: 'Joined to nothing', count: adrift })
+  return { projects: shape(projects, false), entities: shape(entities, true), islands }
 }
