@@ -98,6 +98,9 @@ const ITERATIONS = 90
  */
 export type Arrange = 'clusters' | 'links'
 
+/** Closest two project names may sit, whatever their sizes: a label is about this wide on screen. */
+const LABEL_GAP = 95
+
 /** Room a cluster needs, from how many entries it holds: volume goes as n, radius as n^(1/3). */
 const roomFor = (count: number): number => 16 + 11 * Math.cbrt(count)
 
@@ -139,6 +142,29 @@ const anchorsFor = (counts: Map<string, number>): Map<string, Point3> => {
       z: Math.sin(a) * r,
     })
   })
+  // Spiral slots are even on average and still leave neighbours close: two
+  // small projects can land side by side with their names on top of each
+  // other. Push any pair closer than their rooms plus a label's width apart,
+  // a fixed number of passes in sorted order so the answer never varies.
+  const placed = keys.map((key) => ({ key, p: out.get(key) as Point3, room: roomFor(counts.get(key) ?? 0) }))
+  for (let pass = 0; pass < 160; pass += 1) {
+    for (let i = 0; i < placed.length; i += 1) {
+      for (let j = i + 1; j < placed.length; j += 1) {
+        const a = placed[i] as (typeof placed)[number]
+        const b = placed[j] as (typeof placed)[number]
+        const dx = b.p.x - a.p.x
+        const dz = b.p.z - a.p.z
+        const d = Math.hypot(dx, dz) || 0.01
+        const want = Math.max(LABEL_GAP, (a.room + b.room) * 0.62)
+        if (d >= want) continue
+        const push = (want - d) / 2
+        a.p.x -= (dx / d) * push
+        a.p.z -= (dz / d) * push
+        b.p.x += (dx / d) * push
+        b.p.z += (dz / d) * push
+      }
+    }
+  }
   return out
 }
 

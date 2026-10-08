@@ -1027,7 +1027,31 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
      * It is the only place the entity is written down, and without it the
      * coloured regions are a mood rather than a fact.
      */
+    // Biggest first: when two names would land on each other the larger
+    // project keeps its name and the smaller waits until the camera is close
+    // enough for them to part.
+    const labelOrder = groups.map((_, i) => i).sort((a, b) => (groups[b]?.count ?? 0) - (groups[a]?.count ?? 0) || a - b)
+    const crowded = new Set<number>()
     const drawWorlds = (w: number, h: number) => {
+      crowded.clear()
+      const taken: { x: number; y: number; w: number; h: number }[] = []
+      for (const i of labelOrder) {
+        const g = groups[i]
+        if (!g) continue
+        projected.set(g.x, g.y, g.z).project(camera)
+        if (projected.z <= -1 || projected.z >= 1) continue
+        const box = {
+          x: (projected.x * 0.5 + 0.5) * w,
+          y: (-projected.y * 0.5 + 0.5) * h,
+          w: ((titleOf.get(g.key) ?? g.key).length * 13 + String(g.count).length * 9 + 14),
+          h: 22,
+        }
+        if (taken.some((t) => Math.abs(t.x - box.x) < (t.w + box.w) / 2 && Math.abs(t.y - box.y) < (t.h + box.h) / 2)) {
+          crowded.add(i)
+        } else {
+          taken.push(box)
+        }
+      }
       groups.forEach((world, i) => {
         projected.set(world.x, world.y, world.z).project(camera)
         let span = worldPool[i]
@@ -1042,7 +1066,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
           overlay.appendChild(span)
           worldPool[i] = span
         }
-        if (projected.z <= -1 || projected.z >= 1) {
+        if (projected.z <= -1 || projected.z >= 1 || crowded.has(i)) {
           span.style.display = 'none'
           return
         }
