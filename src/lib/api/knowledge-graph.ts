@@ -2,6 +2,8 @@ import { unstable_cache } from 'next/cache'
 import { admin } from '@/lib/db/client'
 import { normalizeSlugRef } from '@/schemas/knowledge'
 import { components, layoutGraph, type Edge } from '@/lib/graph-layout'
+import { stalenessFor, type AgeableEntry } from '@/lib/api/staleness'
+import { recallCounts } from '@/lib/api/knowledge-use'
 
 /**
  * The knowledge corpus as a map, including the parts of it joined to nothing.
@@ -530,6 +532,19 @@ export type GraphNode = {
   entity: string | null
   /** How many entries this one is joined to, in either direction. */
   degree: number
+  /** How many entries cite this one. `degree` cannot tell a hub from a bibliography. */
+  inbound?: number
+  /** When it was last written, epoch ms. The map colours by age against the reader's clock. */
+  updatedAt?: number
+  /** Times a search returned it or something read it in the recall window (CAIRN-270). */
+  recalls?: number
+  /**
+   * Whether the fact may have moved under its author (CAIRN-361): `stale` when
+   * files it names were touched in two or more sessions since it was
+   * confirmed, `unverified` when it names none and has gone unconfirmed for
+   * two weeks. The same two tests the knowledge list already applies.
+   */
+  health?: 'stale' | 'unverified'
   /**
    * The first thing the entry says, as plain text, for the hover card
    * (CAIRN-349). Absent rather than empty when there is no prose to show, so
@@ -580,6 +595,13 @@ export type KnowledgeGraph = {
 }
 
 type Row = {
+  id?: string
+  created_at?: string | null
+  updated_at?: string | null
+  verified_at?: string | null
+  source_task_id?: string | null
+  source_session_id?: string | null
+  source_session_ref?: string | null
   slug: string
   title: string
   body: string
@@ -672,6 +694,7 @@ type Analysed = {
   bySlug: Map<string, Row>
   edges: Edge[]
   degree: Map<string, number>
+  inbound: Map<string, number>
   missing: Map<string, string[]>
   references: number
   resolved: number
@@ -681,7 +704,9 @@ type Analysed = {
 const analyse = async (): Promise<Analysed> => {
   const { data, error } = await admin()
     .from('knowledge')
-    .select('slug, title, body, superseded_by, knowledge_projects(project:projects(key)), knowledge_entities(entity:entities(key))')
+    .select(
+      'id, slug, title, body, superseded_by, created_at, updated_at, verified_at, source_task_id, source_session_id, source_session_ref, knowledge_projects(project:projects(key)), knowledge_entities(entity:entities(key))',
+    )
   if (error) throw new Error(error.message)
 
   const all = (data ?? []) as unknown as Row[]
@@ -703,6 +728,7 @@ const analyse = async (): Promise<Analysed> => {
   const seen = new Set<string>()
   const missing = new Map<string, string[]>()
   const degree = new Map<string, number>()
+  const inbound = new Map<string, number>()
   let references = 0
   let resolved = 0
   let withReferences = 0
@@ -727,6 +753,10 @@ const analyse = async (): Promise<Analysed> => {
       // drawn would be a line to nowhere.
       if (!bySlug.has(to)) continue
 
+      // Counted before the undirected dedupe: two entries citing each other
+      // are one link but two citations.
+      inbound.set(to, (inbound.get(to) ?? 0) + 1)
+
       // Undirected: two entries that cite each other are one link, not two.
       const key = [from, to].sort().join(' -> ')
       if (seen.has(key)) continue
@@ -737,7 +767,7 @@ const analyse = async (): Promise<Analysed> => {
     }
   }
 
-  return { rows, bySlug, edges, degree, missing, references, resolved, withReferences }
+  return { rows, bySlug, edges, degree, inbound, missing, references, resolved, withReferences }
 }
 
 /**
@@ -872,11 +902,15 @@ const graphFor = unstable_cache(
   // version argument tracks the corpus, not the code, so a graph cached before
   // nodes carried an excerpt would be served without one until the next write
   // (CAIRN-349).
-  ['cairn-knowledge-graph-v2'],
+  ['cairn-knowledge-graph-v3'],
   { revalidate: 3600 },
 )
 
 export const knowledgeGraph = async (): Promise<KnowledgeGraph> => graphFor(await corpusVersion())
+
+const healthOf = (
+  s: { stale: boolean; unverifiedDays: number | null } | undefined,
+): GraphNode['health'] => (s?.stale ? 'stale' : s?.unverifiedDays != null ? 'unverified' : undefined)
 
 const buildGraph = async (): Promise<KnowledgeGraph> => {
   const [a, worldOf, entities] = await Promise.all([
@@ -884,7 +918,13 @@ const buildGraph = async (): Promise<KnowledgeGraph> => {
     entityByProject(),
     entityTitles(),
   ])
-  const { rows, bySlug, edges, degree, missing } = a
+  const { rows, bySlug, edges, degree, inbound, missing } = a
+
+  const live = rows.filter((row) => row.id)
+  const [aged, recalled] = await Promise.all([
+    stalenessFor('', live as unknown as AgeableEntry[]).catch(() => new Map()),
+    recallCounts(live.map((row) => row.id as string)).catch(() => new Map()),
+  ])
 
   const ids = [...bySlug.keys()].sort()
   const { placed, width, height, isolatedFrom } = layoutGraph(ids, edges)
@@ -904,6 +944,10 @@ const buildGraph = async (): Promise<KnowledgeGraph> => {
       // Its own scope first, then whatever world its project lives in.
       entity: entityKeyOf(row) ?? (key ? (worldOf.get(key) ?? null) : null),
       degree: degree.get(p.id) ?? 0,
+      inbound: inbound.get(p.id) ?? 0,
+      updatedAt: Date.parse(row.updated_at ?? row.created_at ?? '') || 0,
+      recalls: row.id ? (recalled.get(row.id)?.returned ?? 0) + (recalled.get(row.id)?.read ?? 0) : 0,
+      health: healthOf(row.id ? aged.get(row.id) : undefined),
       excerpt: excerptOf(row.body ?? '', row.title) || undefined,
       island: islandOf.get(p.id) ?? -1,
       // One decimal. Nothing is drawn to a tenth of a unit, and full float

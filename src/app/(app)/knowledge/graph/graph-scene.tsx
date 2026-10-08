@@ -7,7 +7,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { entityColor, projectColor } from '@/components/icons'
 import { groupsOf, layout3D } from '@/lib/graph-3d'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
-import type { KnowledgeGraph } from '@/lib/api/knowledge-graph'
+import { mapNow, nodeColour, type ColourBy } from '@/lib/graph-colour'
+import type { KnowledgeGraph, GraphNode } from '@/lib/api/knowledge-graph'
 
 /**
  * The map as a place you can move through.
@@ -44,6 +45,8 @@ type Props = {
   spotlight: Spotlight
   /** What the named glows are drawn around: each project, or each entity. */
   grouping: Grouping
+  /** What the dots' colour says. Changing it rebuilds the scene with the camera kept. */
+  colourBy?: ColourBy
 }
 
 export type Grouping = 'project' | 'entity'
@@ -193,7 +196,7 @@ const spriteMaterial = (map: THREE.Texture, additive: boolean, opacity: number) 
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   })
 
-export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Props) => {
+export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project' }: Props) => {
   const host = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -410,9 +413,12 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
     const slugAt = [...linked.map((n) => n.slug), ...adrift.map((n) => n.slug)]
     const byslug = new Map(all.map((n) => [n.slug, n]))
     const rowOf = new Map(linked.map((n, i) => [n.slug, i]))
-    const colourOf = (project: string | null) =>
-      project ? new THREE.Color(projectColor(project)) : palette.muted.clone()
-    let base = linked.map((n) => colourOf(n.project))
+    const now = mapNow()
+    const colourOf = (n: GraphNode) => {
+      const css = nodeColour(n, colourBy, now)
+      return css ? new THREE.Color(css) : palette.muted.clone()
+    }
+    let base = linked.map((n) => colourOf(n))
 
     const sphere = new THREE.SphereGeometry(1, 18, 14)
     const material = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 })
@@ -939,7 +945,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       palette = readPalette()
       scene.background = palette.bg.clone()
       if (scene.fog) (scene.fog as THREE.Fog).color = palette.bg.clone()
-      base = linked.map((n) => colourOf(n.project))
+      base = linked.map((n) => colourOf(n))
       adriftColour.copy(palette.muted)
       for (const [m, op] of [
         [glowMat, palette.dark ? 0.5 : 0.16],
@@ -1306,7 +1312,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping }: Pro
       renderer.dispose()
       canvas.remove()
     }
-  }, [graph, place, groups, grouping, neighbours, open])
+  }, [graph, place, groups, grouping, colourBy, neighbours, open])
 
   return (
     <div className="absolute inset-0">

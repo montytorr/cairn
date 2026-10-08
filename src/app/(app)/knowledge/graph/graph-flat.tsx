@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/control'
 import { projectColor } from '@/components/icons'
 import { inSpotlight, type Spotlight } from '@/lib/graph-spotlight'
+import { mapNow, nodeColour, type ColourBy } from '@/lib/graph-colour'
 import type { GraphNode, KnowledgeGraph } from '@/lib/api/knowledge-graph'
 
 /**
@@ -46,6 +47,8 @@ type Props = {
   setFocused: (slug: string | null) => void
   /** One project or world lit against the rest, or null for all of it. */
   spotlight: Spotlight
+  /** What the dots' colour says; project unless somebody asked for another question. */
+  colourBy?: ColourBy
 }
 
 /** Deterministic, and the same hash the layout and the palette use. */
@@ -225,13 +228,15 @@ const NodeLayer = memo(function NodeLayer({
   spotlight,
   onFocus,
   onOpen,
-}: LayerProps & { onOpen: (slug: string, event: React.MouseEvent) => void }) {
+  colourBy = 'project',
+}: LayerProps & { onOpen: (slug: string, event: React.MouseEvent) => void; colourBy?: ColourBy }) {
+  const now = mapNow()
   return (
     <>
       {graph.nodes.map((n) => {
         const on = isLit(focused, neighbours, n.slug, spotlight, at)
         const r = radiusOf(n.degree)
-        const colour = n.project ? projectColor(n.project) : 'var(--fg-muted)'
+        const colour = nodeColour(n, colourBy, now) ?? 'var(--fg-muted)'
         const seed = hash(n.slug)
         return (
           <g
@@ -287,7 +292,7 @@ const NodeLayer = memo(function NodeLayer({
   )
 })
 
-export const GraphFlat = ({ graph, focused, setFocused, spotlight }: Props) => {
+export const GraphFlat = ({ graph, focused, setFocused, spotlight, colourBy }: Props) => {
   // Read by the click handler, which must stay referentially stable or the
   // memoised node layer re-renders on every hover — the thing this avoids.
   const focusedRef = useRef<string | null>(null)
@@ -693,6 +698,7 @@ export const GraphFlat = ({ graph, focused, setFocused, spotlight }: Props) => {
             spotlight={spotlight}
             onFocus={setFocused}
             onOpen={openNode}
+            colourBy={colourBy}
           />
 
           {/* The hubs carry their names without being asked, because a map of

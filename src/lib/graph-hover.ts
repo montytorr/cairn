@@ -37,10 +37,13 @@ export const hoverCardFor = (
   if (node) {
     const links =
       node.degree === 0 ? 'joined to nothing' : `${node.degree} link${node.degree === 1 ? '' : 's'}`
-    const meta = [links, node.project ?? 'global']
+    const meta = [links]
+    if (node.inbound) meta.push(`cited by ${node.inbound}`)
+    meta.push(node.project ?? 'global')
     if (node.entity && node.entity !== node.project) {
       meta.push(entityTitles.get(node.entity) ?? node.entity)
     }
+    if (node.health) meta.push(node.health === 'stale' ? 'may be stale' : 'unverified')
     return { kind: 'entry', title: node.title, meta: meta.join(' · '), excerpt: node.excerpt || null }
   }
   const gap = missing.find((m) => m.slug === slug)
