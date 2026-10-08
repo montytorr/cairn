@@ -15,9 +15,15 @@ export const dynamic = 'force-dynamic'
  * because `task delete` refuses anything carrying a work log. The two rules
  * met and left junk that nothing could remove.
  *
- * Only your own, and only ever one at a time: a work log is the record of what
- * was tried, and letting one agent erase another's would make it untrustworthy
- * in a way that losing a single mistaken line is not.
+ * An agent may withdraw only its own, and only ever one at a time: a work log
+ * is the record of what was tried, and letting one agent erase another's would
+ * make it untrustworthy in a way that losing a single mistaken line is not.
+ *
+ * A person signed in to the web app may withdraw any note on a task they can
+ * open. Agents write most decisions, and the person whose account they run
+ * under had no way to take back a wrong one: the author is "claude-code · you",
+ * and the browser is only ever "you". A human choosing to delete a line is the
+ * judgement the rule exists to protect, not the thing it guards against.
  */
 export const DELETE = route<{ ref: string; id: string }>({
   handler: async ({ actor, params }) => {
@@ -36,11 +42,11 @@ export const DELETE = route<{ ref: string; id: string }>({
     if (!note) return fail('not_found', 'No such note on this task.')
 
     const row = note as { id: string; actor_id: string; kind: string }
-    if (row.actor_id !== actor.actorId) {
+    if (actor.actorType !== 'human' && row.actor_id !== actor.actorId) {
       return fail(
         'forbidden',
         `That note was written by ${row.actor_id}. A work log is the record of what was ` +
-          `tried, so only its author can withdraw a line of it.`,
+          `tried, so only its author, or a person in the web app, can withdraw a line of it.`,
       )
     }
 
