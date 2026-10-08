@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-10-08
+
 ### Added
 
 - **Knowledge map: search, colour modes, project clusters and a tour** (CAIRN-361). A search box
@@ -1931,7 +1933,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.20.3...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/montytorr/cairn/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/montytorr/cairn/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/montytorr/cairn/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/montytorr/cairn/compare/v0.20.0...v0.20.1
