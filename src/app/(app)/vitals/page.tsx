@@ -53,7 +53,7 @@ const Stat = ({
     </span>
     <span
       className={cn(
-        'font-display headline text-[1.625rem] leading-none tabular-nums',
+        'font-display headline text-[1.375rem] leading-none tabular-nums',
         tone === 'bad' && 'text-danger',
         tone === 'warn' && 'text-status-doing',
         tone === 'good' && 'text-status-in-review',

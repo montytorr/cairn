@@ -9,6 +9,39 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **Knowledge map: search, colour modes, project clusters and a tour** (CAIRN-361). A search box
+  (press `/`) lights the entries whose title or slug match, and the spotlight can pick one of the
+  biggest islands or everything joined to nothing. Dots can be coloured by project, age, recall
+  (what agents searched or read in the last 30 days) or health (may be stale, or unverified for
+  two weeks), in both the spatial and the flat view. The spatial map gets a Clusters arrangement,
+  now the default: each project has a place of its own on a flat disc, its links work inside it,
+  and links between projects are drawn fainter, so a project reads as one constellation instead
+  of sharing the middle with the rest. Names carry their entry count, a name that would land on a
+  larger one waits until you zoom in, and a Tour button flies the camera from project to project,
+  lighting each. The hover card says how many entries cite the one under the pointer.
+- **A work-log note can be deleted from the task page** (CAIRN-361). Each entry has a trash icon
+  that asks once ("Delete?") before it removes the note. A person signed in to the web app may
+  withdraw any note on a task they can open, including a decision an agent wrote under their
+  account; agents and the CLI can still withdraw only their own.
+
+### Changed
+
+- **Interface text is one step smaller** (CAIRN-362). Interface type goes from 15/16px to 14/15px,
+  the uppercase section labels from 12.4px to 12px, markdown headings from 20/18px to 18/16.5px,
+  and page titles by about a fifth. Helper text stays at 13px, the floor. Row heights and
+  spacing are unchanged.
+- **"Mentioned in" is grouped by the task that mentioned this one** (CAIRN-362). Seven mentions
+  across three audit tasks were seven rows that each repeated a title the width of the screen.
+  Each task now appears once, with a line per mention (kind, author, time) and a two-line
+  excerpt shown as plain text rather than raw markdown.
+- **Quieter pills and fields** (CAIRN-362). Type and label pills lose their tinted fill and keep
+  the dot, the word and a hairline. Text fields, selects, textareas and the pickers get a soft
+  rim and a slightly recessed fill instead of a bright outline. This lowers a field's rim from
+  3:1 contrast to about 1.4:1, a deliberate trade for how the forms look; checkboxes and radios
+  keep the 3:1 rim.
+
 ## [0.20.3] — 2026-10-07
 
 ### Fixed

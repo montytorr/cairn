@@ -239,9 +239,11 @@ const TYPE_LABEL: Record<TaskType, string> = {
  * has a theme-specific hex chosen to clear 4.5 against that theme's ground,
  * which is why they are tokens rather than one shared palette.
  *
- * Both pills are one shape: the same height, a soft fill of their own colour
- * and a hairline rim of it, so a row carrying a type and two labels reads as
- * one set of chips rather than three styles.
+ * Both pills are one shape: the same height and a hairline rim of their own
+ * colour, so a row carrying a type and two labels reads as one set of chips
+ * rather than three styles. No fill (CAIRN-362): two hundred rows each with a
+ * tinted block turned the list into a column of coloured rectangles, and the
+ * dot and the word already say it.
  */
 const PILL =
   'inline-flex h-[1.25rem] shrink-0 items-center gap-1.5 rounded-full border pr-2 pl-1.5 text-meta leading-none whitespace-nowrap ' +
@@ -257,7 +259,7 @@ const tint = (color: string, rim: number, wash: number): React.CSSProperties => 
 export const TypePill = ({ type }: { type: TaskType }) => {
   const color = `var(--type-${type})`
   return (
-    <span className={PILL} style={{ color, ...tint(color, 34, 10) }}>
+    <span className={PILL} style={{ color, ...tint(color, 26, 0) }}>
       <span className="size-[0.4375rem] rounded-full" style={{ backgroundColor: color }} />
       {TYPE_LABEL[type]}
     </span>
@@ -269,7 +271,7 @@ export const LabelPill = ({ children }: { children: React.ReactNode }) => {
   // The text stays grey: the derived palette is not measured against either
   // ground the way the type tokens are, so it colours the chip, not the word.
   return (
-    <span className={cn(PILL, 'text-fg-muted')} style={tint(color, 28, 8)}>
+    <span className={cn(PILL, 'text-fg-muted')} style={tint(color, 22, 0)}>
       <span className="size-[0.4375rem] rounded-full" style={{ backgroundColor: color }} />
       {children}
     </span>

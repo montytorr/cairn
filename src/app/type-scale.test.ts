@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 /**
  * The interface is set in three sizes (--fs-ui, --fs-meta, --fs-label in
- * globals.css): 15/16px, 13/13.5px, and a 12.4px uppercase, tracked micro
+ * globals.css): 14/15px, 13/13.5px, and a 12px uppercase, tracked micro
  * label. Nothing smaller than `meta` may carry words unless it is that label.
  *
  * What goes wrong is a one-off `text-[0.6875rem]` written for a tight row. It
@@ -41,9 +41,9 @@ describe('interface type scale', () => {
 
   it('declares the three sizes, with the interface size growing at 768', () => {
     const css = readFileSync('src/app/globals.css', 'utf8')
-    expect(css).toMatch(/--fs-ui:\s*0\.8333rem/)
+    expect(css).toMatch(/--fs-ui:\s*0\.7778rem/)
     expect(css).toMatch(/--fs-meta:\s*0\.7222rem/)
-    expect(css).toMatch(/min-width:\s*768px\)\s*\{\s*:root\s*\{\s*--fs-ui:\s*0\.8889rem/)
+    expect(css).toMatch(/min-width:\s*768px\)\s*\{\s*:root\s*\{\s*--fs-ui:\s*0\.8333rem/)
   })
 
   it('keeps micro labels uppercase', () => {
