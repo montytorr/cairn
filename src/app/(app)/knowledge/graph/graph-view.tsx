@@ -11,7 +11,7 @@ import {
   useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { Box, Map as MapIcon, Search, X } from 'lucide-react'
+import { Box, Map as MapIcon, Play, Search, Square, X } from 'lucide-react'
 import { Button, Select, Input } from '@/components/ui/control'
 import { cn } from '@/lib/utils'
 import { GraphFlat } from './graph-flat'
@@ -158,6 +158,7 @@ export const GraphView = ({ graph: incoming }: Props) => {
   /** One project or one world, lit against everything else. */
   const [spotlight, setSpotlight] = useState<Spotlight>(null)
 
+  const [touring, setTouring] = useState(false)
   const { able, mode: preferred } = useSyncExternalStore(noSubscribe, capability, onServer)
   /** What the toggle was last set to, which outranks the remembered answer. */
   const [chosen, setChosen] = useState<Mode | null>(null)
@@ -181,9 +182,15 @@ export const GraphView = ({ graph: incoming }: Props) => {
     }
   }, [])
 
+  const stopTour = useCallback(() => {
+    setTouring(false)
+    setSpotlight(null)
+  }, [])
+
   const choose = useCallback((next: Mode) => {
     setChosen(next)
     setFocused(null)
+    setTouring(false)
     try {
       window.localStorage.setItem(STORAGE, next)
     } catch {
@@ -338,6 +345,12 @@ export const GraphView = ({ graph: incoming }: Props) => {
           grouping={grouping}
           colourBy={colourBy}
           arrange={arrange}
+          tour={touring}
+          onTourStep={(key) => {
+            setQuery('')
+            setSpotlight({ kind: grouping === 'entity' ? 'entity' : 'project', key })
+          }}
+          onTourStop={stopTour}
         />
       ) : (
         <GraphFlat
@@ -586,6 +599,19 @@ export const GraphView = ({ graph: incoming }: Props) => {
                 </Button>
               ))}
             </div>
+          ) : null}
+          {mode === 'scene' ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={touring}
+              onClick={() => (touring ? stopTour() : setTouring(true))}
+              title={touring ? 'Stop the tour' : 'Fly from project to project'}
+              className={cn(CHROME, SEGMENT)}
+            >
+              {touring ? <Square size={12} aria-hidden /> : <Play size={12} aria-hidden />}
+              {touring ? 'Stop' : 'Tour'}
+            </Button>
           ) : null}
           {/* Only where it changes something: the glows are the scene's, and
               with one entity there is nothing to choose between. */}

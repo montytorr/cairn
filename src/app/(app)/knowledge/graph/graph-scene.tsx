@@ -49,6 +49,10 @@ type Props = {
   colourBy?: ColourBy
   /** Whether projects get a place of their own or the links decide. */
   arrange?: Arrange
+  /** Fly from cluster to cluster, naming each as it goes; any touch ends it. */
+  tour?: boolean
+  onTourStep?: (key: string) => void
+  onTourStop?: () => void
 }
 
 export type Grouping = 'project' | 'entity'
@@ -198,7 +202,7 @@ const spriteMaterial = (map: THREE.Texture, additive: boolean, opacity: number) 
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
   })
 
-export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project', arrange = 'clusters' }: Props) => {
+export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colourBy = 'project', arrange = 'clusters', tour = false, onTourStep, onTourStop }: Props) => {
   const host = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -214,6 +218,16 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
   useEffect(() => {
     spotRef.current = spotlight
   }, [spotlight])
+
+  /** Read by the loop, which is built once and must not be rebuilt to start a tour. */
+  const tourRef = useRef(tour)
+  const onTourStepRef = useRef(onTourStep)
+  const onTourStopRef = useRef(onTourStop)
+  useEffect(() => {
+    tourRef.current = tour
+    onTourStepRef.current = onTourStep
+    onTourStopRef.current = onTourStop
+  }, [tour, onTourStep, onTourStop])
 
   const onHoverRef = useRef(onHover)
   useEffect(() => {
@@ -322,7 +336,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     const FOV = 46
     // The orphan shell is the periphery, so in clusters it may run past the glass a little
     // rather than shrinking every project to fit it.
-    const half = place.shell * (arrange === 'clusters' ? 0.8 : 1.05)
+    const half = arrange === 'clusters' ? place.radius * 1.15 : place.shell * 1.05
     const TARGET = new THREE.Vector3(0, 0, 0)
     const fitFor = (aspect: number) => {
       const vertical = half / Math.tan((FOV * Math.PI) / 360)
@@ -332,7 +346,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     }
     const reach = fitFor(1.8)
     /** Off-axis, because straight-on hides the depth this view exists for. */
-    const HOME = new THREE.Vector3(0.42, 0.34, 0.84).normalize().multiplyScalar(reach)
+    const HOME = (arrange === 'clusters' ? new THREE.Vector3(0.25, 0.9, 0.55) : new THREE.Vector3(0.42, 0.34, 0.84)).normalize().multiplyScalar(reach)
     camera.position.copy(TARGET).add(HOME)
     const resumed = kept.current
     if (resumed) camera.position.copy(resumed.position)
@@ -361,7 +375,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     // two buttons, and a camera that can be walked far enough from the cloud
     // that there is no way back but the reset.
     controls.enablePan = false
-    controls.minDistance = reach * 0.3
+    controls.minDistance = reach * 0.14
     controls.maxDistance = reach * 3
     // Clamped off both poles: straight down the Y axis the cloud collapses to
     // a disc and the floor of orphans disappears edge-on, which are the two
@@ -389,6 +403,7 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     let touched = resumed?.touched ?? false
     controls.addEventListener('start', () => {
       touched = true
+      if (tourRef.current) onTourStopRef.current?.()
     })
 
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -1020,6 +1035,10 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
           span = document.createElement('span')
           span.className =
             'absolute top-0 left-0 whitespace-nowrap text-[0.9375rem] font-semibold uppercase leading-none tracking-[0.22em]'
+          span.appendChild(document.createTextNode(''))
+          const tally = document.createElement('i')
+          tally.className = 'ml-1.5 text-meta font-medium not-italic tracking-normal opacity-60'
+          span.appendChild(tally)
           overlay.appendChild(span)
           worldPool[i] = span
         }
@@ -1028,7 +1047,10 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
           return
         }
         const name = titleOf.get(world.key) ?? world.key
-        if (span.textContent !== name) span.textContent = name
+        const [text, tally] = [span.firstChild as Text, span.lastChild as HTMLElement]
+        if (text.data !== name) text.data = name
+        const count = String(world.count)
+        if (tally.textContent !== count) tally.textContent = count
         span.style.color = worldInk(world.key)
         // Knocked out of the ground, like the titles — a coloured word over a
         // coloured haze is the one place on this map contrast can vanish.
@@ -1161,6 +1183,13 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
     resize()
 
     const _home = new THREE.Vector3()
+    const TOUR_MS = 4800
+    const tourOrder = [...groups].sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1))
+    const tourDest = new THREE.Vector3()
+    const tourEye = new THREE.Vector3()
+    let tourAt = 0
+    let tourClock = 0
+    let tourIdx = -1
     let raf = 0
     let frame = 0
     let alive = true
@@ -1188,6 +1217,33 @@ export const GraphScene = ({ graph, onHover, focused, spotlight, grouping, colou
         controls.target.lerp(TARGET, e * 0.35)
         camera.position.lerp(_home.copy(TARGET).add(HOME), e * 0.35)
         if (k >= 1) homing = 0
+      }
+
+      // The tour: ease to the next cluster every few seconds, closer for a
+      // small one than a large, keeping the heading the reader is orbiting on.
+      if (tourRef.current && tourOrder.length > 0) {
+        const now = performance.now()
+        // Eased by elapsed time, not by frame: the same glide on a 60Hz laptop,
+        // a 120Hz display and a tab the browser is throttling.
+        const dt = Math.min(0.25, Math.max(0, (now - (tourClock || now)) / 1000))
+        tourClock = now
+        const ease = 1 - Math.exp(-dt * 2.6)
+        if (!tourAt || now - tourAt > TOUR_MS) {
+          tourIdx = (tourIdx + 1) % tourOrder.length
+          tourAt = now
+          onTourStepRef.current?.((tourOrder[tourIdx] as (typeof tourOrder)[number]).key)
+        }
+        const g = tourOrder[tourIdx] as (typeof tourOrder)[number]
+        const c = g.core ?? { x: g.x, y: g.y, z: g.z, reach: g.spread }
+        controls.target.lerp(tourDest.set(c.x, c.y, c.z), ease)
+        const want = Math.min(reach * 0.8, Math.max(reach * 0.12, c.reach * 2.1))
+        tourEye.copy(camera.position).sub(controls.target)
+        tourEye.setLength(tourEye.length() + (want - tourEye.length()) * ease)
+        camera.position.copy(controls.target).add(tourEye)
+      } else {
+        tourAt = 0
+        tourClock = 0
+        tourIdx = -1
       }
 
       const age = performance.now() - born

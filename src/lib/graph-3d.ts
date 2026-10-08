@@ -58,7 +58,20 @@ export type Layout3D = {
    * and because a centroid taken after the relaxation is the honest answer to
    * "where is Dispofi" — not a guess made from the seed.
    */
-  worlds: { key: string; x: number; y: number; z: number; spread: number; count: number }[]
+  worlds: {
+    key: string
+    x: number
+    y: number
+    z: number
+    spread: number
+    count: number
+    /**
+     * Where the bulk of it is, for a camera: the median point and the
+     * seventieth-percentile distance from it. A mean is dragged toward the
+     * one entry that wandered off, and a camera aimed at it looks at nothing.
+     */
+    core?: { x: number; y: number; z: number; reach: number }
+  }[]
 }
 
 /** How far apart the cloud wants to be, before anything is drawn in it. */
@@ -89,7 +102,7 @@ export type Arrange = 'clusters' | 'links'
 const roomFor = (count: number): number => 16 + 11 * Math.cbrt(count)
 
 /**
- * Where each project with company sits, on a flattened sphere.
+ * Where each project with company sits, on a thin disc like a galaxy seen from above.
  *
  * Largest first and spread by a stride coprime to the count, so consecutive
  * (and therefore similar-sized) projects are never neighbours on the spiral:
@@ -106,17 +119,25 @@ const anchorsFor = (counts: Map<string, number>): Map<string, Point3> => {
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
   let stride = Math.max(1, Math.round(n * 0.618))
   while (gcd(stride, n) !== 1) stride += 1
-  // Big clusters push the sphere out: the sphere's surface must hold their
-  // combined cross-sections with air between them.
+  // The disc must hold the clusters' combined cross-sections with air between
+  // them: the area of a circle of radius R is pi R^2, so 1.3x the root of the
+  // summed squares leaves about five times the room they need.
   const area = keys.reduce((sum, key) => sum + roomFor(counts.get(key) ?? 0) ** 2, 0)
-  const radius = Math.max(SPREAD * 0.9, Math.sqrt(area) * 1.75)
+  const radius = Math.max(SPREAD * 0.9, Math.sqrt(area) * 2.6)
   const golden = Math.PI * (3 - Math.sqrt(5))
   keys.forEach((key, rank) => {
     const slot = (rank * stride) % n
-    const up = n === 1 ? 0 : 1 - (2 * (slot + 0.5)) / n
-    const ring = Math.sqrt(Math.max(0, 1 - up * up))
+    // Vogel's spiral: even spacing at any count, biggest slot at the middle.
+    const r = radius * Math.sqrt((slot + 0.5) / n)
     const a = slot * golden
-    out.set(key, { x: Math.cos(a) * ring * radius, y: up * radius * 0.8, z: Math.sin(a) * ring * radius })
+    out.set(key, {
+      x: Math.cos(a) * r,
+      // A thin disc, with a little hashed relief so it is not a plane: seen
+      // from above nothing hides behind anything, and from the side it still
+      // has depth to orbit.
+      y: (unit(key, 21) - 0.5) * radius * 0.22,
+      z: Math.sin(a) * r,
+    })
   })
   return out
 }
@@ -339,7 +360,9 @@ export const layout3D = (graph: KnowledgeGraph, arrange: Arrange = 'links'): Lay
     for (let i = 0; i < count; i += 1) {
       // Pulled gently home, or the repulsion inflates the cloud without limit
       // and the islands drift off the far side of the camera.
-      const gravity = clustered ? 0.002 : 0.012
+      // An anchor holds the entries that have one; the rest are held by
+      // gravity alone, or repulsion throws them out of the picture.
+      const gravity = clustered && home[i] ? 0.002 : 0.012
       const vx = (fx[i] as number) * heat - (px[i] as number) * gravity
       const vy = (fy[i] as number) * heat - (py[i] as number) * gravity
       const vz = (fz[i] as number) * heat - (pz[i] as number) * gravity
@@ -503,6 +526,23 @@ export const groupsOf = (
       const cy = ps.reduce((s, p) => s + p.y, 0) / ps.length
       const cz = ps.reduce((s, p) => s + p.z, 0) / ps.length
       const d = ps.reduce((s, p) => s + Math.hypot(p.x - cx, p.y - cy, p.z - cz), 0) / ps.length
-      return { key, x: cx, y: cy, z: cz, spread: Math.max(SPREAD * 0.2, d), count: ps.length }
+      const median = (values: number[]): number => {
+        const sorted = [...values].sort((a, b) => a - b)
+        return sorted[Math.floor(sorted.length / 2)] ?? 0
+      }
+      const mx = median(ps.map((p) => p.x))
+      const my = median(ps.map((p) => p.y))
+      const mz = median(ps.map((p) => p.z))
+      const away = ps.map((p) => Math.hypot(p.x - mx, p.y - my, p.z - mz)).sort((a, b) => a - b)
+      const reach = Math.max(SPREAD * 0.2, away[Math.floor(away.length * 0.7)] ?? 0)
+      return {
+        key,
+        x: cx,
+        y: cy,
+        z: cz,
+        spread: Math.max(SPREAD * 0.2, d),
+        count: ps.length,
+        core: { x: mx, y: my, z: mz, reach },
+      }
     })
 }

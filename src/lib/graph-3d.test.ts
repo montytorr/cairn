@@ -427,3 +427,21 @@ describe('clusters arrangement (CAIRN-361)', () => {
     expect([...layout3D(graph).at.entries()]).toEqual([...layout3D(graph, 'links').at.entries()])
   })
 })
+
+describe('group cores (CAIRN-361)', () => {
+  it('aims a camera at the bulk of a group, not at the one entry that wandered off', () => {
+    const near = Array.from({ length: 9 }, (_, i) => ({ slug: `n${i}`, x: 0, y: 0, z: 0 }))
+    const stray = { slug: 'far', x: 1000, y: 0, z: 0 }
+    const nodes = [...near, stray].map((n) => ({
+      slug: n.slug, title: n.slug, project: 'p', entity: null, degree: 1, island: 0, x: 0, y: 0,
+    }))
+    const place = {
+      at: new Map([...near, stray].map((n) => [n.slug, { x: n.x, y: n.y, z: n.z }])),
+      radius: 100, shell: 130, worlds: [],
+    }
+    const [group] = groupsOf(place, nodes as never, (n) => n.project)
+    expect(group!.x).toBeGreaterThan(50)
+    expect(group!.core!.x).toBe(0)
+    expect(group!.core!.reach).toBeLessThan(100)
+  })
+})
