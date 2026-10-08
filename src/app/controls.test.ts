@@ -48,12 +48,20 @@ const light = tokens(/^:root\s*\{/m)
 const dark = { ...light, ...tokens(/^:root\.dark\s*\{/m) }
 
 describe.each([['light', light], ['dark', dark]] as const)('%s theme controls', (_name, t) => {
-  it('draws a field rim that is visible, 3:1 on every ground a field sits on', () => {
+  it('draws the rim of a checkbox or radio at 3:1 on every ground, since the box has nothing else to say it is a control', () => {
     const low = ['bg', 'bg-elevated', 'surface', 'surface-raised']
       .map((ground) => [ground, ratio(t['control-border']!, t[ground]!)] as const)
       .filter(([, r]) => r < 3)
       .map(([ground, r]) => `${ground}: ${r.toFixed(2)}`)
     expect(low).toEqual([])
+  })
+
+  it('keeps a text field quieter than that but still drawn: its rim is distinct from the field fill and the ground, and brightens on hover', () => {
+    for (const ground of ['bg', 'bg-elevated', 'surface']) {
+      expect(ratio(t['field-border']!, t[ground]!)).toBeGreaterThanOrEqual(1.25)
+    }
+    expect(ratio(t['field-border']!, t['field-bg']!)).toBeGreaterThanOrEqual(1.25)
+    expect(ratio(t['field-border-hover']!, t['field-bg']!)).toBeGreaterThan(ratio(t['field-border']!, t['field-bg']!))
   })
 
   it('keeps a disabled control readable: muted text, 4.5:1 on the raised ground it is drawn on', () => {

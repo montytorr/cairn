@@ -43,13 +43,13 @@ const LINK =
 const components: Components = {
   h1: ({ className, ...p }) => (
     <h1
-      className={cn(MEASURE, 'text-fg mt-6 mb-2 text-lg leading-snug font-semibold tracking-[-0.015em] text-balance first:mt-0', className)}
+      className={cn(MEASURE, 'text-fg mt-6 mb-2 text-[1rem] leading-snug font-semibold tracking-[-0.015em] text-balance first:mt-0', className)}
       {...dom(p)}
     />
   ),
   h2: ({ className, ...p }) => (
     <h2
-      className={cn(MEASURE, 'text-fg mt-5 mb-2 text-base leading-snug font-semibold tracking-[-0.01em] text-balance first:mt-0', className)}
+      className={cn(MEASURE, 'text-fg mt-5 mb-2 text-[0.9167rem] leading-snug font-semibold tracking-[-0.01em] text-balance first:mt-0', className)}
       {...dom(p)}
     />
   ),

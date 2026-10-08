@@ -274,7 +274,7 @@ export const KnowledgeDetail = ({
           <div className="mb-3 flex items-start justify-between gap-3">
             <h1
               className={cn(
-                'font-display headline text-fg text-[1.375rem] leading-snug',
+                'font-display headline text-fg text-[1.25rem] leading-snug',
                 current.superseded && 'text-fg-muted line-through decoration-1',
               )}
             >

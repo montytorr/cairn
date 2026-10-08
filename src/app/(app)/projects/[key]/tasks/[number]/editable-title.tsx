@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/control'
  * heading's type, so the field is the same field as every other.
  */
 const TITLE =
-  'font-display headline text-fg -mx-1.5 mb-5 rounded-md border px-1.5 text-[1.5rem] leading-[1.2] sm:text-[1.75rem] ' +
+  'font-display headline text-fg -mx-1.5 mb-5 rounded-md border px-1.5 text-[1.25rem] leading-[1.25] sm:text-[1.375rem] ' +
   'transition-[background-color,box-shadow] duration-[var(--dur-1)] ease-[var(--ease-out)]'
 
 /**

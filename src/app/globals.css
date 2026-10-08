@@ -18,14 +18,16 @@
   --radius: 6px;
 
   /* The type scale. Three interface sizes, set in rem on the 18px root:
-     ui    15px on a phone, 16px from 768 up: labels, rows, buttons, fields.
+     ui    14px on a phone, 15px from 768 up: labels, rows, buttons, fields.
      meta  13px, 13.5px from 768 up: the floor for any helper, ref or date.
-     label 12.4px, only ever uppercase and tracked: a section's micro-label.
+     label 12px, only ever uppercase and tracked: a section's micro-label.
+     Brought down a step from 15/16/12.4 (CAIRN-362): at that size the
+     interface read as shouting, and ui sat too close to its own headings.
      Task bodies and markdown keep their own reading size. type-scale.test.ts
      fails on a size below `meta` that is not an uppercase label. */
-  --fs-ui:    0.8333rem;
+  --fs-ui:    0.7778rem;
   --fs-meta:  0.7222rem;
-  --fs-label: 0.6875rem;
+  --fs-label: 0.6667rem;
 
   /* light — a faithful inverse, kept usable but not the primary target */
   --bg:             #ffffff;
@@ -66,6 +68,14 @@
   --control-radius:       var(--radius);
   --control-border:       #868a93;
   --control-border-hover: #686c74;
+  /* The quieter rim of text fields, selects and field-like chips (CAIRN-362).
+     Checkboxes and radios keep the 3:1 rim above, because a 20px box has
+     nothing else to say it is a control; a field is wide, labelled and has a
+     placeholder, and a loud grey outline around every one of them is what made
+     forms look cheap. */
+  --field-border:         #cfd2d8;
+  --field-border-hover:   #aeb2ba;
+  --field-bg:             #ffffff;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2.5 4.5 3.5 3.5 3.5-3.5' fill='none' stroke='%2361656c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* status — the six.
@@ -170,6 +180,11 @@
 
   --control-border:       #64686f;
   --control-border-hover: #8a8e97;
+  --field-border:         #2d2f35;
+  --field-border-hover:   #484b53;
+  /* A touch darker than the surfaces fields sit on, so they read as set into
+     the page rather than outlined on it. */
+  --field-bg:             #0b0c0e;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2.5 4.5 3.5 3.5 3.5-3.5' fill='none' stroke='%239aa0a9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   --status-backlog:   #80868f;
@@ -259,7 +274,7 @@
 
 @media (min-width: 768px) {
   :root {
-    --fs-ui:   0.8889rem;
+    --fs-ui:   0.8333rem;
     --fs-meta: 0.75rem;
   }
 }
@@ -824,11 +839,11 @@
   .btn-secondary {
     color: var(--fg);
     background-color: var(--surface);
-    border-color: var(--control-border);
+    border-color: var(--field-border);
   }
   .btn-secondary:hover:not(:disabled) {
     background-color: var(--surface-raised);
-    border-color: var(--control-border-hover);
+    border-color: var(--field-border-hover);
   }
   .btn-ghost {
     color: var(--fg-muted);
@@ -843,7 +858,7 @@
   .btn-quiet:hover:not(:disabled) {
     color: var(--fg);
     background-color: var(--surface-raised);
-    border-color: var(--control-border);
+    border-color: var(--field-border);
   }
   .btn-danger {
     color: var(--danger);
@@ -892,15 +907,15 @@
     min-height: var(--control-h);
     padding: 0.5rem var(--control-px);
     color: var(--fg);
-    background-color: var(--surface);
-    border: 1px solid var(--control-border);
+    background-color: var(--field-bg);
+    border: 1px solid var(--field-border);
     border-radius: var(--control-radius);
     transition:
       border-color var(--dur-1) var(--ease),
       box-shadow var(--dur-1) var(--ease);
   }
   .field-shell:hover:not(:focus-within) {
-    border-color: var(--control-border-hover);
+    border-color: var(--field-border-hover);
   }
   .field-shell:focus-within {
     border-color: var(--accent);
@@ -930,8 +945,8 @@
     line-height: 1.25;
     white-space: nowrap;
     color: var(--fg-muted);
-    background-color: var(--surface);
-    border: 1px solid var(--control-border);
+    background-color: var(--field-bg);
+    border: 1px solid var(--field-border);
     border-radius: var(--control-radius);
     transition:
       color var(--dur-1) var(--ease),
@@ -941,7 +956,7 @@
   .chip:hover:not(:has(:disabled)) {
     color: var(--fg);
     background-color: var(--surface-raised);
-    border-color: var(--control-border-hover);
+    border-color: var(--field-border-hover);
   }
   .chip:has(:focus-visible) {
     color: var(--fg);
@@ -1088,8 +1103,8 @@
     line-height: 1.25;
     letter-spacing: inherit;
     color: var(--fg);
-    background-color: var(--surface);
-    border: 1px solid var(--control-border);
+    background-color: var(--field-bg);
+    border: 1px solid var(--field-border);
     border-radius: var(--control-radius);
     box-shadow: none;
     -webkit-appearance: none;
@@ -1124,7 +1139,7 @@
   }
 
   :is(input, select, textarea):where(:hover):not(:disabled, :focus) {
-    border-color: var(--control-border-hover);
+    border-color: var(--field-border-hover);
   }
 
   /* Flat: the rim turns to the accent and doubles to two pixels; no halo. A
