@@ -6,7 +6,7 @@ import { admin } from '@/lib/db/client'
 import { diffTaskEvents, recordActivity } from '@/lib/api/activity'
 import { findTask, noSuchTaskMessage, refuseArchived, renameFields, resolveParent, resolveTask } from '@/lib/api/tasks'
 import { formerKeysByProject, formerRefsOf, projectsForKeys, resolveProject } from '@/lib/api/project-keys'
-import { buildDigest } from '@/lib/api/digest'
+import { buildDigest, looksLikeDigestClip } from '@/lib/api/digest'
 import { mentionsOf } from '@/lib/api/mentions'
 import { peopleByIds, resolveAssignee, withAssignee } from '@/lib/api/people'
 import { removeAttachments } from '@/lib/attachments'
@@ -79,6 +79,16 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
 
     const unreadable = refuseUnreadableBody(actor, body.description, `cairn update ${params.ref} --body -`)
     if (unreadable) return unreadable
+
+    if (typeof body.description === 'string' && looksLikeDigestClip(body.description, task.description as string | null)) {
+      return fail(
+        'validation_failed',
+        `This description ends with "…" and is shorter than the stored one, so it looks like the clipped ` +
+          `text from \`cairn show ${params.ref}\` and it was not saved. \`update --body\` replaces the whole ` +
+          `description. Read all of it with \`cairn show ${params.ref} --full\`, edit that, and send it again.`,
+        { field: 'description' },
+      )
+    }
 
     const nextStatus = body.status ?? (task.status as string)
     const existingResolution = task.resolution as string | null

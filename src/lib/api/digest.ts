@@ -9,7 +9,14 @@ const tokens = (text: string | null | undefined) => Math.ceil((text?.length ?? 0
  * asks for; measured against real data, where the median body is 2KB and the
  * 90th percentile is 5KB, so passing it through whole would save nothing.
  */
-const BODY_BUDGET = 800
+export const BODY_BUDGET = 800
+
+/**
+ * Whether `next` is a digest's clipped description sent back as an edit.
+ * Saving it would silently drop the tail of `stored`.
+ */
+export const looksLikeDigestClip = (next: string, stored: string | null | undefined): boolean =>
+  !!stored && next.trimEnd().endsWith('…') && stored.length > BODY_BUDGET && next.length < stored.length
 
 /** Mentions shown in a digest. The rest are one request away. */
 const MENTION_BUDGET = 5
