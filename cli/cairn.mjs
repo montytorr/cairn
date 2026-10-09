@@ -2804,6 +2804,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    already holds work here or similar open work
                                    exists; --no-start to only file it)
     cairn update <ref> [--title T] [--status S] [--type T] [--priority P] [--assignee <who>] [--body -]
+                                   --body replaces the whole description: edit from show --full
     cairn add ... --external-ref KEY --external-url URL
                                    where it came from in another tool; filing the same
                                    --external-ref again returns that task, not a second

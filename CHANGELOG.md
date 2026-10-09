@@ -9,6 +9,12 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`update --body` no longer saves the digest's clipped description.** A body ending in `…` and
+  shorter than a stored description over 800 characters is refused with a pointer to `show --full`,
+  instead of silently dropping the tail.
+
 ## [0.21.0] — 2026-10-08
 
 ### Added
