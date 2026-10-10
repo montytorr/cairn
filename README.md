@@ -452,6 +452,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | **Projects** | |
 | `cairn map <KEY>` | Tell Cairn which project this checkout is. Validates the key, and claims the repository so every other clone and worktree resolves too. `cairn map none` releases both |
 | `cairn project create <KEY> "<title>"` · `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
+| `cairn project describe <KEY> --body -` · `cairn project describe <KEY> --clear` | Replace the project's description from stdin. An agent's body goes through the same markdown checks as a task body, an empty one is refused, and `--clear` is the deliberate way to remove it. The change is recorded as `project_described` in the activity feed |
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
 | **The Lab** (where an administrator has switched it on) | |
 | `cairn idea "<title>"` · `cairn ideas` | File an idea (a subject in the first planned stage), and list the planned ones |
