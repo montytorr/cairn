@@ -2940,7 +2940,9 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    the work leaves this instance: files it there, links it
                                    here, and that tracker owns the status from then on.
                                    --to is optional when its project has a default; a
-                                   Cairn is another configured instance (cairn instance)
+                                   Cairn is another configured instance (cairn instance).
+                                   Claiming, closing or moving it here is then refused
+                                   (handed_off, exit 1: not 9, which is another agent)
     cairn handoff <ref> --link <REF> [--url URL] [--to <tracker>:<target>]
                                    record a task made by hand; a Cairn link needs --url,
                                    the destination's absolute https address
@@ -3703,9 +3705,11 @@ const subjectOwnerFlag = () => {
 /** Refused, said with what to do: the agent's next call is the fix. */
 const conclusionRefusal = (ref, stage) => (payload) => {
   if (payload.code !== 'conclusion_required') return undefined
+  // The server's sentence often names the flag already; saying it twice is noise.
+  const named = /--conclusion/.test(String(payload.error))
   return die(
-    `${ref}${stage ? ` -> "${stage}"` : ''} needs a conclusion: ${payload.error}\n` +
-      're-run with --conclusion "<what was concluded, and why>" (or --conclusion - to read markdown from stdin)',
+    `${ref}${stage ? ` -> "${stage}"` : ''} needs a conclusion: ${payload.error}` +
+      (named ? '' : '\nre-run with --conclusion "<what was concluded, and why>" (or --conclusion - to read markdown from stdin)'),
   )
 }
 
@@ -4226,7 +4230,7 @@ const syncHandoffs = async () => {
       result: [
         String(shown.status).toLowerCase() === String(handoff.status ?? '').toLowerCase()
           ? 'unchanged'
-          : `was ${handoff.status ?? 'unknown'}`,
+          : handoff.status ? `was ${handoff.status}` : 'was not synced yet',
         linked?.noted ? 'noted' : '',
         linked?.closed ? 'closed' : '',
         withheld ? 'resolution withheld: it looked like a secret' : '',

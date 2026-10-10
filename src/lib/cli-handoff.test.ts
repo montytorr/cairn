@@ -525,6 +525,18 @@ describe('cairn sync', () => {
     expect(rows[4]).toBe('CAIRN-14\tlinear\tENG-1\t\tskipped: no linear adapter on this machine')
   })
 
+  it('a hand-off nobody has synced yet says so, rather than "unknown"', async () => {
+    const only = [
+      { ref: 'CAIRN-13', title: 'b', status: 'todo', subject: null, handoff: { tracker: 'github', ref: 'owner/repo#7', url: null, status: null } },
+    ]
+    const w = await world((s) => (s.path.startsWith('/api/v1/handoffs') ? only : linkOk), destination(), {
+      ghView: JSON.stringify({ state: 'OPEN', url: 'https://github.com/owner/repo/issues/7' }),
+    })
+    const out = await w.run(['sync'])
+    expect(out.stdout).toContain('CAIRN-13\tgithub\towner/repo#7\ttodo\twas not synced yet')
+    expect(out.stdout).not.toContain('unknown')
+  })
+
   it('reads a closed issue as done, or as cancelled when it was not planned', async () => {
     const closed = (reason: string) =>
       JSON.stringify({ state: 'CLOSED', stateReason: reason, url: 'https://github.com/owner/repo/issues/7' })

@@ -290,6 +290,21 @@ describe('cairn subject stage and note', () => {
     expect(out.stderr).toContain('--conclusion "<what was concluded, and why>"')
   })
 
+  it('does not repeat the flag when the server\'s own sentence already names it', async () => {
+    const { base } = serve(() => ({
+      status: 400,
+      fail: {
+        error: 'done is a completed stage: say what was learned. Send a conclusion with the move (cairn subject stage LAB-2 "done" --conclusion "<what we learned>").',
+        code: 'conclusion_required',
+      },
+    }))
+    const out = await run(['subject', 'stage', 'LAB-2', 'done'], await base())
+    expect(out.code).toBe(1)
+    expect(out.stderr).toContain('LAB-2 -> "done" needs a conclusion: done is a completed stage')
+    expect(out.stderr).not.toContain('re-run with')
+    expect(out.stderr.match(/--conclusion/g)).toHaveLength(1)
+  })
+
   it('sends the conclusion with the move', async () => {
     const { seen, base } = serve(() => subject)
     await run(['subject', 'stage', 'LAB-12', 'done', '--conclusion', '-'], await base(), { stdin: 'Adopt it behind a flag.\n' })

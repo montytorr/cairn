@@ -92,7 +92,8 @@ cairn sync                                     # read every handed-off task's st
 It files the task there (title, body, a line saying where it came from), records the link
 here with the destination's absolute https URL, and releases your claim. **From then on the
 other tracker owns the status**: claim, release, close or move the task here and the server
-answers `handed_off`; `--undo` is the way back. `sync` reads each one through that tracker's
+answers `handed_off`, **exit 1** (not 9, which is another agent holding it): work it there,
+or `--undo` to take it back. `sync` reads each one through that tracker's
 own CLI and credentials on this machine (`cairn` for another instance, `gh` for GitHub) and
 skips, saying so, those it cannot reach. A task that ended there is closed here once, with
 their resolution, and a todo's subject gets a line for it: then decide the subject's stage,
