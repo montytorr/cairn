@@ -30,7 +30,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -65,6 +65,19 @@ const ARTEFACTS = [
     targets: [
       at(join(home, '.claude/skills/cairn/SKILL.md'), join(home, '.claude'), 'claude-code'),
       at(join(home, '.codex/skills/cairn/SKILL.md'), join(home, '.codex'), 'codex'),
+    ],
+  },
+  {
+    // The Lab's workflow, which SKILL.md points at and which is kept out of it
+    // so that an instance without the Lab does not pay for it in every session.
+    // Beside the skill it belongs to: `needs` is the skill's own folder, so it
+    // is repaired where the skill was installed and never creates one.
+    name: 'skill:lab',
+    file: 'skills/cairn/lab.md',
+    mode: 0o644,
+    targets: [
+      at(join(home, '.claude/skills/cairn/lab.md'), join(home, '.claude/skills/cairn'), 'claude-code'),
+      at(join(home, '.codex/skills/cairn/lab.md'), join(home, '.codex/skills/cairn'), 'codex'),
     ],
   },
   {
@@ -198,6 +211,11 @@ for (let i = 0; i < process.argv.length; i += 1) {
   const [name, path] = (process.argv[i + 1] ?? '').split('=')
   const artefact = ARTEFACTS.find((a) => a.name === name)
   if (artefact && path) artefact.targets.push(at(path))
+  // The skill is a folder: a copy of SKILL.md somewhere else (a gateway's own
+  // tree) takes its lab.md along, with no second `--also` to remember.
+  if (name === 'skill' && path && basename(path) === 'SKILL.md') {
+    ARTEFACTS.find((a) => a.name === 'skill:lab').targets.push(at(join(dirname(path), 'lab.md')))
+  }
 }
 
 const CHECK = process.argv.includes('--check')

@@ -1,5 +1,8 @@
 import { admin } from '@/lib/db/client'
 import { issuedUnderFormerKey, lookupFormerKey, type KeyRename } from './project-keys'
+import { isLabEnabled } from './lab-settings'
+import { subjectRefQuery } from './lab-shape'
+import { getSubjectByNumber, type Subject } from './subjects'
 
 /**
  * Query construction for prior-work discovery.
@@ -216,6 +219,23 @@ const taskByRef = async (_userId: string, q: string): Promise<ExactTask | null> 
   return { ...task, requested_ref: `${key}-${number}`, renamed_from: former.rename }
 }
 
+/** A subject a `LAB-12` query names, as a search row: above every ranked hit. */
+const asSubjectRow = (subject: Subject): SearchAllRow => ({
+  kind: 'subject',
+  id: subject.id,
+  ref: subject.ref,
+  title: subject.title,
+  subtitle: subject.conclusion?.replace(/\s+/g, ' ').slice(0, 120) || null,
+  project_key: subject.project?.key ?? null,
+  status: subject.stage.name,
+  type: 'subject',
+  answered: subject.conclusion !== null,
+  updated_at: subject.updated_at,
+  body_bytes: (subject.body?.length ?? 0) + (subject.conclusion?.length ?? 0),
+  rank: Number.POSITIVE_INFINITY,
+  widened: false,
+})
+
 const asSearchAllRow = (task: ExactTask): SearchAllRow => ({
   kind: 'task',
   id: task.id,
@@ -340,7 +360,7 @@ const rankTasks = async (
  * exist, a work-log note, was the one table nothing searched.
  */
 export type SearchAllRow = {
-  kind: 'task' | 'note' | 'knowledge' | 'session'
+  kind: 'task' | 'note' | 'knowledge' | 'session' | 'subject'
   id: string
   ref: string
   title: string
@@ -386,12 +406,23 @@ export const searchAll = async (
       })()
     : []
 
+  // `LAB-12` names a Lab subject (docs/lab.md): resolved directly and put
+  // first, the way a task ref is, while the Lab is on.
+  const wantsSubjects = !filters.kinds || filters.kinds.includes('subject')
+  const subjectNumber = wantsSubjects ? subjectRefQuery(q) : null
+  const found = subjectNumber && (await isLabEnabled()) ? await getSubjectByNumber(subjectNumber) : null
+  // A project-scoped search pins it only when it belongs to that project, as
+  // the full-text arm only returns that project's subjects.
+  const subject =
+    found && (!filters.project || found.project?.key === filters.project.toUpperCase()) ? found : null
+
   const addressedIds = new Set(addressed.map((t) => t.id))
+  const head = [...(subject ? [asSubjectRow(subject)] : []), ...addressed.map(asSearchAllRow)]
   const withExact =
-    addressed.length > 0
+    head.length > 0
       ? [
-          ...addressed.map(asSearchAllRow),
-          ...rows.filter((r) => !(r.kind === 'task' && addressedIds.has(r.id))),
+          ...head,
+          ...rows.filter((r) => !(r.kind === 'task' && addressedIds.has(r.id)) && !(r.kind === 'subject' && r.id === subject?.id)),
         ]
       : rows
 

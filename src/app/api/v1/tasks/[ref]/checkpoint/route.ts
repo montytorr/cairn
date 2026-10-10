@@ -1,9 +1,11 @@
+import { withLabField } from '@/lib/api/task-lab-fields'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { admin } from '@/lib/db/client'
-import { findTask, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { findTask, refOfRow, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { refuseHandedOff } from '@/lib/api/lab-shape'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +37,12 @@ export const POST = route<{ ref: string }, z.infer<typeof checkpointBody>>({
     const parsedMutation = z.string().uuid().safeParse(idempotencyHeader)
     if (idempotencyHeader && !parsedMutation.success) return fail('validation_failed', 'Invalid idempotency key.')
     const existingClaim = task.claimed_by !== null && task.claimed_by !== undefined
+    // A checkpoint on an unheld task claims it, and a handed-off task's
+    // tracker owns it while the hand-off is open (docs/lab.md).
+    if (!existingClaim) {
+      const handedOff = refuseHandedOff(task, refOfRow(task) ?? params.ref)
+      if (handedOff) return handedOff
+    }
     if (existingClaim && (body.ownershipVersion === undefined || body.checkpointVersion === undefined)) {
       return fail('conflict', 'Checkpoint requires ownership and checkpoint predecessors for an existing claim.')
     }
@@ -66,6 +74,14 @@ export const POST = route<{ ref: string }, z.infer<typeof checkpointBody>>({
 
     if (error) return fail('internal_error', error.message)
     if (!result || result.code === 'not_found') return fail('not_found', `No task ${params.ref}.`)
+    if (result.code === 'handed_off') {
+      // 072: the database refused to claim a task whose hand-off is open.
+      const now = await findTask(actor, params.ref, TASK_LIST_FIELDS)
+      return (
+        refuseHandedOff(now, refOfRow(task) ?? params.ref) ??
+        fail('conflict', `${params.ref} is handed off to another tracker; work it there.`)
+      )
+    }
     if (result.code === 'already_claimed') {
       return fail('already_claimed', `Held by ${result.holder}, not you.`, { claimedBy: result.holder })
     }
@@ -79,6 +95,6 @@ export const POST = route<{ ref: string }, z.infer<typeof checkpointBody>>({
       return fail('conflict', 'Checkpoint requires ownership and checkpoint predecessors for an existing claim.')
     }
     if (result.code === 'terminal') return fail('conflict', 'Closed tasks do not accept checkpoints.')
-    return ok({ ...(result.data ?? {}), ...(result.claimed ? { claimed: true } : {}), replay: result.code })
+    return ok({ ...(await withLabField(result.data ?? {})), ...(result.claimed ? { claimed: true } : {}), replay: result.code })
   },
 })

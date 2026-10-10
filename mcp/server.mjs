@@ -18,6 +18,13 @@
  * timeouts and approval modes, Claude Code enforces the tool schemas so the
  * model cannot invent flags, and OpenClaw can reach it through mcporter.
  *
+ * Deliberately left to the CLI, so an MCP-only agent knows they exist: the
+ * Lab's administration (`cairn lab on|off|home|stages|tags`), editing,
+ * archiving and deleting a subject, people's notes and files on a subject, and
+ * `cairn sync` (reading hand-offs back). Those are a human administrator's, or
+ * destructive, or run on a schedule; the tools below are the ones an agent
+ * works a subject with.
+ *
  * Requires `cairn` on PATH, plus CAIRN_BASE_URL and CAIRN_API_KEY (or
  * ~/.cairn/env, which the CLI reads itself).
  */
@@ -76,7 +83,9 @@ const TOOLS = [
       'of prior TASKS, work-log NOTES, KNOWLEDGE and SESSIONS — showing whether each ' +
       'carries a recorded answer and roughly what it costs to open. Do not re-debug ' +
       'something already answered. Open a task row with cairn_show; open a knowledge ' +
-      'row with cairn_know, whose ref is a slug rather than a KEY-123.',
+      'row with cairn_know, whose ref is a slug rather than a KEY-123. Where the Lab is ' +
+      'on it also returns SUBJECTS (LAB-12) — what the lab concluded: open one with ' +
+      'cairn_subject_show.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -99,7 +108,8 @@ const TOOLS = [
     name: 'cairn_show',
     description:
       'Full detail of one task, including its resolution if it has one. Takes a task ' +
-      'ref like CAI-42 — for a knowledge slug from cairn_check, use cairn_know.',
+      'ref like CAI-42 — for a knowledge slug from cairn_check, use cairn_know. A ref ' +
+      'like LAB-12 is a Lab subject and is shown as one.',
     inputSchema: {
       type: 'object',
       properties: { ref: { type: 'string', description: 'e.g. CAI-42' } },
@@ -469,6 +479,182 @@ const TOOLS = [
       required: ['ref'],
     },
     run: (a) => ['log', a.ref],
+  },
+  {
+    name: 'cairn_subject_list',
+    description:
+      'The Lab\'s subjects: technologies to evaluate, proofs of concept, ideas. Each has a ' +
+      'stage, tags, an owner, its todos (open/closed) and — once it has concluded — a ' +
+      'recorded answer. Use it before evaluating or prototyping anything, to see what ' +
+      'the lab already looked at. Only where the Lab is on.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to search for in title, conclusion and write-up.' },
+        stage: { type: 'string', description: 'A stage name, or several separated by commas.' },
+        category: {
+          type: 'string',
+          description: 'planned (the ideas), active, completed or dropped; commas for several.',
+        },
+        tag: { type: 'string', description: 'A tag name, or several separated by commas.' },
+        mine: { type: 'boolean', description: 'Only the ones your human owns.' },
+        project: { type: 'string', description: 'A project key, or "none".' },
+        archived: { type: 'string', enum: ['include', 'only'], description: 'Archived ones too, or only those.' },
+        limit: { type: 'number' },
+      },
+    },
+    run: (a) => [
+      'subject', 'list',
+      ...(a.query ? [a.query] : []),
+      ...(a.stage ? ['--stage', a.stage] : []),
+      ...(a.category ? ['--category', a.category] : []),
+      ...(a.tag ? ['--tag', a.tag] : []),
+      ...(a.mine ? ['--mine'] : []),
+      ...(a.project ? ['--project', a.project] : []),
+      ...(a.archived ? ['--archived', a.archived] : []),
+      ...(a.limit !== undefined ? ['--limit', String(a.limit)] : []),
+    ],
+  },
+  {
+    name: 'cairn_subject_show',
+    description:
+      'One subject as a digest: its conclusion, its todos, the write-up and the log ' +
+      '(every finding, decision and hand-off, the recent rest). `full` returns it all.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'e.g. LAB-12' },
+        full: { type: 'boolean' },
+      },
+      required: ['ref'],
+    },
+    run: (a) => ['subject', 'show', a.ref, ...(a.full ? ['--full'] : [])],
+  },
+  {
+    name: 'cairn_subject_add',
+    description:
+      'File a subject: something the lab should explore or prove. With no stage it is an ' +
+      'idea, in the first planned stage. Its todos are ordinary tasks (cairn_subject_todo). ' +
+      'Check first (cairn_check, cairn_subject_list): do not file what the lab concluded.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        body: { type: 'string', description: 'Markdown write-up: what it is and why it matters.' },
+        stage: { type: 'string', description: 'A stage name; omit for an idea.' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Curated tag names.' },
+        owner: { type: 'string', description: '"me", an email, a name or an id; "none" for nobody.' },
+        project: { type: 'string', description: 'A project key it belongs to, or "none".' },
+        conclusion: {
+          type: 'string',
+          description: 'Required only when filing straight into a completed or dropped stage.',
+        },
+      },
+      required: ['title'],
+    },
+    run: (a) => [
+      'subject', 'add', a.title,
+      ...(a.body ? ['--body', a.body] : []),
+      ...(a.stage ? ['--stage', a.stage] : []),
+      ...(slugList(a.tags).length ? ['--tag', slugList(a.tags).join(',')] : []),
+      ...(a.owner ? ['--owner', a.owner] : []),
+      ...(a.project ? ['--project', a.project] : []),
+      ...(a.conclusion ? ['--conclusion', a.conclusion] : []),
+    ],
+  },
+  {
+    name: 'cairn_subject_stage',
+    description:
+      'Move a subject to another stage. A completed or dropped stage CLOSES it and ' +
+      'requires a conclusion: what the lab concluded, and why — that is the answer ' +
+      'the next agent will find. The move is refused without one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'e.g. LAB-12' },
+        stage: { type: 'string', description: 'A stage name.' },
+        conclusion: { type: 'string', description: 'Markdown. Required for a completed or dropped stage.' },
+      },
+      required: ['ref', 'stage'],
+    },
+    run: (a) => [
+      'subject', 'stage', a.ref, a.stage,
+      ...(a.conclusion ? ['--conclusion', a.conclusion] : []),
+    ],
+  },
+  {
+    name: 'cairn_subject_note',
+    description:
+      'Append to a subject\'s log: what you tried, found or decided while exploring it. ' +
+      'Dead ends too — "tried X, no difference" is `attempt`. Safe to retry; a repeat is ignored.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'e.g. LAB-12' },
+        note: { type: 'string' },
+        kind: { type: 'string', enum: ['note', 'finding', 'decision', 'attempt', 'handoff'] },
+      },
+      required: ['ref', 'note'],
+    },
+    run: (a) => ['subject', 'note', a.ref, a.note, ...(a.kind ? ['--kind', a.kind] : [])],
+  },
+  {
+    name: 'cairn_subject_todo',
+    description:
+      'File a todo of a subject: an ordinary task (work it with cairn_claim, cairn_note, ' +
+      'cairn_done) that belongs to it. From an agent runtime it is claimed on creation; ' +
+      '`noStart` only files it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'The subject, e.g. LAB-12' },
+        title: { type: 'string' },
+        body: { type: 'string', description: 'Markdown description.' },
+        type: { type: 'string', enum: ['feature', 'bug', 'improvement', 'chore', 'spike', 'docs'] },
+        priority: { type: 'string', enum: ['urgent', 'high', 'medium', 'low'] },
+        noStart: { type: 'boolean', description: 'File it without claiming it.' },
+      },
+      required: ['ref', 'title'],
+    },
+    run: (a) => [
+      'subject', 'todo', a.ref, a.title,
+      ...(a.body ? ['--body', a.body] : []),
+      ...(a.type ? ['--type', a.type] : []),
+      ...(a.priority ? ['--priority', a.priority] : []),
+      ...(a.noStart ? ['--no-start'] : []),
+    ],
+  },
+  {
+    name: 'cairn_handoff',
+    description:
+      'Hand a task over to where the committed work lives — another Cairn instance, or ' +
+      'a GitHub repository. It files the task there, records the link here, and from then ' +
+      'on that tracker owns its status (cairn sync reads it back). Use it when work LEAVES ' +
+      'this instance, not to move a task between projects here. Say where with `to` ' +
+      '(<instance>:<KEY> or github:<owner>/<repo>), or leave it off when the task\'s ' +
+      'project has a default. `link` records a task already made by hand; `undo` takes ' +
+      'the hand-off back (nothing is done in the other tracker).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string', description: 'The task, e.g. CAI-42' },
+        to: { type: 'string', description: '<instance>:<KEY> or github:<owner>/<repo>' },
+        link: { type: 'string', description: 'The ref of a task already made in the other tracker.' },
+        url: {
+          type: 'string',
+          description: 'With link: its address. A Cairn link needs the absolute https URL unless `to` names the instance.',
+        },
+        undo: { type: 'boolean', description: 'Take the hand-off back.' },
+      },
+      required: ['ref'],
+    },
+    run: (a) => [
+      'handoff', a.ref,
+      ...(a.undo ? ['--undo'] : []),
+      ...(a.to ? ['--to', a.to] : []),
+      ...(a.link ? ['--link', a.link] : []),
+      ...(a.url ? ['--url', a.url] : []),
+    ],
   },
   {
     name: 'cairn_claim',

@@ -1,4 +1,5 @@
 import { pool } from '@/lib/db/client'
+import { withLabFields } from './task-lab-fields'
 
 /**
  * A user as the rest of the workspace sees one: enough to name them and pick
@@ -98,7 +99,9 @@ export const withAssignees = async <T extends object>(
     return typeof id === 'string' ? id : null
   }
   const people = await peopleByIds(rows.map((row) => idOf(row) ?? ''))
-  return rows.map((row) => ({ ...row, assignee: people.get(idOf(row) ?? '') ?? null }))
+  // Every task response passes through here, so this is where the raw
+  // subject_id and handoff_* columns become `subject` and `handoff`.
+  return withLabFields(rows.map((row) => ({ ...row, assignee: people.get(idOf(row) ?? '') ?? null })))
 }
 
 export const withAssignee = async <T extends object>(row: T): Promise<T & { assignee: Person | null }> =>

@@ -37,11 +37,18 @@ describe('refuseUnreadableBody (CAIRN-312)', () => {
   })
 
   it.each([
-    ['create', 'src/app/api/v1/projects/[id]/tasks/route.ts'],
+    // Every create — a project's task and a Lab subject's todo — goes through task-create.ts.
+    ['create', 'src/lib/api/task-create.ts'],
     ['update', 'src/app/api/v1/tasks/[ref]/route.ts'],
   ])('is applied where a task body is written: %s', (_verb, file) => {
     const source = readFileSync(join(process.cwd(), file), 'utf8')
     expect(source).toMatch(/const unreadable = refuseUnreadableBody\(actor, body\.description,/)
-    expect(source).toContain('if (unreadable) return unreadable')
+    expect(source).toMatch(/if \(unreadable\) return (unreadable|\{ ok: false, response: unreadable \})/)
+  })
+
+  it('files every new task through task-create.ts', () => {
+    for (const file of ['src/app/api/v1/projects/[id]/tasks/route.ts', 'src/app/api/v1/subjects/[ref]/todos/route.ts']) {
+      expect(readFileSync(join(process.cwd(), file), 'utf8')).toContain('createTaskInProject(')
+    }
   })
 })

@@ -9,6 +9,97 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **The Lab, server side** (CAIRN-366; contract in `docs/lab.md`). Croft's lab is folded back
+  into Cairn. A Lab subject (`LAB-12`) is something to explore or prove. It moves through
+  curated stages (Croft's nine are seeded), carries a write-up, an append-only log, people's
+  notes, files and curated tags, and needs a conclusion to enter a completed or dropped stage.
+  An idea is a subject in a planned stage. Todos are ordinary tasks with a subject, filed in the
+  subject's project or in a `LT` home project. Deleting a subject never deletes tasks: one with
+  todos is refused unless they are detached, and each detached todo gets a note saying which
+  subject it was a todo of. Subject numbers are never reused. Subjects appear in search (a
+  `LAB-12` query resolves directly), the live-update pulse, the activity feed and the briefing
+  (`lab` in `/context`). `LAB-12` written in a task is recorded as a mention of the subject.
+  Routes: `/api/v1/subjects/**` and `/api/v1/lab/{settings,stages,tags}`, plus
+  `GET /api/v1/attachments/{id}/content`, a stable redirect for embedding a file in markdown.
+- **The Lab is off by default, per instance.** A signed-in administrator turns it on with
+  `PUT /api/v1/lab/settings {"enabled": true}`. While it is off, Lab routes answer 404
+  `lab_disabled` and nothing Lab-shaped appears anywhere, so an upgrading instance gains only
+  empty tables.
+- **Hand-off to another tracker or another Cairn instance.** `POST /api/v1/tasks/{ref}/handoff`
+  links a task to the task it became elsewhere, re-links it, or records what that tracker last
+  said about it. A `cairn` hand-off must carry the destination task's https URL, so the link
+  says which instance holds the task. While a hand-off is open, claim, release and status
+  changes answer 409 `handed_off`; a done or cancelled report closes the task once.
+  `DELETE /api/v1/tasks/{ref}/handoff` takes a hand-off back, `GET /api/v1/handoffs` lists them,
+  and projects can name a default tracker and target. This works whether or not the Lab is on.
+  `cairn next` no longer offers a task whose hand-off is open, and the database's claim paths
+  refuse one too.
+- **The Lab in the CLI, the MCP server, the skill and the briefing** (CAIRN-370). Where an
+  administrator has switched the Lab on, `cairn subject add|list|show|edit|stage|note|notes|tag|attach|files|todo|archive|restore|delete|mentions`
+  works the subjects, `cairn idea "<title>"` files one in the first planned stage and `cairn
+  ideas` lists the planned ones. `cairn lab` shows the settings; `cairn lab on|off|home` (a
+  human administrator's) and `cairn lab stages|tags` with their add, edit, remove and order
+  verbs manage the curated lists. `cairn add --subject LAB-12`, `cairn update --subject
+  LAB-12|none` and `cairn list --subject LAB-12` link tasks to a subject; `cairn show LAB-12`
+  follows the task route's 404 to the subject; `cairn check --kinds subject` searches them.
+  Entering a completed or dropped stage asks for `--conclusion`, and the refusal says so. The
+  briefing gains a `Lab:` block (open subjects per stage, and the ones your human owns) only
+  when the server sends one, and the Lab section of `cairn --help` appears only on an instance
+  that has it on.
+- **`cairn handoff <ref> [--to <instance>:<KEY>|github:<owner>/<repo>]` and `cairn sync`**
+  (CAIRN-370). The work leaves this instance: the task is filed in another configured instance
+  (through that instance's own CLI, `~/.cairn/instances.json` and `--instance` routing) or as a
+  GitHub issue (through `gh`), and the link is recorded here with the destination task's
+  absolute https URL, which the server requires. The project's default hand-off applies when
+  `--to` is left off; `--link <REF> [--url URL]` records a task made by hand; `--undo` takes it
+  back. `cairn sync [--project K] [--all-instances]` reads each open hand-off's status back and
+  records it, and a task that ended there is closed here once with the other side's resolution.
+  Hand-off works on any task, with or without the Lab.
+- **`cairn project handoff <KEY> [--to <instance>:<KEY>|github:<owner>/<repo> | --clear]`**
+  (CAIRN-370) sets or clears a project's default hand-off, which `cairn handoff` uses when
+  `--to` is left off; bare, it shows it.
+- **MCP tools** `cairn_subject_list`, `cairn_subject_show`, `cairn_subject_add`,
+  `cairn_subject_stage`, `cairn_subject_note`, `cairn_subject_todo` and `cairn_handoff`.
+- **The Lab's workflow is a second file of the skill, `skills/cairn/lab.md`** (CAIRN-370),
+  so an instance without the Lab does not pay for it in every session: `SKILL.md` and
+  `AGENTS.md` carry a line each pointing at it, and stay inside their byte budgets. `cairn
+  setup` and the agent-files job install it beside `SKILL.md` (and an `--also skill=<path>`
+  copy takes it along); on a Lab instance the briefing's `Lab:` block and the Lab section of
+  `cairn --help` state the essentials themselves.
+- `request()` in the CLI takes an `onError` hook, so a verb can word a particular refusal (a
+  missing conclusion, a subject with todos, the Lab being off) instead of printing the server's
+  sentence alone. Lab-off refusals now say how to switch it on.
+- **The Lab in the web app** (CAIRN-368). With the Lab on, the sidebar gets a Lab entry and
+  `/lab` shows every subject as a list grouped by stage or as a board of stage lanes, narrowed
+  by stage, category (Ideas are the planned stages), tag, owner, project and text, all kept in
+  the address. Dragging a card into a completed or dropped stage asks for the conclusion first.
+  A subject's page (`/lab/subjects/12`) has its write-up (raw markdown, with images pasted or
+  dropped into the subject's own files), its todos as a list or a board, people's notes, the log,
+  files, and a rail for stage, owner, project, tags and conclusion, with archive and a delete
+  that detaches todos rather than destroying them. Settings gets a Lab section for an
+  administrator: the switch, the project todos are filed in, and the stages and tags. A task's
+  page gets a Subject field and shows where it was handed off to; while a hand-off is open its
+  status control is disabled. With the Lab off, none of this is drawn.
+- **`scripts/import-croft.mjs` moves a Croft database into a Lab instance** (CAIRN-369). It
+  reads Croft and writes the whole of it in one transaction: users with their password hashes,
+  stages, tags, lab projects (as Cairn projects keyed by their hand-off target), subjects as
+  `LAB-n` with the same numbers, their log, notes and files, and every todo as a task in its
+  subject's project with its notes, comments, history and hand-off. Authors, actors and
+  timestamps are kept. A dry run, the default, is the same write rolled back, so it fails on
+  what an `--apply` would fail on; the importer refuses a target that already holds subjects and
+  writes a mapping file (`S-n` to `LAB-n`, `T-n` to its new ref). `--rewrite-refs` turns `S-n` and
+  `T-n` in prose into the new refs, never inside code, links or URLs, and the report samples ten
+  rewrites. See `docs/lab-import.md`.
+
+### Changed
+
+- **`LAB` is reserved as a project key.** The API refuses it everywhere. Migration 071 adds a
+  database check, unless the instance already has a project keyed `LAB`: then the migration
+  still runs, and turning the Lab on is refused until that project is rekeyed.
+- Task responses gain `handoff`, and `subject` while the Lab is on.
+
 ## [0.21.0] — 2026-10-08
 
 ### Added

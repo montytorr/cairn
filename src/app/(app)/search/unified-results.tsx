@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookMarked, FileText, ListTodo, Radio } from 'lucide-react'
+import { BookMarked, FileText, FlaskConical, ListTodo, Radio } from 'lucide-react'
 import { ProjectIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import type { SearchAllRow } from '@/lib/api/search'
@@ -27,6 +27,14 @@ const KIND_META: Record<
     color: 'var(--status-done)',
   },
   session: { label: 'Session', Icon: Radio, tone: 'text-fg-subtle', color: 'var(--fg-subtle)' },
+  // Green: the one colour no other kind here takes. A subject is a question
+  // being answered, and the answer, once there, is its conclusion.
+  subject: {
+    label: 'Subject',
+    Icon: FlaskConical,
+    tone: 'text-status-in-review',
+    color: 'var(--status-in-review)',
+  },
 }
 
 /** The kind of a hit, as a small pill in its own colour. */
@@ -58,6 +66,7 @@ const hrefFor = (row: SearchAllRow): string | null => {
     return key && number ? `/projects/${key}/tasks/${number}` : null
   }
   if (row.kind === 'knowledge') return `/knowledge/${row.ref}`
+  if (row.kind === 'subject') return `/lab/subjects/${row.ref.replace(/^LAB-/, '')}`
   return null
 }
 

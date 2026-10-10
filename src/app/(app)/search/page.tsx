@@ -10,6 +10,7 @@ import { BrandName } from '@/components/brand'
 import { SearchControls } from './search-controls'
 import { SearchResults } from './search-results'
 import { UnifiedResults } from './unified-results'
+import { isLabEnabled } from '../lab/data'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 import { EmptyState } from '@/components/empty-state'
 
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = { title: 'Search' }
 
-export const KINDS = ['all', 'task', 'note', 'knowledge', 'session'] as const
+const KINDS = ['all', 'task', 'note', 'knowledge', 'session', 'subject'] as const
 export type Kind = (typeof KINDS)[number]
 
 const SearchPage = async ({
@@ -35,7 +36,7 @@ const SearchPage = async ({
   const user = await currentUser()
   if (!user) redirect('/login')
 
-  const projects = await listProjects(user.id)
+  const [projects, lab] = await Promise.all([listProjects(user.id), isLabEnabled()])
   const query = q.trim()
 
   // A type or status filter is a statement about tasks, so it selects the
@@ -67,7 +68,10 @@ const SearchPage = async ({
           query,
           {
             project: project || undefined,
-            kinds: KINDS.includes(kind as Kind) && kind !== 'all' ? [kind as string] : undefined,
+            kinds:
+              KINDS.includes(kind as Kind) && kind !== 'all' && (kind !== 'subject' || lab)
+                ? [kind as string]
+                : undefined,
           },
           60,
         ))
@@ -110,6 +114,7 @@ const SearchPage = async ({
         status={status ?? ''}
         kind={kind ?? 'all'}
         projects={projects.map((p) => ({ key: p.key, title: p.title }))}
+        lab={lab}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

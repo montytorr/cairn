@@ -73,6 +73,9 @@ export const GET = route({
       )
       .not('status', 'in', '("done","cancelled")')
       .neq('projects.status', 'archived')
+      // A task handed off to another tracker is worked there: picking it here
+      // would only meet 409 handed_off, and be picked again (docs/lab.md).
+      .or('handoff_ref.is.null,handoff_status.in.(done,cancelled)')
     const scoped = projectKey ? base.eq('projects.key', projectKey) : base
 
     const { data } = await (owner?.ok ? scoped.eq('assignee_user_id', owner.person.id) : scoped)
