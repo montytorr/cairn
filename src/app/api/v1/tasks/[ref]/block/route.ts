@@ -1,3 +1,4 @@
+import { withLabField } from '@/lib/api/task-lab-fields'
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
@@ -47,6 +48,6 @@ export const POST = route<{ ref: string }, z.infer<typeof blockBody>>({
       data: { reason: body.reason ?? null, ...(actor.host ? { host: actor.host } : {}) },
     })
 
-    return ok(data)
+    return ok(data && typeof data === 'object' ? await withLabField(data) : data)
   },
 })

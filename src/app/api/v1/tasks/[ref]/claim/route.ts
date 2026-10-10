@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
-import { findTask, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { findTask, refOfRow, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { refuseHandedOff } from '@/lib/api/lab-shape'
 import { takeTask } from '@/lib/api/claim'
 import { withAssignee } from '@/lib/api/people'
 import { CLAIM_LEASE_SECONDS } from '@/lib/utils'
@@ -30,6 +31,9 @@ export const POST = route<{ ref: string }, z.infer<typeof claimBody>>({
     if (!task) return fail('not_found', `No task ${params.ref}.`)
     const archived = refuseArchived(task)
     if (archived) return archived
+    // Its tracker owns it while the hand-off is open (docs/lab.md).
+    const handedOff = refuseHandedOff(task, refOfRow(task) ?? params.ref)
+    if (handedOff) return handedOff
 
     // A terminal task is settled history, not available work. Keep the public
     // claim endpoint from reopening a task that already has a resolution; the
@@ -48,6 +52,12 @@ export const POST = route<{ ref: string }, z.infer<typeof claimBody>>({
     if (error) return fail('internal_error', error)
 
     if (!row) {
+      // Handed off between the read above and the claim: the database refused
+      // it, and the caller is owed the real reason.
+      const now = await findTask(actor, params.ref, TASK_LIST_FIELDS)
+      const handedOffNow = refuseHandedOff(now, refOfRow(task) ?? params.ref)
+      if (handedOffNow) return handedOffNow
+
       const holder = task.claimed_by as string | null
       const lastBeat = task.heartbeat_at as string | null
       const agoMinutes = lastBeat

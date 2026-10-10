@@ -16,6 +16,9 @@ export const TASK_FIELDS =
   'checkpoint_summary, checkpoint_payload, checkpoint_at, checkpoint_version, blocked_reason, blocked_at, ' +
   'resolution, resolution_kind, resolved_at, resolved_by, duplicate_of, parent_id, external_ref, external_url, ' +
   'memory_session_id, observation_ids, created_at, updated_at, ' +
+  // The Lab and hand-off (docs/lab.md). Shaped into `subject` and `handoff`
+  // by withLabFields before any response; the raw columns never leave.
+  'subject_id, handoff_tracker, handoff_ref, handoff_url, handoff_status, handoff_synced_at, ' +
   'project:projects!project_id!inner(id, key, title, status)'
 
 /** Terse columns for list/search output. See the CLI's output discipline. */
@@ -23,15 +26,29 @@ export const TASK_LIST_FIELDS =
   'id, number, title, type, status, priority, labels, assignee_user_id, claimed_by, claimed_session, claimed_at, heartbeat_at, attempt, ownership_version, checkpoint_version, ' +
   // project_id as well as the embed: an activity row records the project by id,
   // and it is the only scope that survives the task being deleted.
-  'resolution, external_ref, updated_at, project_id, project:projects!project_id!inner(key, status)'
+  'resolution, external_ref, updated_at, project_id, ' +
+  'subject_id, handoff_tracker, handoff_ref, handoff_url, handoff_status, handoff_synced_at, ' +
+  'project:projects!project_id!inner(key, status)'
 
 export type TaskRef = { key: string; number: number } | { id: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/**
+ * A ref as the URL carried it. Not valid percent-encoding (`100%`) is taken as
+ * written: it then matches no ref, which is a 404, never a thrown URIError.
+ */
+const decodeRef = (raw: string) => {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+
 /** Accepts either `CAI-42` or a raw UUID, so both prose refs and ids work. */
 export const parseRef = (raw: string): TaskRef | null => {
-  const value = decodeURIComponent(raw).trim()
+  const value = decodeRef(raw).trim()
   if (UUID.test(value)) return { id: value }
 
   const match = /^([A-Za-z][A-Za-z0-9]{1,9})-(\d+)$/.exec(value)
@@ -70,7 +87,7 @@ export const resolveTask = async (
   raw: string,
   fields = TASK_FIELDS,
 ): Promise<ResolvedTask> => {
-  const requestedRef = decodeURIComponent(raw).trim().toUpperCase()
+  const requestedRef = decodeRef(raw).trim().toUpperCase()
   const ref = parseRef(raw)
   if (!ref) return { task: null, renamed: null, requestedRef }
 

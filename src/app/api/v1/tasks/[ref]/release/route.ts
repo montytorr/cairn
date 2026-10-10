@@ -1,8 +1,10 @@
+import { withLabField } from '@/lib/api/task-lab-fields'
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { admin } from '@/lib/db/client'
-import { findTask, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { findTask, refOfRow, refuseArchived, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { refuseHandedOff } from '@/lib/api/lab-shape'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +25,9 @@ export const POST = route<{ ref: string }, z.infer<typeof releaseBody>>({
     if (!task) return fail('not_found', `No task ${params.ref}.`)
     const archived = refuseArchived(task)
     if (archived) return archived
+    // Its tracker owns it while the hand-off is open (docs/lab.md).
+    const handedOff = refuseHandedOff(task, refOfRow(task) ?? params.ref)
+    if (handedOff) return handedOff
 
     /**
      * Whose claim this actually is.
@@ -67,6 +72,6 @@ export const POST = route<{ ref: string }, z.infer<typeof releaseBody>>({
     // behind it would answer "which session holds this" with one that does
     // not. It also moves a held `doing` task back to `todo`, as the reaper
     // does, so a released task stops saying somebody is on it.
-    return ok(data)
+    return ok(data && typeof data === 'object' ? await withLabField(data) : data)
   },
 })

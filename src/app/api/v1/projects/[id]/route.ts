@@ -7,6 +7,8 @@ import { recordActivity } from '@/lib/api/activity'
 import type { Actor } from '@/lib/api/auth'
 import { removeAttachments } from '@/lib/attachments'
 import { formerKeysByProject, resolveProject } from '@/lib/api/project-keys'
+import { reservedKeyRefusal } from '@/lib/api/lab-shape'
+import { handoffPairProblem, projectHandoffFields } from '@/lib/api/lab-schemas'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,13 +27,15 @@ type ProjectRow = {
  * project AC" about a project that was only renamed (CAIRN-264).
  */
 const resolve = (idOrKey: string) =>
-  resolveProject<ProjectRow>(idOrKey, 'id, key, title, description, status, task_counter')
+  resolveProject<ProjectRow>(idOrKey, 'id, key, title, description, status, task_counter, handoff_tracker, handoff_target')
 
 const updateProject = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(100_000).nullable().optional(),
   key: z.string().regex(/^[A-Z][A-Z0-9]{1,9}$/).optional(),
   status: z.enum(['planning', 'active', 'paused', 'completed', 'archived']).optional(),
+  /** Where this project's tasks are handed off by default (docs/lab.md): both, or neither. */
+  ...projectHandoffFields,
 })
 
 export const GET = route<{ id: string }>({
@@ -106,12 +110,19 @@ export const PATCH = route<{ id: string }, z.infer<typeof updateProject>>({
     if (Object.keys(body).length === 0) {
       return fail('validation_failed', 'No fields to update.')
     }
+    const reserved = reservedKeyRefusal(body.key)
+    if (reserved) return reserved
+    const pair = handoffPairProblem(body)
+    if (pair) return fail('validation_failed', pair, { field: 'handoffTracker' })
 
     // A key change is not a field update. Every ref already issued under the
     // old key — in commit messages, PR titles, other agents' notes — has to go
     // on resolving, so the rename and the record of what the key used to be
     // happen in one statement rather than two round trips that can half-fail.
-    const { key, ...fields } = body
+    const { key, handoffTracker, handoffTarget, ...rest } = body
+    const fields: Record<string, unknown> = { ...rest }
+    if (handoffTracker !== undefined) fields.handoff_tracker = handoffTracker
+    if (handoffTarget !== undefined) fields.handoff_target = handoffTarget
     const renaming = key !== undefined && key !== project.key
 
     if (renaming) {
@@ -134,7 +145,7 @@ export const PATCH = route<{ id: string }, z.infer<typeof updateProject>>({
     if (Object.keys(fields).length === 0) {
       const { data } = await admin()
         .from('projects')
-        .select('id, key, title, description, status')
+        .select('id, key, title, description, status, handoff_tracker, handoff_target')
         .eq('id', project.id)
         .single()
       await recordProjectChanges(actor, project, body, renaming)
@@ -145,7 +156,7 @@ export const PATCH = route<{ id: string }, z.infer<typeof updateProject>>({
       .from('projects')
       .update(fields)
       .eq('id', project.id)
-      .select('id, key, title, description, status')
+      .select('id, key, title, description, status, handoff_tracker, handoff_target')
       .single()
 
     if (error) return failFromDb(error)
