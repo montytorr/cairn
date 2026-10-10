@@ -74,6 +74,7 @@ const PROJECT_EVENT: Record<string, (key: string) => string> = {
   project_renamed: (key) => `Project ${key} renamed`,
   project_archived: (key) => `Project ${key} archived`,
   project_restored: (key) => `Project ${key} restored`,
+  project_described: (key) => `Project ${key} description changed`,
 }
 
 export const titleFor = (row: ActivityRow): string => {

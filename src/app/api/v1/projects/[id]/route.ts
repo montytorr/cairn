@@ -6,6 +6,7 @@ import { admin } from '@/lib/db/client'
 import { recordActivity } from '@/lib/api/activity'
 import type { Actor } from '@/lib/api/auth'
 import { removeAttachments } from '@/lib/attachments'
+import { refuseUnreadableBody } from '@/lib/api/task-body'
 import { formerKeysByProject, resolveProject } from '@/lib/api/project-keys'
 import { reservedKeyRefusal } from '@/lib/api/lab-shape'
 import { handoffPairProblem, projectHandoffFields } from '@/lib/api/lab-schemas'
@@ -74,7 +75,7 @@ const recordProjectChanges = async (
   // The row comes back from the adapter loosely typed; only these four fields
   // are read, and they are read as strings.
   before: Record<string, unknown>,
-  body: { title?: string; key?: string; status?: string },
+  body: { title?: string; key?: string; status?: string; description?: string | null },
   renaming: boolean,
 ) => {
   const events: Parameters<typeof recordActivity>[0] = []
@@ -97,6 +98,12 @@ const recordProjectChanges = async (
       events.push({ ...base, event: 'project_restored', data: { key, to: body.status } })
     }
   }
+  // Who changed what the project says it is. The text itself is not stored in
+  // the event: the description can be long, and the project holds the current
+  // one.
+  if (body.description !== undefined && body.description !== (before.description ?? null)) {
+    events.push({ ...base, event: 'project_described', data: { key } })
+  }
   await recordActivity(events, actor.userId, actor.host)
 }
 
@@ -114,6 +121,16 @@ export const PATCH = route<{ id: string }, z.infer<typeof updateProject>>({
     if (reserved) return reserved
     const pair = handoffPairProblem(body)
     if (pair) return fail('validation_failed', pair, { field: 'handoffTracker' })
+
+    // The same readability rule as a task body, here for the reason it is
+    // there for tasks: this is where the CLI, the MCP server and a raw HTTP
+    // caller all meet it (CAIRN-374).
+    const unreadable = refuseUnreadableBody(
+      actor,
+      body.description,
+      `cairn project describe ${project.key} --body -`,
+    )
+    if (unreadable) return unreadable
 
     // A key change is not a field update. Every ref already issued under the
     // old key — in commit messages, PR titles, other agents' notes — has to go

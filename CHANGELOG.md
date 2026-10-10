@@ -11,6 +11,11 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **`cairn project describe <KEY> --body -`** (CAIRN-374) replaces a project's description from
+  stdin, which nothing could do after the project was created. An agent's body gets the same
+  markdown checks as a task body, on the server, so the CLI, MCP and raw HTTP all meet them; an
+  empty body is refused unless `--clear` is given. The change is recorded as `project_described`
+  (migration 077, validated by 078) and shows in the activity feed.
 - **The Lab, server side** (CAIRN-366; contract in `docs/lab.md`). Croft's lab is folded back
   into Cairn. A Lab subject (`LAB-12`) is something to explore or prove. It moves through
   curated stages (Croft's nine are seeded), carries a write-up, an append-only log, people's
