@@ -5029,7 +5029,7 @@ const commands = {
       emit(await request('DELETE', `/api/v1/projects/${key}?confirm=${encodeURIComponent(key)}`))
       return
     }
-    die(`unknown subcommand "${sub}" — expected create, rename, rekey, archive, restore, delete or handoff`)
+    die(`unknown subcommand "${sub}" — expected create, rename, rekey, describe, archive, restore, delete or handoff`)
   },
 
   /**

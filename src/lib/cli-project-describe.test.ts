@@ -105,6 +105,16 @@ describe('cairn project describe', () => {
     expect(seen).toEqual([])
   })
 
+  it('lists describe among the subcommands when one is unknown', async () => {
+    const seen: Seen[] = []
+    const base = await serve(ok, seen)
+    const { code, stderr } = await run(['project', 'nope', 'CIVIC'], base)
+    expect(code).not.toBe(0)
+    expect(stderr).toContain('unknown subcommand "nope"')
+    expect(stderr).toContain('describe')
+    expect(seen).toEqual([])
+  })
+
   it('shows usage when no body is given', async () => {
     const seen: Seen[] = []
     const base = await serve(ok, seen)
