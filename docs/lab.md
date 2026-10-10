@@ -51,6 +51,7 @@ PUT /api/v1/lab/settings            (human admin)
   "homeProject": "LT" | "<uuid>" | null }   // optional; null = back to the default
 → 200 same shape
 errors: 403 forbidden · 400 validation_failed (unknown or archived project) · 401
+        409 conflict (enabling while a project, live or former key, is LAB)
 ```
 
 ## Refs
@@ -59,10 +60,15 @@ errors: 403 forbidden · 400 validation_failed (unknown or archived project) · 
   `LAB-12`, `lab-12` or `12` on subject routes (`/subjects/{ref}`), and as a UUID.
 - **`LAB` is reserved** in the project-key namespace, on every instance, whether or not the Lab
   is on, so a ref never means two things. Creating or renaming a project to `LAB` is refused
-  with 400 `validation_failed` (`field: "key"`, `"LAB is reserved for Lab subjects"`), and a
-  database check on `projects.key` and `project_former_keys.key` is the floor. Migration 071
-  stops with a readable error if an instance already has a project keyed `LAB` (none of the
-  known instances does).
+  with 400 `validation_failed` (`field: "key"`, `"LAB is reserved for Lab subjects"`) on every
+  instance, and a database check on `projects.key` and `project_former_keys.key`
+  (`projects_key_not_lab`, `project_former_keys_not_lab`) is the floor.
+- **An instance that already has `LAB`** (a live or a former key) still migrates: 071 skips
+  adding the check and installs everything else, so a deploy that migrates on start is never
+  blocked. On such an instance `PUT /lab/settings { "enabled": true }` is refused with 409
+  `conflict` naming the project to rekey first (`{ "project": "LAB", "project_id": … }`). Once the
+  key is free, the next successful `PUT /lab/settings` adds the check (and so may any later
+  migration). The API-level refusal applies whether or not the check exists.
 - **Numbers are never reused.** A counter (`subject_number_counter`, one row) only goes up,
   as `projects.task_counter` does for tasks. Deleting `LAB-15` leaves a hole; the next subject
   is `LAB-16`. A failed insert rolls the counter back, so the only holes are deletions.
@@ -471,10 +477,19 @@ todo, its subject's log records it.
 Shapes: `handoff_tracker` matches `^[a-z][a-z0-9-]{1,31}$`; `handoff_ref` 1–200 characters with
 no whitespace; `handoff_url` http(s) or null; tracker and ref are both set or both null.
 
+**A `cairn` hand-off names its instance.** A bare `KDP-41` does not say which Cairn holds it
+(several instances use the same key shapes), so when `tracker = "cairn"` the `url` is
+**required** and must be the destination task's absolute `https://` URL
+(`https://tasks.example.com/projects/KDP/tasks/41`). Without it the route answers 400
+`validation_failed` (`field: "url"`), and a database check (`tasks_handoff_cairn_url_check`)
+is the floor. A sync of a link that already has its URL may omit it (the stored one is kept).
+Other trackers may omit the URL.
+
 ### `POST /api/v1/tasks/{ref}/handoff`: link, re-link or sync
 
 ```json
-{ "tracker": "cairn", "ref": "KDP-41", "url": "https://…",     // url optional
+{ "tracker": "cairn", "ref": "KDP-41",
+  "url": "https://tasks.example.com/projects/KDP/tasks/41",  // required for cairn, optional otherwise
   "status": "doing",                       // optional: what the tracker says now
   "resolution": "…", "resolutionKind": "fixed" }   // with a done/cancelled status
 ```
@@ -595,3 +610,59 @@ lab?: {
 
 Each is idempotent: `if not exists`, guarded constraint adds, and a marker check before every
 function transform.
+
+## Importing
+
+There is no import API. The Croft importer (P4) writes SQL straight into a fresh Lab instance's
+database, in one transaction, so it keeps the original authors, actors and timestamps. The only
+import affordance in the API is the admin-only `number` on `POST /subjects`.
+
+Tables and columns (all in `public`):
+
+| table | columns the importer sets |
+|---|---|
+| `lab_settings` | `id = true`, `enabled`, `home_project_id` (upsert on `id`) |
+| `lab_stages` | `id`, `name`, `category`, `color`, `position`, `created_at` (071 seeds Croft's nine: match on `lower(name)` rather than inserting duplicates) |
+| `lab_tags` | `id`, `name` (lower-case), `color`, `position`, `created_at` |
+| `subjects` | `id`, **`number`**, `title`, `body`, `stage_id`, `owner_user_id`, `project_id`, `conclusion`, `concluded_at`, `position`, `actor_type`, `actor_id`, `created_at`, `updated_at`, `archived_at` |
+| `subject_tags` | `subject_id`, `tag_id` |
+| `subject_notes` | `subject_id`, `kind`, `note`, `actor_type`, `actor_id`, `user_id`, `content_hash`, `created_at` |
+| `subject_human_notes` | `subject_id`, `body`, `user_id`, `actor_type`, `actor_id`, `created_at`, `updated_at` |
+| `subject_attachments` | `subject_id`, `filename`, `mime_type`, `size_bytes`, `storage_path`, `sha256`, `uploaded_by`, `user_id`, `created_at` (copy the bytes to the store first) |
+| `tasks` | the usual task columns plus `subject_id` and `handoff_tracker`, `handoff_ref`, `handoff_url`, `handoff_status`, `handoff_synced_at` |
+| `projects` | the usual columns plus `handoff_tracker`, `handoff_target` |
+
+Trigger side effects the importer must expect:
+
+- **`subjects_assign_number`** (before insert): a null `number` takes the next from
+  `subject_number_counter`; an explicit one moves the counter to at least that number. Insert
+  subjects with their Croft numbers and the counter follows; never write the counter yourself.
+- **`subjects_touch`** (before update) sets `updated_at = now()` on every update of a subject.
+  Insert subjects with their final `updated_at`, and do not update them afterwards (or the
+  original time is lost).
+- **Touch-the-subject triggers** (after insert on `subject_notes`, `subject_human_notes`,
+  `subject_attachments`; after insert or delete on `subject_tags`) set the subject's
+  `updated_at = now()`. Children reference the subject, so they always come after it. To keep
+  the original time, re-set every subject's `updated_at` as the last step of the transaction
+  with `subjects_touch` disabled (`alter table subjects disable trigger subjects_touch` …
+  `enable trigger`). (`set local session_replication_role = replica` also works, but skips
+  every trigger listed here, and the importer then owns all of their effects.)
+- **`lab_stages_touch`, `lab_tags_touch`, `subject_human_notes_touch`** (before update) set
+  `updated_at = now()`; inserts are untouched.
+- **No stage notes are written by triggers.** Stage notes are written by the API on a move, so
+  imported `stage` notes are inserted as they are, and inserting a subject in a stage writes
+  nothing.
+- **`content_hash`** is unique per subject. Compute it as the API does,
+  `left(encode(sha256(convert_to(kind || E'\n' || note, 'UTF8')), 'hex'), 32)`, or copy Croft's,
+  which uses the same formula. Stage notes' hashes carry the moment and may be copied as they are.
+- **Task triggers** run as for any task: `tasks_assign_number` (null `number` takes the project
+  counter; an explicit one does not move it, so set `projects.task_counter` to the max yourself),
+  the touch trigger, and **`task_mentions_refresh`** on `description` and `resolution` (and on
+  `task_notes.note`, `task_comments.content`), which fills `task_mentions` and
+  `subject_mentions` from the text. Insert subjects before tasks, so `LAB-n` in imported task
+  text finds its subject.
+- **Hand-off checks:** tracker and ref together; tracker shape; a `cairn` tracker needs an
+  https `handoff_url`. Croft's 35 links to personal Cairn must be given their URL
+  (`https://tasks.montytorr.com/projects/<KEY>/tasks/<n>`) or the insert fails.
+- No activity events are written by triggers; insert `task_activity_events` rows (with
+  `subject_id`) yourself if the history should show in the feed.
