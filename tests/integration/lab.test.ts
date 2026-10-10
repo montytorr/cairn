@@ -502,9 +502,12 @@ describe('hand-off', () => {
   })
 
   it('refuses a secret in the resolution, as PATCH does', async () => {
+    // Assembled at run time, as in secrets.test.ts, so this file holds nothing
+    // a repository scanner reads as a leaked key.
+    const fakeKey = ['sk', 'live', ''].join('_') + Array.from({ length: 24 }, (_, i) => 'aB3dE5gH7jK9'[i % 12]).join('')
     const leaked = await call(handoffRoute, `/tasks/${ref}/handoff`, { ref }, {
       method: 'POST',
-      body: { tracker: 'cairn', ref: 'KDP-41', status: 'doing', resolution: 'key sk_live_abcdefghijklmnopqrstuvwx' },
+      body: { tracker: 'cairn', ref: 'KDP-41', status: 'doing', resolution: `key ${fakeKey}` },
     })
     expect(leaked.status).toBe(400)
     expect(leaked.json.code).toBe('secret_detected')
