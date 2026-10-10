@@ -24,7 +24,7 @@ const rememberView = (projectKey: string, view: ProjectView) => {
  * bar of its own in the other, so it remounts on every change; `from` is the
  * view it is leaving, and the pill starts there and slides across.
  */
-const ViewToggle = ({
+export const ViewToggle = ({
   view,
   from,
   onPick,

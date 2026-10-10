@@ -30,6 +30,8 @@ import { RedirectNotice } from '@/components/redirect-notice'
 import { listFormerKeyRecords } from '@/lib/data'
 import { formerRefsOf, renameLine, renamesOf, taskRedirectNotice } from '@/lib/project-rename'
 import { LABEL, PANE } from './styles'
+import { HandoffBadge } from '@/components/lab/handoff-badge'
+import { taskLabFields } from '@/components/lab/task-fields'
 
 export const dynamic = 'force-dynamic'
 
@@ -149,6 +151,7 @@ const TaskPage = async ({
   // system, on the page whose whole job is to tell you what you are looking at.
   const ref = `${task.project.key}-${task.number}`
   const arrivedFrom = taskRedirectNotice(from, renames, { ...task, ref })
+  const lab = taskLabFields(task)
 
   return (
     <div className="flex h-dvh flex-col">
@@ -233,6 +236,7 @@ const TaskPage = async ({
                 <ProjectIcon size={11} projectKey={task.project.key} />
                 <span className="truncate">{task.project.title}</span>
               </Link>
+              {lab.handoff ? <HandoffBadge handoff={lab.handoff} /> : null}
             </div>
 
             <EditableTitle taskId={task.id} initial={task.title} />
@@ -347,6 +351,7 @@ const TaskPage = async ({
             alsoProjects={alsoProjects}
             projects={allProjects.map((p) => ({ key: p.key, title: p.title }))}
             parent={parent}
+            lab={lab}
           />
         </div>
       </div>

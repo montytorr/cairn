@@ -9,6 +9,20 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **The Lab in the web app** (CAIRN-368). With the Lab on, the sidebar gets a Lab entry and
+  `/lab` shows every subject as a list grouped by stage or as a board of stage lanes, narrowed
+  by stage, category (Ideas are the planned stages), tag, owner, project and text, all kept in
+  the address. Dragging a card into a completed or dropped stage asks for the conclusion first.
+  A subject's page (`/lab/subjects/12`) has its write-up (raw markdown, with images pasted or
+  dropped into the subject's own files), its todos as a list or a board, people's notes, the log,
+  files, and a rail for stage, owner, project, tags and conclusion, with archive and a delete
+  that detaches todos rather than destroying them. Settings gets a Lab section for an
+  administrator: the switch, the project todos are filed in, and the stages and tags. A task's
+  page gets a Subject field and shows where it was handed off to; while a hand-off is open its
+  status control is disabled. With the Lab off, none of this is drawn.
+
 ## [0.21.0] — 2026-10-08
 
 ### Added
