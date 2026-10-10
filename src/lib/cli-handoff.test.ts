@@ -510,7 +510,7 @@ describe('cairn sync', () => {
     const out = await w.run(['sync'])
     expect(out.code).toBe(0)
 
-    expect(w.src.seen.find((s) => s.path.startsWith('/api/v1/handoffs'))!.path).toBe('/api/v1/handoffs?state=open')
+    expect(w.src.seen.find((s) => s.path.startsWith('/api/v1/handoffs'))!.path).toBe('/api/v1/handoffs?state=open&limit=500')
     const sent = posts(w.src.seen, '/handoff')
     expect(sent.map((s) => s.path)).toEqual(['/api/v1/tasks/CAIRN-12/handoff', '/api/v1/tasks/CAIRN-13/handoff'])
     expect(sent[0]!.body).toEqual({
@@ -561,6 +561,26 @@ describe('cairn sync', () => {
     expect(out.code).toBe(0)
     expect(out.stdout).toContain('unread: no configured instance serves https://elsewhere.example.test')
     expect(posts(w.src.seen, '/handoff')).toHaveLength(0)
+  })
+
+  it('a resolution the server takes for a secret is withheld, and the status is still recorded', async () => {
+    const dest = destination()
+    const destUrl = await dest.url()
+    const w = await world((s) => {
+      if (s.path.startsWith('/api/v1/handoffs')) return open(destUrl).slice(0, 1)
+      if (s.method === 'POST' && s.path.endsWith('/handoff')) {
+        return s.body?.resolution
+          ? { status: 400, fail: { error: 'resolution looks like it contains a secret', code: 'secret_detected' } }
+          : { ...linkOk, closed: true }
+      }
+      return []
+    }, dest)
+    const out = await w.run(['sync'])
+    expect(out.code).toBe(0)
+    const sent = posts(w.src.seen, '/handoff')
+    expect(sent).toHaveLength(2)
+    expect(sent[1]!.body).toEqual({ tracker: 'cairn', ref: 'KDP-41', status: 'done' })
+    expect(out.stdout).toContain('closed · resolution withheld: it looked like a secret')
   })
 
   it('one task the server refuses does not end the run', async () => {

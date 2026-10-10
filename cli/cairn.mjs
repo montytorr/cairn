@@ -3499,6 +3499,18 @@ const subjectFlag = (value, verb) => {
   return subjectArg(raw)
 }
 
+/**
+ * The settings, and a `warning` the server may add (turning the Lab on could
+ * not add the database's LAB reservation): said on stderr, where a person
+ * sees it, and left in the JSON for anything that parses.
+ */
+const emitSettings = (settings) => {
+  if (FORMAT !== 'tsv' || !settings?.warning) return emit(settings)
+  const { warning, ...rest } = settings
+  emit(rest)
+  process.stderr.write(`warning: ${warning}\n`)
+}
+
 /** A subject's page on the server the request went to. */
 const subjectUrl = (ref) => {
   const m = /^LAB-(\d+)$/i.exec(ref ?? '')
@@ -4157,7 +4169,9 @@ class SyncRowError extends Error {}
 
 /** The body of `cairn sync`: read every open hand-off back from where it lives. */
 const syncHandoffs = async () => {
-  const params = new URLSearchParams({ state: 'open' })
+  // The most the server returns (default 200): a sync that silently stopped at
+  // the default would leave the rest looking unchanged.
+  const params = new URLSearchParams({ state: 'open', limit: '500' })
   if (flags.project) params.set('project', flags.project)
   const open = await request('GET', `/api/v1/handoffs?${params}`)
   const rows = []
@@ -4181,13 +4195,26 @@ const syncHandoffs = async () => {
       if (shown.resolution) body.resolution = shown.resolution
       if (shown.resolutionKind) body.resolutionKind = String(shown.resolutionKind)
     }
-    let linked
-    try {
-      linked = await request('POST', `/api/v1/tasks/${item.ref}/handoff`, body, {
-        onError: (payload) => {
-          throw new SyncRowError(payload.error ?? payload.code ?? 'refused')
+    const send = (payload) =>
+      request('POST', `/api/v1/tasks/${item.ref}/handoff`, payload, {
+        onError: (refusal) => {
+          throw new SyncRowError(refusal.error ?? refusal.code ?? 'refused', { cause: refusal.code })
         },
       })
+    let linked
+    let withheld = false
+    try {
+      try {
+        linked = await send(body)
+      } catch (error) {
+        // The other side's resolution looked like a credential and the server
+        // refuses to store one. The status is still true and still worth
+        // recording; the words are not worth losing the whole row over.
+        if (!(error instanceof SyncRowError) || error.cause !== 'secret_detected' || !body.resolution) throw error
+        const { resolution: _resolution, resolutionKind: _kind, ...bare } = body
+        withheld = true
+        linked = await send(bare)
+      }
     } catch (error) {
       if (!(error instanceof SyncRowError)) throw error
       rows.push({ ...row, status: shown.status, result: `refused: ${truncate(error.message, 60)}` })
@@ -4197,9 +4224,12 @@ const syncHandoffs = async () => {
       ...row,
       status: shown.status,
       result: [
-        shown.status === handoff.status ? 'unchanged' : `was ${handoff.status ?? 'unknown'}`,
+        String(shown.status).toLowerCase() === String(handoff.status ?? '').toLowerCase()
+          ? 'unchanged'
+          : `was ${handoff.status ?? 'unknown'}`,
         linked?.noted ? 'noted' : '',
         linked?.closed ? 'closed' : '',
+        withheld ? 'resolution withheld: it looked like a secret' : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -5260,7 +5290,7 @@ const commands = {
     if (verb === 'on' || verb === 'off') {
       const settings = await request('PUT', '/api/v1/lab/settings', { enabled: verb === 'on' }, { onError: humanOnly })
       rememberLab(settings?.enabled === true)
-      return emit(settings)
+      return emitSettings(settings)
     }
 
     if (verb === 'home') {
@@ -5271,7 +5301,7 @@ const commands = {
         { homeProject: String(key).toLowerCase() === 'default' ? null : key },
         { onError: humanOnly },
       )
-      return emit(settings)
+      return emitSettings(settings)
     }
 
     if (verb === 'stages') {

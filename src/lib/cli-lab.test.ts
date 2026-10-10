@@ -466,6 +466,17 @@ describe('cairn lab', () => {
     expect(out.stderr).toContain('an agent key is refused')
   })
 
+  it('says on stderr what the server warned about when switching on, and keeps it in the JSON', async () => {
+    const { base } = serve(() => ({ enabled: true, home_project: null, warning: 'The LAB reservation could not be added.' }))
+    const url = await base()
+    const out = await run(['lab', 'on'], url)
+    expect(out.code).toBe(0)
+    expect(out.stdout).toContain('enabled\ttrue')
+    expect(out.stdout).not.toContain('warning')
+    expect(out.stderr).toContain('warning: The LAB reservation could not be added.')
+    expect(JSON.parse((await run(['lab', 'on', '--json'], url)).stdout).warning).toContain('reservation')
+  })
+
   it('home sends the key, or null for default', async () => {
     const { seen, base } = serve(() => ({ enabled: true, home_project: { key: 'LT' } }))
     const url = await base()
