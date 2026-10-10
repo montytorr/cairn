@@ -2879,6 +2879,8 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn project rename <KEY> "<title>"
     cairn project rekey <KEY> <NEW>              change the key; old refs keep resolving
     cairn project rename <KEY> --key <NEW>       the same, as entities spells it
+    cairn project describe <KEY> --body -        replace its description from stdin (markdown,
+                                                 checked like a task body); --clear empties it
     cairn project archive <KEY>                  hides it; the tasks stay searchable
     cairn project restore <KEY>
     cairn project delete <KEY> --confirm <KEY>   deletes every task in it
@@ -4949,6 +4951,31 @@ const commands = {
       }
       const title = need(positional[2], 'usage: cairn project rename <KEY> "<new title>"  (or --key <NEW_KEY>)')
       emit(await request('PATCH', `/api/v1/projects/${key}`, { title }))
+      return
+    }
+    /**
+     * Replacing the description, which nothing could do after the project was
+     * created (CAIRN-374). The body is read like `cairn add --body -`; the
+     * server applies the task-body readability rule and answers with the list
+     * of what to fix, which the shared error path prints.
+     *
+     * An empty body is refused rather than saved: a heredoc that came out
+     * empty should not silently wipe what the project says it is. `--clear`
+     * is the deliberate way to do that.
+     */
+    if (sub === 'describe') {
+      const usage = 'usage: cairn project describe <KEY> --body -   (markdown on stdin; --clear empties it)'
+      if (flags.clear && flags.body !== undefined) die('pass --body or --clear, not both')
+      if (flags.clear) {
+        emit(await request('PATCH', `/api/v1/projects/${key}`, { description: null }))
+        return
+      }
+      if (flags.body === undefined || flags.body === true) die(usage)
+      const description = String(await resolveValue(flags.body)).trim()
+      if (!description) {
+        die('the description is empty, so nothing was changed. Pass --clear to remove it.')
+      }
+      emit(await request('PATCH', `/api/v1/projects/${key}`, { description }))
       return
     }
     if (sub === 'archive' || sub === 'restore') {
