@@ -43,6 +43,11 @@ export type ApiError =
   | 'secret_detected'
   | 'rate_limited'
   | 'internal_error'
+  | 'lab_disabled'
+  | 'conclusion_required'
+  | 'stage_in_use'
+  | 'subject_has_todos'
+  | 'handed_off'
 
 const STATUS: Record<ApiError, number> = {
   unauthorized: 401,
@@ -56,6 +61,12 @@ const STATUS: Record<ApiError, number> = {
   secret_detected: 400,
   rate_limited: 429,
   internal_error: 500,
+  // The Lab (docs/lab.md). Off reads as absent, hence 404.
+  lab_disabled: 404,
+  conclusion_required: 400,
+  stage_in_use: 409,
+  subject_has_todos: 409,
+  handed_off: 409,
 }
 
 export const ok = <T>(data: T, init?: ResponseInit) =>

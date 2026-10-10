@@ -11,6 +11,31 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **The Lab, server side** (CAIRN-366; contract in `docs/lab.md`). Croft's lab is folded back
+  into Cairn. A Lab subject (`LAB-12`) is something to explore or prove. It moves through
+  curated stages (Croft's nine are seeded), carries a write-up, an append-only log, people's
+  notes, files and curated tags, and needs a conclusion to enter a completed or dropped stage.
+  An idea is a subject in a planned stage. Todos are ordinary tasks with a subject, filed in the
+  subject's project or in a `LT` home project. Deleting a subject never deletes tasks: one with
+  todos is refused unless they are detached, and each detached todo gets a note saying which
+  subject it was a todo of. Subject numbers are never reused. Subjects appear in search (a
+  `LAB-12` query resolves directly), the live-update pulse, the activity feed and the briefing
+  (`lab` in `/context`). `LAB-12` written in a task is recorded as a mention of the subject.
+  Routes: `/api/v1/subjects/**` and `/api/v1/lab/{settings,stages,tags}`, plus
+  `GET /api/v1/attachments/{id}/content`, a stable redirect for embedding a file in markdown.
+- **The Lab is off by default, per instance.** A signed-in administrator turns it on with
+  `PUT /api/v1/lab/settings {"enabled": true}`. While it is off, Lab routes answer 404
+  `lab_disabled` and nothing Lab-shaped appears anywhere, so an upgrading instance gains only
+  empty tables.
+- **Hand-off to another tracker or another Cairn instance.** `POST /api/v1/tasks/{ref}/handoff`
+  links a task to the task it became elsewhere, re-links it, or records what that tracker last
+  said about it. A `cairn` hand-off must carry the destination task's https URL, so the link
+  says which instance holds the task. While a hand-off is open, claim, release and status
+  changes answer 409 `handed_off`; a done or cancelled report closes the task once.
+  `DELETE /api/v1/tasks/{ref}/handoff` takes a hand-off back, `GET /api/v1/handoffs` lists them,
+  and projects can name a default tracker and target. This works whether or not the Lab is on.
+  `cairn next` no longer offers a task whose hand-off is open, and the database's claim paths
+  refuse one too.
 - **The Lab in the web app** (CAIRN-368). With the Lab on, the sidebar gets a Lab entry and
   `/lab` shows every subject as a list grouped by stage or as a board of stage lanes, narrowed
   by stage, category (Ideas are the planned stages), tag, owner, project and text, all kept in
@@ -22,6 +47,13 @@ out under **Breaking** with what to do about it.
   administrator: the switch, the project todos are filed in, and the stages and tags. A task's
   page gets a Subject field and shows where it was handed off to; while a hand-off is open its
   status control is disabled. With the Lab off, none of this is drawn.
+
+### Changed
+
+- **`LAB` is reserved as a project key.** The API refuses it everywhere. Migration 071 adds a
+  database check, unless the instance already has a project keyed `LAB`: then the migration
+  still runs, and turning the Lab on is refused until that project is rekeyed.
+- Task responses gain `handoff`, and `subject` while the Lab is on.
 
 ## [0.21.0] — 2026-10-08
 

@@ -3,6 +3,10 @@ import { ok, fail } from '@/lib/api/response'
 import { admin } from '@/lib/db/client'
 import { recordActivity } from '@/lib/api/activity'
 import { removeAttachments, signUrls } from '@/lib/attachments'
+import { isLabEnabled } from '@/lib/api/lab-settings'
+import { findSubjectFile, toAttachment } from '@/lib/api/subject-extras'
+import { subjectRef } from '@/lib/api/lab-shape'
+import { pool } from '@/lib/db/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +36,13 @@ const findWorkspaceAttachment = async (id: string) => {
 export const GET = route<{ id: string }>({
   handler: async ({ params }) => {
     const row = await findWorkspaceAttachment(params.id)
-    if (!row) return fail('not_found', 'No such attachment.')
+    if (!row) {
+      // A Lab subject's file (docs/lab.md), removed through its subject.
+      const file = (await isLabEnabled()) ? await findSubjectFile(params.id) : null
+      if (!file) return fail('not_found', 'No such attachment.')
+      const { rows } = await pool().query<{ number: number }>('select number from subjects where id = $1', [file.subject_id])
+      return ok({ ...(await toAttachment(file)), subject: rows[0] ? subjectRef(rows[0].number) : null })
+    }
     return ok({ ...row, ...(await signUrls(row.storage_path, row.original_name, row.mime_type)) })
   },
 })

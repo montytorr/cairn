@@ -7,6 +7,8 @@ import { projectForCwd, projectForRepo } from './project-resolution'
 import { formerKeysByProject, formerRefsOf, liveProjectKey, resolveProject, type FormerKey, type KeyRename } from './project-keys'
 import { peopleByIds } from './people'
 import { TASK_PRIORITIES } from '@/schemas/task'
+import { isLabEnabled } from './lab-settings'
+import { labBrief, type LabBrief } from './subjects'
 
 /**
  * The briefing a session opens with.
@@ -103,6 +105,12 @@ export type ContextPayload = {
   knowledge: { slug: string; title: string; scope: string; stale: boolean }[]
   staleClaims: { ref: string; title: string; claimedBy: string; heldFor: string }[]
   file?: FileContext
+  /**
+   * The Lab, when it is on (docs/lab.md): how many live subjects each stage
+   * holds, and up to three live subjects the caller's human owns in an active
+   * or planned stage, active first. Absent while the Lab is off.
+   */
+  lab?: LabBrief
 }
 
 const TASK_SELECT =
@@ -425,6 +433,7 @@ export const buildContext = async (
   }))
 
   const file = input.file ? await contextForFile(actor.userId, input.file) : undefined
+  const lab = (await isLabEnabled()) ? await labBrief(actor.userId) : undefined
 
   return {
     project,
@@ -436,6 +445,7 @@ export const buildContext = async (
     knowledge,
     staleClaims,
     file,
+    ...(lab ? { lab } : {}),
   }
 }
 

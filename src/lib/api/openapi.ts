@@ -12,6 +12,8 @@ import {
 } from '@/schemas/task'
 import { knowledgeCreate, knowledgeUpdate } from '@/schemas/knowledge'
 import { sessionUpsert } from '@/schemas/session'
+import { projectHandoffFields } from './lab-schemas'
+import { handoffShape, labPaths, taskSubjectShape } from './openapi-lab'
 
 /**
  * The spec is generated from the same Zod schemas the routes validate with,
@@ -42,6 +44,8 @@ const errorResponse = {
               'unauthorized', 'forbidden', 'not_found', 'validation_failed',
               'conflict', 'already_claimed', 'session_closed', 'resolution_required',
               'secret_detected', 'rate_limited', 'internal_error',
+              'lab_disabled', 'conclusion_required', 'stage_in_use', 'subject_has_todos',
+              'handed_off',
             ],
           },
           suggestedResolution: {
@@ -153,6 +157,18 @@ const okResponse = (description: string, data: Record<string, unknown> = { type:
   content: { 'application/json': { schema: envelope(data) } },
 })
 
+/** Task bodies may name the subject the task is a todo of (docs/lab.md). */
+const withTaskSubject = (schema: Record<string, unknown>) => ({
+  ...schema,
+  properties: {
+    ...(schema.properties as Record<string, unknown>),
+    subject: {
+      ...((json(z.object({ subject: z.string().trim().min(1).max(60).nullable().optional() })).properties as Record<string, unknown>).subject as Record<string, unknown>),
+      description: 'The subject this task is a todo of (`LAB-12`), or null to unlink. Ignored while the Lab is off.',
+    },
+  },
+})
+
 const person = {
   type: 'object',
   properties: {
@@ -238,6 +254,8 @@ const taskSummary = {
       type: 'boolean',
       description: 'Only on a create that sent an `externalRef` already held: this is the existing task, not a new one.',
     },
+    subject: taskSubjectShape,
+    handoff: { ...handoffShape, type: ['object', 'null'] },
   },
 }
 
@@ -463,6 +481,15 @@ export const openapiSpec = () => ({
       '`POST /tasks/{ref}/claim` is a single conditional update. A 409 means another',
       'agent holds it — pick different work. A lease whose heartbeat has been silent for',
       '15 minutes can be taken over.',
+      '',
+      '## The Lab',
+      '',
+      'Where an instance explores ideas before they become work. Its unit is a subject,',
+      '`LAB-12`, with stages, a log, notes, files, tags, todos (ordinary tasks) and a',
+      'conclusion. It is off by default, per instance: while off, every Lab route answers',
+      '404 `lab_disabled` except `/lab/settings`, and nothing else shows a subject.',
+      '`LAB` is reserved as a project key on every instance. Hand-off (`/tasks/{ref}/handoff`,',
+      '`/handoffs`) is not part of the Lab and works either way.',
     ].join('\n'),
     license: { name: 'MIT' },
   },
@@ -502,7 +529,7 @@ export const openapiSpec = () => ({
           {
             name: 'kinds',
             in: 'query',
-            description: 'Comma-separated subset of task,note,knowledge,session. Default: all.',
+            description: 'Comma-separated subset of task,note,knowledge,session,subject. Default: all. Subjects only while the Lab is on.',
             schema: { type: 'string', example: 'task,knowledge' },
           },
           { name: 'tasksOnly', in: 'query', schema: { type: 'boolean', default: false } },
@@ -525,11 +552,11 @@ export const openapiSpec = () => ({
                 items: {
                   type: 'object',
                   properties: {
-                    kind: { type: 'string', enum: ['task', 'note', 'knowledge', 'session'] },
+                    kind: { type: 'string', enum: ['task', 'note', 'knowledge', 'session', 'subject'] },
                     ref: {
                       type: 'string',
                       description:
-                        'A task ref for tasks and notes, a slug for knowledge, a date for sessions.',
+                        'A task ref for tasks and notes, a slug for knowledge, a date for sessions, `LAB-12` for subjects.',
                     },
                     title: { type: 'string' },
                     type: { type: 'string' },
@@ -619,7 +646,11 @@ export const openapiSpec = () => ({
                 'Changing this changes every task ref. The former key is retained and keeps resolving, so refs already written into commits and notes still find the task; the response carries `former_key`, and the retirement records who made it and what the key became (`former_keys`). A key retired by another project is refused, because reusing it would make those refs ambiguous. `cairn project rekey <KEY> <NEW>` is the CLI for this.',
             },
             status: { type: 'string', enum: ['active', 'archived'] },
+            ...(json(z.object(projectHandoffFields)).properties as Record<string, unknown>),
           },
+          description:
+            '`handoffTracker` and `handoffTarget` are where this project\'s tasks are handed off by ' +
+            'default: both or neither, `null` clears both.',
         }),
         responses: { '200': okResponse('Updated.'), '400': errorResponse },
       },
@@ -684,6 +715,8 @@ export const openapiSpec = () => ({
             description: 'Owned by: `me`, an email, a display name or a user id.' },
           { name: 'external_ref', in: 'query', schema: { type: 'string' },
             description: 'Exact match on the task\'s external ref: where it came from in another tool.' },
+          { name: 'subject', in: 'query', schema: { type: 'string' },
+            description: 'Todos of a subject (`LAB-12`), or `none`. Ignored while the Lab is off.' },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 200 } },
           { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
         ],
@@ -702,8 +735,9 @@ export const openapiSpec = () => ({
           'may carry an external ref (`externalRef`, `externalUrl`): where it came from in ' +
           'another tool. The ref is unique across the instance, and creating with one that is ' +
           'already held is idempotent: it returns the existing task with `duplicate: true` and ' +
-          'status 200, whichever project it is in, and changes nothing.',
-        requestBody: body(json(createTaskSchema)),
+          'status 200, whichever project it is in, and changes nothing. `subject` makes it a todo ' +
+          'of that subject, filed in this project.',
+        requestBody: body(withTaskSubject(json(createTaskSchema))),
         responses: {
           '200': okResponse('A task already carries that `externalRef`; this is it, with `duplicate: true`.', taskSummary),
           '201': okResponse('Created.', taskSummary),
@@ -728,7 +762,8 @@ export const openapiSpec = () => ({
           'after it was created, so a task filed after a rename claims none. A retired-key ref ' +
           'to a task created after the rename is a 404 that names the live ref, because that ' +
           'old ref was never issued. The digest names the `assignee` and `createdBy`, the actor ' +
-          'that filed it.',
+          'that filed it. While the Lab is on, `LAB-12` is a 404 carrying `subject` and `href`, ' +
+          'the subject\'s address.',
         parameters: [
           { name: 'view', in: 'query', schema: { type: 'string', enum: ['full', 'digest'], default: 'full' } },
         ],
@@ -764,8 +799,10 @@ export const openapiSpec = () => ({
           'readable-markdown check as on create. Every write here, including moving the task ' +
           'elsewhere, is refused with 409 if its current project is archived — most likely the ' +
           'copy left behind by a move to another Cairn instance; restore the project first, or ' +
-          'point the CLI at the other instance.',
-        requestBody: body(json(updateTaskSchema)),
+          'point the CLI at the other instance. `subject` links the task as a todo of that subject, ' +
+          'or `null` unlinks it. While a hand-off is open, `status`, `resolution` and ' +
+          '`resolutionKind` are refused with 409 `handed_off`; the other fields stay editable.',
+        requestBody: body(withTaskSubject(json(updateTaskSchema))),
         responses: {
           '200': okResponse('Updated.', taskSummary),
           '400': errorResponse,
@@ -797,7 +834,8 @@ export const openapiSpec = () => ({
         description:
           'A 409 means another agent holds it, or that the task\'s project is archived — most ' +
           'likely the copy left behind by a move to another Cairn instance. Pick different work, ' +
-          'or restore the project / point the CLI at the other instance.',
+          'or restore the project / point the CLI at the other instance. A task handed off to ' +
+          'another tracker is 409 `handed_off`.',
         responses: { '200': okResponse('Claimed.'), '409': errorResponse },
       },
     },
@@ -809,7 +847,9 @@ export const openapiSpec = () => ({
       parameters: [refParam],
       post: {
         summary: 'Record where work stopped',
-        description: 'Only the latest is kept — it is the payload another agent resumes from.',
+        description:
+          'Only the latest is kept — it is the payload another agent resumes from. Its implicit ' +
+          'claim is refused with 409 `handed_off` while the task is handed off.',
         requestBody: body({
           type: 'object',
           properties: { summary: { type: 'string' }, payload: { type: 'object' } },
@@ -820,7 +860,11 @@ export const openapiSpec = () => ({
     },
     '/tasks/{ref}/release': {
       parameters: [refParam],
-      post: { summary: 'Drop a claim', responses: { '200': okResponse('Released.'), '409': errorResponse } },
+      post: {
+        summary: 'Drop a claim',
+        description: 'Refused with 409 `handed_off` while the task is handed off.',
+        responses: { '200': okResponse('Released.'), '409': errorResponse },
+      },
     },
     '/tasks/{ref}/block': {
       parameters: [refParam],
@@ -969,8 +1013,16 @@ export const openapiSpec = () => ({
     },
     '/attachments/{id}': {
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
-      get: { summary: 'Get an attachment with fresh signed URLs', responses: { '200': okResponse('Attachment.') } },
-      delete: { summary: 'Delete an attachment', responses: { '200': okResponse('Deleted.') } },
+      get: {
+        summary: 'Get an attachment with fresh signed URLs',
+        description: 'A task\'s file, or a subject\'s, which carries `subject: "LAB-12"` (404 while the Lab is off).',
+        responses: { '200': okResponse('Attachment.'), '404': errorResponse },
+      },
+      delete: {
+        summary: 'Delete a task\'s attachment',
+        description: 'Task files only; a subject\'s file is removed through its subject.',
+        responses: { '200': okResponse('Deleted.') },
+      },
     },
     '/activity': {
       get: {
@@ -1676,6 +1728,7 @@ export const openapiSpec = () => ({
         },
       },
     },
+    ...labPaths({ json, body, okResponse, errorResponse }),
   },
   'x-resolution-kinds': [...RESOLUTION_KINDS],
 })
