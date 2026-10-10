@@ -6,7 +6,10 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ProjectIcon } from '@/components/icons'
 import { Button, Input } from '@/components/ui/control'
-import { Activity, BookOpen, Columns3, FolderKanban, HeartPulse, History, Inbox, Search, Waypoints, X } from 'lucide-react'
+import { useLabEnabled } from '@/components/lab/lab-context'
+import {
+  Activity, BookOpen, Columns3, FlaskConical, FolderKanban, HeartPulse, History, Inbox, Search, Waypoints, X,
+} from 'lucide-react'
 
 /**
  * 34 projects is too many for a plain list, so the nav filters.
@@ -40,6 +43,7 @@ export const ProjectNav = ({
   onNavigate?: () => void
 }) => {
   const pathname = usePathname()
+  const labEnabled = useLabEnabled()
   const [query, setQuery] = useState('')
 
   const shown = useMemo(() => {
@@ -58,6 +62,8 @@ export const ProjectNav = ({
     // answer to "what do we know, and what is joined to nothing"; it should
     // not be the harder one to find.
     { href: '/knowledge/graph', label: 'Map', icon: Waypoints },
+    // Only where the Lab is switched on: off, nothing lab-shaped is drawn.
+    ...(labEnabled ? [{ href: '/lab', label: 'Lab', icon: FlaskConical }] : []),
     { href: '/sessions', label: 'Sessions', icon: History },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/vitals', label: 'Vitals', icon: HeartPulse },
@@ -69,7 +75,8 @@ export const ProjectNav = ({
     // Knowledge alone has child routes (/knowledge/[slug]) that should still
     // light up this entry — but not the map, which has its own, or both would
     // be lit at once.
-    (href === '/knowledge' && pathname.startsWith('/knowledge/') && pathname !== '/knowledge/graph')
+    (href === '/knowledge' && pathname.startsWith('/knowledge/') && pathname !== '/knowledge/graph') ||
+    (href === '/lab' && pathname.startsWith('/lab/'))
   const activeLink = links.findIndex(({ href }) => isActive(href))
   const activeProject = shown.findIndex(
     (p) => pathname === `/projects/${p.key}` || pathname.startsWith(`/projects/${p.key}/`),

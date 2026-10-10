@@ -2,6 +2,7 @@ import Link from 'next/link'
 import {
   BookMarked,
   CirclePlus,
+  FlaskConical,
   GitCommitHorizontal,
   ListTodo,
   MessageSquare,
@@ -38,12 +39,21 @@ const KIND: Record<
   knowledge: { label: 'knowledge', Icon: BookMarked, color: 'var(--status-done)' },
 }
 
+/**
+ * A Lab subject's row: its ref is `LAB-<n>`, and `LAB` is reserved, so no
+ * project's task is ever one. Only present while the Lab is on.
+ */
+const subjectNumberOf = (row: Pick<ActivityRow, 'ref'>): string | null =>
+  /^LAB-\d+$/.test(row.ref) ? row.ref.slice('LAB-'.length) : null
+
 /** Where a row leads. A session has no page of its own, and its useful content
  *  is the line already shown, so it stays unlinked rather than pointing at a
  *  list the reader is already looking at. */
 export const hrefFor = (row: ActivityRow): string | null => {
   if (row.kind === 'knowledge') return `/knowledge/${row.ref}`
   if (row.kind === 'session') return null
+  const subject = subjectNumberOf(row)
+  if (subject) return `/lab/subjects/${subject}`
   const [key, number] = row.ref.split('-')
   if (key && number) return `/projects/${key}/tasks/${number}`
   // An event about the project itself — renamed, re-keyed, archived — carries
@@ -114,7 +124,12 @@ const ROW =
   'group relative block after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:left-[5.125rem] after:h-px after:bg-border/70 last:after:hidden'
 
 const Row = ({ row }: { row: ActivityGroup }) => {
-  const { label, Icon, color } = KIND[row.kind]
+  const isSubject = subjectNumberOf(row) !== null
+  // A subject's rows keep their own verbs (filed, changed, note) in the Lab's
+  // colour and glyph, so the feed shows at a glance which are lab work.
+  const { label, Icon, color } = isSubject
+    ? { ...KIND[row.kind], Icon: FlaskConical, color: 'var(--status-in-review)' }
+    : KIND[row.kind]
   const href = hrefFor(row)
   const time = timeOfDay(row.at)
 
@@ -156,6 +171,12 @@ const Row = ({ row }: { row: ActivityGroup }) => {
             .map((d) => (
               <span key={d}>· {d.replace(/_/g, ' ')}</span>
             ))}
+          {isSubject && !row.project_key && (
+            <span className="flex shrink-0 items-center gap-1">
+              <span aria-hidden>·</span>
+              <span className="text-fg-muted font-mono">{row.ref}</span>
+            </span>
+          )}
           {row.project_key && (
             <span className="flex shrink-0 items-center gap-1">
               <span aria-hidden>·</span>

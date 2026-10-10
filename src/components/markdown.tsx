@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { CodeBlock } from '@/components/code-block'
 import { useProjectKeys } from '@/components/project-keys'
 import { useKnowledgeSlugs } from '@/components/knowledge-slugs'
+import { useLabEnabled } from '@/components/lab/lab-context'
 import { remarkTaskRefs } from '@/lib/markdown/task-refs'
 import { remarkKnowledgeRefs } from '@/lib/markdown/knowledge-refs'
 
@@ -226,15 +227,17 @@ export const MarkdownView = ({ children }: { children: string }) => {
   // plugin would mark every entry missing from it as never written, so the
   // provider's default is null and this stays off rather than lying.
   const slugs = useKnowledgeSlugs()
+  // `LAB-12` is a link only while the Lab is on; off, it stays the text it was.
+  const lab = useLabEnabled()
   // react-markdown re-parses whenever the plugin array changes identity, so
   // this must not be rebuilt on every render.
   const remarkPlugins = useMemo<PluggableList>(
     () => [
       remarkGfm,
-      [remarkTaskRefs, { keys }],
+      [remarkTaskRefs, { keys, lab }],
       [remarkKnowledgeRefs, slugs ? { known: slugs } : {}],
     ],
-    [keys, slugs],
+    [keys, lab, slugs],
   )
 
   return (

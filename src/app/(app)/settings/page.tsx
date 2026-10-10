@@ -7,6 +7,8 @@ import { PasswordSection } from './password-section'
 import { LabelsSection, type LabelRow } from './labels-section'
 import { EntitiesSection, type EntityRow } from './entities-section'
 import { BrandingSection } from './branding-section'
+import { LabSection } from './lab-section'
+import { loadLabAdmin } from '../lab/data'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +23,8 @@ const SettingsPage = async () => {
     admin().rpc('list_labels', { p_owner: user.id }),
     getBranding(),
   ])
+
+  const lab = user.role === 'admin' ? await loadLabAdmin(user.id) : null
 
   const [{ data: entityRows }, { data: projectRows }] = await Promise.all([
     admin()
@@ -89,6 +93,14 @@ const SettingsPage = async () => {
             {user.role === 'admin' ? (
               <BrandingSection
                 initial={{ name: branding.name, accent: branding.accent }}
+              />
+            ) : null}
+            {lab ? (
+              <LabSection
+                settings={lab.settings}
+                stages={lab.stages}
+                tags={lab.tags}
+                projects={lab.projects}
               />
             ) : null}
           </div>

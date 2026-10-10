@@ -26,6 +26,9 @@ import { dueDateDisplay, fullDateTime, todayDate } from '@/lib/dates'
 import { useMounted, useRenderedClaimStale } from '@/lib/use-mounted'
 import type { Task, Project, Relation } from '@/lib/data'
 import { useMutate } from '@/lib/api/use-mutate'
+import { HandoffBadge } from '@/components/lab/handoff-badge'
+import { SubjectField } from '@/components/lab/subject-field'
+import { handoffIsOpen, type TaskLabFields } from '@/components/lab/types'
 import { ROW, ROW_LABEL } from './styles'
 
 /**
@@ -300,6 +303,7 @@ export const Properties = ({
   alsoProjects = [],
   projects = [],
   parent = null,
+  lab = {},
 }: {
   task: Task
   project: Project
@@ -307,6 +311,8 @@ export const Properties = ({
   alsoProjects?: string[]
   projects?: { key: string; title: string }[]
   parent?: { ref: string; title: string } | null
+  /** The task's Lab fields: `subject` is absent while the Lab is off, so no row is drawn. */
+  lab?: TaskLabFields
 }) => {
   const router = useRouter()
   const request = useMutate()
@@ -395,7 +401,12 @@ export const Properties = ({
     return true
   }
 
+  // While a hand-off is open the other tracker owns the status; the server
+  // refuses the change (409 handed_off), so the control says so instead.
+  const statusLocked = handoffIsOpen(lab.handoff)
+
   const onStatus = (next: TaskStatus) => {
+    if (statusLocked) return
     // Closing needs a resolution, so ask rather than fire a PATCH the API
     // will refuse — otherwise the change appears to silently fail.
     if (isTerminal(next) && !task.resolution) {
@@ -427,7 +438,21 @@ export const Properties = ({
           labels={STATUS_LABEL}
           icon={<StatusIcon status={shown.status} />}
           onChange={onStatus}
+          disabled={statusLocked}
         />
+        {lab.handoff ? (
+          <div className={ROW}>
+            <span className={ROW_LABEL}>Hand-off</span>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 py-1">
+              <HandoffBadge handoff={lab.handoff} />
+              {statusLocked ? (
+                <span className="text-fg-subtle text-meta">
+                  The status lives there until it is taken back.
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <SelectRow
           label="Priority"
           value={shown.priority}
@@ -584,6 +609,8 @@ export const Properties = ({
         </div>
 
         <DependencyEditor taskRef={`${project.key}-${task.number}`} relations={relations} />
+
+        {lab.subject !== undefined ? <SubjectField taskId={task.id} subject={lab.subject} /> : null}
       </div>
 
       <div className="border-border mt-4 flex flex-col gap-1 border-t pt-3">

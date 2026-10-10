@@ -126,10 +126,10 @@ rather than adding a second, contradictory claim. Secrets are refused on every w
 the session worked on, but never over a checkpoint you wrote on a claim it cannot prove is
 its own — your own checkpoint is the handoff that counts.
 
-**The briefing** is `cairn context` — what you hold, what is in flight, your human's work
-nobody is on, where the last session here stopped, what is known here. A hook runs it at session
-start. `cairn next` says what to pick up and why — your human's work first; another
-person's says whose. `cairn map <KEY>` tells Cairn which project a checkout is — once per
+**The briefing** is `cairn context`: what you hold, what is in flight, your human's work
+nobody is on, where the last session stopped, what is known. A hook runs it at session
+start. `cairn next` says what to pick up and why (your human's work first; another
+person's says whose). `cairn map <KEY>` tells Cairn which project a checkout is, once per
 repository; clones and worktrees follow.
 
 ## 8. Before you stop
@@ -137,7 +137,7 @@ repository; clones and worktrees follow.
 The session record is written for you. These are the things nothing can do for you:
 
 - **Close what you finished** — the API refuses a close without a resolution, so an open
-  task is one you did not close, not one you closed badly.
+  task was never closed, not closed badly.
 - **Say what did not work** — `--kind attempt`. The next agent tries it again otherwise,
   and the trying is the expensive part.
 - **Record what you learned**, scoped.
@@ -166,3 +166,4 @@ It pairs a key per runtime — `CAIRN_API_KEY_CODEX`, `CAIRN_API_KEY_CLAUDE_CODE
 the key *is* the identity.
 
 Full verb reference: `cairn --help`. Machine-readable API: `GET /api/v1/openapi.json`.
+The Lab and hand-off: `skills/cairn/lab.md`, `docs/lab.md`.
