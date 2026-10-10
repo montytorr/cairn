@@ -49,9 +49,14 @@ GET /api/v1/lab/settings
 PUT /api/v1/lab/settings            (human admin)
 { "enabled": true,                  // optional
   "homeProject": "LT" | "<uuid>" | null }   // optional; null = back to the default
-→ 200 same shape
+→ 200 same shape, plus "warning": "<sentence>" when turning the Lab on could not add the
+        database's LAB reservation (it is enabled anyway; the API's own refusal of LAB holds)
 errors: 403 forbidden · 400 validation_failed (unknown or archived project) · 401
         409 conflict (enabling while a project, live or former key, is LAB)
+
+Two writes at once are fine: the reservation takes an advisory lock, and the second finds it
+in place. A read of the setting that fails for any reason but a missing table (an instance
+before 071) is an error, never "off", and is not cached.
 ```
 
 ## Refs
@@ -236,7 +241,8 @@ type Todo = { id: string; ref: string; number: number; title: string; status: st
               assignee: Person | null; handoff: Handoff | null; updated_at: string }
 ```
 
-Every task response (`GET/PATCH /tasks/{ref}`, lists, create) gains:
+Every task response (`GET/PATCH /tasks/{ref}`, the `?view=digest` show, lists, create, claim)
+gains:
 
 - `subject: { ref, title } | null`, while the Lab is on (absent while off);
 - `handoff: Handoff | null`, always. The raw `handoff_*` columns are never returned.
@@ -427,6 +433,7 @@ mentions this subject, newest first (`limit?` 1–100, default 20).
   as an ordinary project keyed **`LT`** ("Lab todos"), owned by the caller, and records it.
   If `LT` is already taken by an unrelated project, nothing is guessed: the todo is refused with
   409 `conflict` asking an admin to choose one with `PUT /lab/settings { homeProject }`.
+  An archived home project is refused the same way (409 `conflict`, naming it).
   `LAB` cannot be the home key (it is reserved for subjects).
 - Linking an existing task: `PATCH /api/v1/tasks/{ref}` with `{ "subject": "LAB-12" }`, or
   `null` to unlink. Creating a task with `{ "subject": "LAB-12" }` on
@@ -464,7 +471,12 @@ tracker is data (`cairn`, `github`, `linear`…); the server never calls it. The
 (P2) create the task there, then record the link here.
 
 Not a Lab feature: it works on any task, whether or not the Lab is on. When the task is a
-todo, its subject's log records it.
+todo and the Lab is on, its subject's log records it and the events carry the subject. While
+the Lab is off nothing about subjects is read or written: responses say `subject: null`, no
+log note is written, and the events carry no subject.
+
+`GET /api/v1/next` never offers a task whose hand-off is open: it is worked in the other
+tracker.
 
 ### States
 
@@ -490,7 +502,8 @@ Other trackers may omit the URL.
 ```json
 { "tracker": "cairn", "ref": "KDP-41",
   "url": "https://tasks.example.com/projects/KDP/tasks/41",  // required for cairn, optional otherwise
-  "status": "doing",                       // optional: what the tracker says now
+  "status": "doing",                       // optional: what the tracker says now; lower-cased,
+                                           // closed/completed read as done, canceled as cancelled
   "resolution": "…", "resolutionKind": "fixed" }   // with a done/cancelled status
 ```
 
@@ -564,8 +577,9 @@ The CLI uses them when `cairn handoff` is given no `--to`.
   - the subject events above, as `kind: "event"` rows with `ref: "LAB-12"`, the subject's title
     and `detail` the event name (a stage move's detail is `exploring → done`);
   - log notes, as `kind: "note"` rows with `ref: "LAB-12"`.
-  - A project filter matches subjects of that project. Subjects are never the activity of a
-    `kinds` filter that names only task kinds.
+  - A project filter matches subjects of that project. A `kinds` filter treats them as their
+    row kinds: `event` includes subject events, `note` includes log notes, and `task` alone
+    includes neither.
 
 ## The briefing
 
@@ -603,10 +617,19 @@ lab?: {
 | file | what |
 |---|---|
 | `071_lab_core.sql` | `lab_settings`, stages (seeded), tags, subjects, the number counter, `subject_tags`, the log, people's notes, files, `tasks.subject_id`, the `LAB` reservation, `task_activity_events.subject_id` and the event list |
-| `072_handoff.sql` | `tasks.handoff_*`, `projects.handoff_*`, checks and index |
+| `072_handoff.sql` | `tasks.handoff_*`, `projects.handoff_*`, checks and index; `claim_task_atomic` and `checkpoint_task_atomic` refuse an open hand-off (transformed in place) |
 | `073_lab_search.sql` | `search_all` transformed in place (055's transform-and-assert) |
 | `074_lab_pulse_activity.sql` | `cairn_pulse` redefined; `activity_feed` transformed in place |
 | `075_subject_mentions.sql` | `subject_mentions` and `task_mentions_refresh` |
+| `076_lab_validate_checks.sql` | validates what 071 and 072 added `NOT VALID` |
+
+The constraints 071 and 072 add on `tasks`, `projects` and `task_activity_events` (the
+`subject_id` foreign key, the hand-off checks, the event list) are added `NOT VALID`: enforced
+for new rows at once without scanning, so an instance that migrates on start does not stall
+its writes. 076, in its own transaction, validates the existing rows under a lock that lets
+writes through. The partial indexes on `tasks` and `task_activity_events` are ordinary
+`create index` (the runner's one transaction per file rules out `concurrently`); they hold a
+write lock only while they build.
 
 Each is idempotent: `if not exists`, guarded constraint adds, and a marker check before every
 function transform.
@@ -640,8 +663,8 @@ Trigger side effects the importer must expect:
 - **`subjects_touch`** (before update) sets `updated_at = now()` on every update of a subject.
   Insert subjects with their final `updated_at`, and do not update them afterwards (or the
   original time is lost).
-- **Touch-the-subject triggers** (after insert on `subject_notes`, `subject_human_notes`,
-  `subject_attachments`; after insert or delete on `subject_tags`) set the subject's
+- **Touch-the-subject triggers** (after insert on `subject_notes` and `subject_human_notes`;
+  after insert or delete on `subject_attachments` and `subject_tags`) set the subject's
   `updated_at = now()`. Children reference the subject, so they always come after it. To keep
   the original time, re-set every subject's `updated_at` as the last step of the transaction
   with `subjects_touch` disabled (`alter table subjects disable trigger subjects_touch` …
