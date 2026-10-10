@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
@@ -12,6 +12,9 @@ import { peopleByIds, resolveAssignee, withAssignee } from '@/lib/api/people'
 import { removeAttachments } from '@/lib/attachments'
 import { refuseUnreadableBody } from '@/lib/api/task-body'
 import { isTerminal, updateTaskSchema, RESOLUTION_KINDS } from '@/schemas/task'
+import { parseSubjectRef, refuseHandedOff } from '@/lib/api/lab-shape'
+import { isLabEnabled } from '@/lib/api/lab-settings'
+import { getSubjectByNumber, noSuchSubject, resolveSubject } from '@/lib/api/subjects'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +31,12 @@ export const dynamic = 'force-dynamic'
 export const GET = route<{ ref: string }>({
   handler: async ({ actor, params, url }) => {
     const resolved = await resolveTask(actor, params.ref)
-    if (!resolved.task) return fail('not_found', noSuchTaskMessage(params.ref, resolved), renameFields(resolved))
+    if (!resolved.task) {
+      // `cairn show LAB-12` asks here first: point it at the subject.
+      const pointer = await subjectPointer(params.ref)
+      if (pointer) return pointer
+      return fail('not_found', noSuchTaskMessage(params.ref, resolved), renameFields(resolved))
+    }
     const task = await withAssignee(resolved.task)
 
     const formerKeys = (await formerKeysByProject([String(task.project_id)])).get(String(task.project_id)) ?? []
@@ -41,12 +49,29 @@ export const GET = route<{ ref: string }>({
     // `full` stays the default so nothing already calling this changes
     // behaviour. The CLI asks for the digest explicitly.
     if (url.searchParams.get('view') === 'digest') {
-      return ok({ ...(await buildDigest(task)), ...told })
+      return ok({ ...(await buildDigest(task)), subject: task.subject, handoff: task.handoff ?? null, ...told })
     }
     const mentioned = await mentionsOf(task.id as string, 50)
     return ok({ ...task, ...told, mentioned_in: mentioned.mentions, mentioned_in_total: mentioned.total })
   },
 })
+
+/**
+ * `LAB-12` is a subject, not a task: say where it lives, so a CLI `show` can
+ * follow. Only while the Lab is on, and only for a subject that exists.
+ */
+const subjectPointer = async (raw: string) => {
+  // Not decoded here: a ref like `100%` is not valid percent-encoding, and a
+  // subject ref never needs decoding anyway. parseSubjectRef decodes safely.
+  if (!/^lab-\d+$/i.test(raw.trim()) || !(await isLabEnabled())) return null
+  const number = parseSubjectRef(raw)
+  const subject = number ? await getSubjectByNumber(number) : null
+  if (!subject) return null
+  return fail('not_found', `${subject.ref} is a Lab subject, not a task: GET /api/v1/subjects/${subject.ref}.`, {
+    subject: subject.ref,
+    href: `/api/v1/subjects/${subject.ref}`,
+  })
+}
 
 /**
  * Offers the agent something to close with when it forgets a resolution.
@@ -68,8 +93,14 @@ const suggestResolution = async (taskId: string, checkpoint: unknown) => {
   return data?.note ?? null
 }
 
-export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
-  schema: updateTaskSchema,
+/**
+ * A task names the subject it is a todo of (`LAB-12`), or `null` to unlink.
+ * Read only while the Lab is on (docs/lab.md).
+ */
+const patchBody = updateTaskSchema.extend({ subject: z.string().trim().min(1).max(60).nullable().optional() })
+
+export const PATCH = route<{ ref: string }, z.infer<typeof patchBody>>({
+  schema: patchBody,
   secretFields: ['title', 'description', 'resolution'],
   handler: async ({ actor, params, body }) => {
     const task = await findTask(actor, params.ref)
@@ -79,6 +110,14 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
 
     const unreadable = refuseUnreadableBody(actor, body.description, `cairn update ${params.ref} --body -`)
     if (unreadable) return unreadable
+
+    // While a hand-off is open its tracker owns the status: closing,
+    // cancelling, reopening and every status move are refused. The rest of
+    // the task stays editable.
+    if (body.status !== undefined || body.resolution !== undefined || body.resolutionKind !== undefined) {
+      const handedOff = refuseHandedOff(task, `${(task.project as { key?: string } | undefined)?.key ?? ''}-${task.number}`)
+      if (handedOff) return handedOff
+    }
 
     const nextStatus = body.status ?? (task.status as string)
     const existingResolution = task.resolution as string | null
@@ -129,6 +168,16 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
     if (body.resolutionKind !== undefined) patch.resolution_kind = body.resolutionKind
     if (body.externalRef !== undefined) patch.external_ref = body.externalRef
     if (body.externalUrl !== undefined) patch.external_url = body.externalUrl
+
+    if (body.subject !== undefined && (await isLabEnabled())) {
+      if (body.subject === null) {
+        patch.subject_id = null
+      } else {
+        const subject = await resolveSubject(body.subject)
+        if (!subject) return noSuchSubject(body.subject)
+        patch.subject_id = subject.id
+      }
+    }
 
     if (body.assignee !== undefined) {
       const owner = await resolveAssignee(body.assignee, actor.userId)
@@ -270,10 +319,10 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
     }
 
     if (Object.keys(patch).length === 0) {
-      if (alsoProjects) return ok({ ...task, alsoProjects })
+      if (alsoProjects) return ok({ ...(await withAssignee(task)), alsoProjects })
       if (moved) {
         return ok({
-          ...task,
+          ...(await withAssignee(task)),
           ref: moved.ref,
           moved,
           note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; anything referring to the old one is now stale.`,
@@ -286,7 +335,8 @@ export const PATCH = route<{ ref: string }, z.infer<typeof updateTaskSchema>>({
       .from('tasks')
       .update(patch)
       .eq('id', task.id)
-      .select('id, number, title, type, status, priority, labels, assignee_user_id, resolution, resolution_kind, external_ref, external_url, updated_at')
+      .select('id, number, title, type, status, priority, labels, assignee_user_id, resolution, resolution_kind, external_ref, external_url, subject_id, ' +
+        'handoff_tracker, handoff_ref, handoff_url, handoff_status, handoff_synced_at, updated_at')
       .single()
 
     if (error?.code === '23505' && error.message.includes('tasks_external_ref_key')) {

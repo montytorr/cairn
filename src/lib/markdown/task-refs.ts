@@ -24,11 +24,14 @@ type Parent = { type: string; children: unknown[] }
  * shared memory if following a reference costs nothing, so this is closer to
  * a core feature than to typography.
  */
-export const remarkTaskRefs = ({ keys }: { keys: readonly string[] }) => {
+export const remarkTaskRefs = ({ keys, lab = false }: { keys: readonly string[]; lab?: boolean }) => {
   const allowed = new Set(keys.map((k) => k.toUpperCase()))
+  // With the Lab on, `LAB-12` is a subject (docs/lab.md). With it off, an
+  // instance that still has a project keyed LAB keeps its task links.
+  if (lab) allowed.delete('LAB')
 
   return (tree: unknown) => {
-    if (allowed.size === 0) return
+    if (allowed.size === 0 && !lab) return
 
     visit(
       tree as Parent,
@@ -44,15 +47,16 @@ export const remarkTaskRefs = ({ keys }: { keys: readonly string[] }) => {
 
         for (const match of value.matchAll(REF)) {
           const [full, key, number] = match
-          if (!key || !number || !allowed.has(key)) continue
+          const subject = lab && key === 'LAB'
+          if (!key || !number || (!subject && !allowed.has(key))) continue
           const at = match.index
           if (at > cursor) out.push({ type: 'text', value: value.slice(cursor, at) })
           out.push({
             type: 'link',
-            url: `/projects/${key}/tasks/${number}`,
+            url: subject ? `/lab/subjects/${number}` : `/projects/${key}/tasks/${number}`,
             // Marks it as internal so the renderer can route it in-app rather
             // than opening a new tab like an external link.
-            data: { hProperties: { 'data-task-ref': full } },
+            data: { hProperties: subject ? { 'data-subject-ref': full } : { 'data-task-ref': full } },
             children: [{ type: 'text', value: full }],
           })
           cursor = at + full.length
