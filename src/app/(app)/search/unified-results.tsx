@@ -27,7 +27,14 @@ const KIND_META: Record<
     color: 'var(--status-done)',
   },
   session: { label: 'Session', Icon: Radio, tone: 'text-fg-subtle', color: 'var(--fg-subtle)' },
-  subject: { label: 'Subject', Icon: FlaskConical, tone: 'text-fg-muted', color: 'var(--fg-muted)' },
+  // Green: the one colour no other kind here takes. A subject is a question
+  // being answered, and the answer, once there, is its conclusion.
+  subject: {
+    label: 'Subject',
+    Icon: FlaskConical,
+    tone: 'text-status-in-review',
+    color: 'var(--status-in-review)',
+  },
 }
 
 /** The kind of a hit, as a small pill in its own colour. */

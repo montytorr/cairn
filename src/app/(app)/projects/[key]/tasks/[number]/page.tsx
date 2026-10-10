@@ -30,6 +30,8 @@ import { RedirectNotice } from '@/components/redirect-notice'
 import { listFormerKeyRecords } from '@/lib/data'
 import { formerRefsOf, renameLine, renamesOf, taskRedirectNotice } from '@/lib/project-rename'
 import { LABEL, PANE } from './styles'
+import { HandoffBadge } from '@/components/lab/handoff-badge'
+import { loadTaskLabFields } from '@/app/(app)/lab/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -117,7 +119,7 @@ const TaskPage = async ({
 
   const [
     notes, comments, attachments, relations, duplicateOf, activity, children, parent,
-    alsoProjects, allProjects, mentioned,
+    alsoProjects, allProjects, mentioned, lab,
   ] = await Promise.all([
     listNotes(task.id),
     listComments(task.id),
@@ -130,6 +132,8 @@ const TaskPage = async ({
     listAlsoProjects(task.id),
     listProjects(user.id),
     mentionsOf(task.id, 8),
+    // Hand-off and subject are not columns the task loader selects.
+    loadTaskLabFields(task.id),
   ])
 
   // What this task used to be called. An alias that only resolves is half an
@@ -233,6 +237,7 @@ const TaskPage = async ({
                 <ProjectIcon size={11} projectKey={task.project.key} />
                 <span className="truncate">{task.project.title}</span>
               </Link>
+              {lab.handoff ? <HandoffBadge handoff={lab.handoff} /> : null}
             </div>
 
             <EditableTitle taskId={task.id} initial={task.title} />
@@ -347,6 +352,7 @@ const TaskPage = async ({
             alsoProjects={alsoProjects}
             projects={allProjects.map((p) => ({ key: p.key, title: p.title }))}
             parent={parent}
+            lab={lab}
           />
         </div>
       </div>

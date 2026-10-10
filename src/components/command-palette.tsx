@@ -3,7 +3,7 @@
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Settings, FileJson, KeyRound, Search as SearchIcon, Moon, Plus } from 'lucide-react'
+import { Settings, FileJson, FlaskConical, KeyRound, Search as SearchIcon, Moon, Plus } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { ProjectIcon, StatusIcon } from '@/components/icons'
 import type { TaskStatus, TaskType } from '@/schemas/task'
@@ -12,6 +12,8 @@ import { EmptyState } from '@/components/empty-state'
 import { Spinner } from '@/components/spinner'
 
 type Hit = {
+  /** `subject` for a Lab subject, which the search puts first when asked for `LAB-12`. */
+  kind?: string
   ref: string
   title: string
   type: TaskType
@@ -179,14 +181,19 @@ export const CommandPalette = ({ projects }: { projects: { key: string; title: s
                 const idx = hit.ref.lastIndexOf('-')
                 const key = hit.ref.slice(0, idx)
                 const number = hit.ref.slice(idx + 1)
+                const subject = hit.kind === 'subject'
                 return (
                   <Command.Item
                     key={hit.ref}
                     value={hit.ref}
-                    onSelect={() => go(`/projects/${key}/tasks/${number}`)}
+                    onSelect={() => go(subject ? `/lab/subjects/${number}` : `/projects/${key}/tasks/${number}`)}
                     className={itemClass}
                   >
-                    <StatusIcon status={hit.status} size={13} />
+                    {subject ? (
+                      <FlaskConical size={13} aria-hidden style={{ color: 'var(--status-in-review)' }} />
+                    ) : (
+                      <StatusIcon status={hit.status} size={13} />
+                    )}
                     <code className="text-fg-subtle w-[4.25rem] shrink-0 truncate text-meta tabular">
                       {hit.ref}
                     </code>
