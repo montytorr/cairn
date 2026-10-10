@@ -36,6 +36,16 @@ out under **Breaking** with what to do about it.
   and projects can name a default tracker and target. This works whether or not the Lab is on.
   `cairn next` no longer offers a task whose hand-off is open, and the database's claim paths
   refuse one too.
+- **`scripts/import-croft.mjs` moves a Croft database into a Lab instance** (CAIRN-369). It
+  reads Croft and writes the whole of it in one transaction: users with their password hashes,
+  stages, tags, lab projects (as Cairn projects keyed by their hand-off target), subjects as
+  `LAB-n` with the same numbers, their log, notes and files, and every todo as a task in its
+  subject's project with its notes, comments, history and hand-off. Authors, actors and
+  timestamps are kept. A dry run, the default, is the same write rolled back, so it fails on
+  what an `--apply` would fail on; the importer refuses a target that already holds subjects and
+  writes a mapping file (`S-n` to `LAB-n`, `T-n` to its new ref). `--rewrite-refs` turns `S-n` and
+  `T-n` in prose into the new refs, never inside code, links or URLs, and the report samples ten
+  rewrites. See `docs/lab-import.md`.
 
 ### Changed
 
