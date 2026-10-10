@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-10-11
+
 ### Added
 
 - **`cairn project describe <KEY> --body -`** (CAIRN-374) replaces a project's description from
@@ -2029,7 +2031,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/montytorr/cairn/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/montytorr/cairn/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/montytorr/cairn/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/montytorr/cairn/compare/v0.20.1...v0.20.2
