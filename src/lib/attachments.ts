@@ -88,6 +88,10 @@ export const validateUpload = (file: {
 export const buildStoragePath = (projectId: string, taskId: string, filename: string) =>
   `${projectId}/tasks/${taskId}/${crypto.randomUUID()}-${sanitizeFilename(filename)}`
 
+/** `lab/subjects/{subjectId}/{uuid}-{name}`: a Lab subject's own files (docs/lab.md). */
+export const buildSubjectStoragePath = (subjectId: string, filename: string) =>
+  `lab/subjects/${subjectId}/${crypto.randomUUID()}-${sanitizeFilename(filename)}`
+
 export const sha256 = (buffer: Buffer | Uint8Array): string =>
   createHash('sha256').update(buffer).digest('hex')
 

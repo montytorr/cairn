@@ -56,3 +56,36 @@ describe('remarkTaskRefs', () => {
     expect(render('xCAI-31')).toBe('xCAI-31')
   })
 })
+
+describe('remarkTaskRefs and Lab subjects (docs/lab.md)', () => {
+  const renderLab = (md: string, lab: boolean, keys: string[] = ['CAI']) =>
+    unified()
+      .use(remarkParse)
+      .use(remarkTaskRefs, { keys, lab })
+      .use(remarkStringify)
+      .processSync(md)
+      .toString()
+      .trim()
+
+  it('links LAB-12 to the subject while the Lab is on', () => {
+    expect(renderLab('see LAB-12 and CAI-3', true)).toBe(
+      'see [LAB-12](/lab/subjects/12) and [CAI-3](/projects/CAI/tasks/3)',
+    )
+  })
+
+  it('leaves LAB-12 as text while the Lab is off', () => {
+    expect(renderLab('see LAB-12', false)).toBe('see LAB-12')
+  })
+
+  it('keeps task links for a project still keyed LAB while the Lab is off', () => {
+    expect(renderLab('see LAB-12', false, ['CAI', 'LAB'])).toBe('see [LAB-12](/projects/LAB/tasks/12)')
+  })
+
+  it('makes LAB-12 a subject, never a task, once the Lab is on', () => {
+    expect(renderLab('see LAB-12', true, ['CAI', 'LAB'])).toBe('see [LAB-12](/lab/subjects/12)')
+  })
+
+  it('links subjects when no project keys are known yet', () => {
+    expect(renderLab('LAB-4', true, [])).toBe('[LAB-4](/lab/subjects/4)')
+  })
+})

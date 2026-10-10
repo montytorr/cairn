@@ -16,6 +16,8 @@ export type ActivityEvent = {
    * can still say where the event belonged.
    */
   project_id?: string | null
+  /** A Lab subject the event is about (071): its own events, and a todo's hand-off. */
+  subject_id?: string | null
   actor_type: string
   actor_id: string
   event: string

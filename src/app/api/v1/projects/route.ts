@@ -6,6 +6,7 @@ import { admin } from '@/lib/db/client'
 import { byTitle } from '@/lib/utils'
 import { recordActivity } from '@/lib/api/activity'
 import { formerKeysByProject } from '@/lib/api/project-keys'
+import { reservedKeyRefusal } from '@/lib/api/lab-shape'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export const GET = route({
 
     const query = admin()
       .from('projects')
-      .select('id, key, title, description, status, task_counter, created_at, updated_at')
+      .select('id, key, title, description, status, task_counter, handoff_tracker, handoff_target, created_at, updated_at')
 
     const { data, error } = await (includeArchived ? query : query.eq('status', 'active'))
       .order('title')
@@ -48,6 +49,10 @@ export const GET = route({
 export const POST = route({
   schema: createProject,
   handler: async ({ actor, body }) => {
+    // LAB-12 is a Lab subject on every instance (docs/lab.md).
+    const reserved = reservedKeyRefusal(body.key)
+    if (reserved) return reserved
+
     const { data, error } = await admin()
       .from('projects')
       .insert({ ...body, owner_user_id: actor.userId })

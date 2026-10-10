@@ -1,3 +1,4 @@
+import { withLabField } from '@/lib/api/task-lab-fields'
 import { z } from 'zod'
 import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
@@ -37,6 +38,6 @@ export const POST = route<{ ref: string }, z.infer<typeof beatBody>>({
 
     if (error) return fail('internal_error', error.message)
     if (!data) return fail('conflict', 'Claim ownership changed; stale heartbeat refused.')
-    return ok(data)
+    return ok(data && typeof data === 'object' ? await withLabField(data) : data)
   },
 })

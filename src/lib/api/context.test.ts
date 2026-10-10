@@ -61,6 +61,14 @@ vi.mock('./people', () => ({
   peopleByIds: async (ids: string[]) =>
     new Map(ids.map((id) => [id, { id, email: `${id}@example.test`, name: id === 'julien' ? 'Julien' : id, active: true }])),
 }))
+const lab = vi.hoisted(() => ({ enabled: false }))
+vi.mock('./lab-settings', () => ({ isLabEnabled: async () => lab.enabled }))
+vi.mock('./subjects', () => ({
+  labBrief: async () => ({
+    stages: [{ id: 's1', name: 'exploring', category: 'active', color: '#6b7fa6', position: 1, count: 2 }],
+    mine: [],
+  }),
+}))
 
 import { buildContext, isLive, latestByActivity } from './context'
 
@@ -240,5 +248,20 @@ describe('the last session by activity', () => {
     expect(isLive(row(null, '2026-01-01T11:30:00Z', 'x'), now)).toBe(true)
     expect(isLive(row(null, '2026-01-01T08:00:00Z', 'x'), now)).toBe(false)
     expect(isLive(row('2026-01-01T11:59:00Z', '2026-01-01T11:59:00Z', 'x'), now)).toBe(false)
+  })
+})
+
+describe('the Lab in the briefing (docs/lab.md)', () => {
+  it('has no lab field while the Lab is off', async () => {
+    lab.enabled = false
+    expect(await buildContext(actor, { project: 'MES' })).not.toHaveProperty('lab')
+  })
+
+  it('carries counts per stage and my subjects while it is on', async () => {
+    lab.enabled = true
+    const context = await buildContext(actor, { project: 'MES' })
+    expect(context.lab?.stages).toEqual([expect.objectContaining({ name: 'exploring', count: 2 })])
+    expect(context.lab?.mine).toEqual([])
+    lab.enabled = false
   })
 })

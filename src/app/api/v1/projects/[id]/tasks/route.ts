@@ -3,10 +3,13 @@ import { route } from '@/lib/api/handler'
 import { ok, fail } from '@/lib/api/response'
 import { failFromDb } from '@/lib/api/db-errors'
 import { admin } from '@/lib/db/client'
-import { findTask, TASK_LIST_FIELDS } from '@/lib/api/tasks'
+import { TASK_LIST_FIELDS } from '@/lib/api/tasks'
 import { resolveProject } from '@/lib/api/project-keys'
-import { resolveAssignee, withAssignee, withAssignees } from '@/lib/api/people'
-import { refuseUnreadableBody } from '@/lib/api/task-body'
+import { resolveAssignee, withAssignees } from '@/lib/api/people'
+import { createTaskInProject } from '@/lib/api/task-create'
+import { isLabEnabled } from '@/lib/api/lab-settings'
+import { noSuchSubject, resolveSubject } from '@/lib/api/subjects'
+import { withLabFields } from '@/lib/api/task-lab-fields'
 import { createTaskSchema, TASK_STATUSES, TASK_TYPES } from '@/schemas/task'
 
 export const dynamic = 'force-dynamic'
@@ -40,6 +43,8 @@ const listQuery = z.object({
   assignee: z.string().trim().min(1).max(320).optional(),
   /** Exact, not a search: the identifier another tool gave it. */
   external_ref: z.string().min(1).max(200).optional(),
+  /** A subject's todos here (`LAB-12`), or `none`. Only while the Lab is on. */
+  subject: z.string().trim().min(1).max(60).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -55,7 +60,7 @@ export const GET = route<{ id: string }>({
 
     const parsed = listQuery.safeParse(Object.fromEntries(url.searchParams))
     if (!parsed.success) return fail('validation_failed', 'Bad query parameters.')
-    const { status, type, label, mine, claimed_by, assignee, external_ref, limit, offset } = parsed.data
+    const { status, type, label, mine, claimed_by, assignee, external_ref, subject, limit, offset } = parsed.data
 
     let query = admin()
       .from('tasks')
@@ -80,6 +85,15 @@ export const GET = route<{ id: string }>({
     if (label) query = query.contains('labels', [label])
     if (claimed_by) query = query.eq('claimed_by', claimed_by)
     if (external_ref) query = query.eq('external_ref', external_ref)
+    if (subject && (await isLabEnabled())) {
+      if (subject.toLowerCase() === 'none') {
+        query = query.is('subject_id', null)
+      } else {
+        const found = await resolveSubject(subject)
+        if (!found) return noSuchSubject(subject)
+        query = query.eq('subject_id', found.id)
+      }
+    }
     if (assignee) {
       const owner = await resolveAssignee(assignee, actor.userId)
       if (!owner.ok) return fail(owner.code, owner.error)
@@ -120,24 +134,14 @@ export const GET = route<{ id: string }>({
   },
 })
 
-const CREATED_FIELDS =
-  'id, number, title, type, status, priority, labels, assignee_user_id, external_ref, external_url, created_at'
+/**
+ * A task create may name the subject it is a todo of (docs/lab.md), filed in
+ * this project. Read only while the Lab is on; ignored while it is off.
+ */
+const createBody = createTaskSchema.and(z.object({ subject: z.string().trim().min(1).max(60).nullable().optional() }))
 
-/** The task already carrying an external ref, wherever it is filed. */
-const holderOf = async (externalRef: string) => {
-  const { data } = await admin()
-    .from('tasks')
-    .select(`${CREATED_FIELDS}, project:projects!project_id!inner(key)`)
-    .eq('external_ref', externalRef)
-    .maybeSingle()
-  if (!data) return null
-  const { project, ...task } = data as unknown as { number: number; project: { key: string } | { key: string }[] }
-  const key = (Array.isArray(project) ? project[0] : project)?.key
-  return { ...(await withAssignee(task)), ref: `${key}-${task.number}` }
-}
-
-export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
-  schema: createTaskSchema,
+export const POST = route<{ id: string }, z.infer<typeof createBody>>({
+  schema: createBody,
   secretFields: ['title', 'description', 'externalRef', 'externalUrl'],
   handler: async ({ actor, params, body }) => {
     const resolved = await resolveProject<{ id: string; key: string; status: string }>(
@@ -147,86 +151,26 @@ export const POST = route<{ id: string }, z.infer<typeof createTaskSchema>>({
     if (!resolved) return fail('not_found', `No project ${params.id}.`)
     const { project, renamed } = resolved
 
-    // Same rule as writing to an existing task (F1): a project archived here
-    // is most likely the copy a move to another instance left behind, and a
-    // stale-cached CLI filing a new task into it would strand the task the
-    // same way a claim or a note would.
-    if (project.status === 'archived') {
-      return fail(
-        'conflict',
-        `${project.key} is archived — most likely because it moved to another Cairn instance and ` +
-          `this is the copy left behind. If it moved, point the CLI at the other one with ` +
-          `--instance <the other instance>. To file work here instead, restore ${project.key} first: ` +
-          `\`cairn project restore ${project.key}\`.`,
-        { project: project.key, projectStatus: 'archived' },
-      )
+    let subjectId: string | null | undefined
+    if (body.subject !== undefined && (await isLabEnabled())) {
+      if (body.subject === null) {
+        subjectId = null
+      } else {
+        const subject = await resolveSubject(body.subject)
+        if (!subject) return noSuchSubject(body.subject)
+        subjectId = subject.id
+      }
     }
 
-    const unreadable = refuseUnreadableBody(actor, body.description, `cairn add "<title>" --project ${project.key} --body -`)
-    if (unreadable) return unreadable
-
-    // Idempotent on the external ref, as a note is on its content: a caller
-    // that retries after a timeout, or files the same upstream item twice,
-    // gets the task it already made. Instance-wide, because the index is.
-    if (body.externalRef) {
-      const existing = await holderOf(body.externalRef)
-      if (existing) return ok({ ...existing, duplicate: true, ...(renamed ? { renamed_from: renamed } : {}) }, { status: 200 })
-    }
-
-    // A new task has no id yet, so it cannot be its own ancestor — the cycle
-    // walk that re-parenting needs is unnecessary here.
-    let parentId: string | null = null
-    if (body.parentRef) {
-      const parent = await findTask(actor, body.parentRef, 'id')
-      if (!parent) return fail('not_found', `No task ${body.parentRef}.`)
-      parentId = parent.id
-    }
-
-    const owner = await resolveAssignee(body.assignee ?? 'me', actor.userId)
-    if (!owner.ok) return fail(owner.code, owner.error)
-
-    const { data, error } = await admin()
-      .from('tasks')
-      .insert({
-        project_id: project.id,
-        parent_id: parentId,
-        title: body.title,
-        description: body.description ?? null,
-        type: body.type,
-        status: body.status,
-        priority: body.priority,
-        labels: body.labels,
-        due_date: body.dueDate ?? null,
-        actor_type: actor.actorType,
-        actor_id: actor.actorId,
-        assignee_user_id: owner.person.id,
-        external_ref: body.externalRef ?? null,
-        external_url: body.externalUrl ?? null,
-      })
-      .select(CREATED_FIELDS)
-      .single()
-
-    // Two creates racing past the lookup: the loser meets the unique index and
-    // gets the winner, which is what the lookup would have said a moment later.
-    if (error && body.externalRef && error.code === '23505' && error.message.includes('tasks_external_ref_key')) {
-      const winner = await holderOf(body.externalRef)
-      if (winner) return ok({ ...winner, duplicate: true, ...(renamed ? { renamed_from: renamed } : {}) }, { status: 200 })
-    }
-    if (error) return failFromDb(error)
-
-    await admin().from('task_activity_events').insert({
-      owner_user_id: actor.userId,
-      project_id: project.id,
-      task_id: data.id,
-      actor_type: actor.actorType,
-      actor_id: actor.actorId,
-      event: 'created',
-      data: { type: body.type, status: body.status, assignee: owner.person.name, ...(actor.host ? { host: actor.host } : {}) },
+    const created = await createTaskInProject(actor, project, body, {
+      subjectId,
+      retry: `cairn add "<title>" --project ${project.key} --body -`,
     })
+    if (!created.ok) return created.response
 
-    return ok(
-      { ...data, assignee: owner.person, ref: `${project.key}-${data.number}`, ...(renamed ? { renamed_from: renamed } : {}) },
-      { status: 201 },
-    )
+    const told = renamed ? { renamed_from: renamed } : {}
+    const [task] = await withLabFields([created.task])
+    if (created.duplicate) return ok({ ...task, duplicate: true, ...told }, { status: 200 })
+    return ok({ ...task, ...told }, { status: 201 })
   },
 })
