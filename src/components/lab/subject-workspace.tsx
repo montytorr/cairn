@@ -3,12 +3,7 @@
 import { useCallback, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { PANE } from '@/app/(app)/projects/[key]/tasks/[number]/styles'
-
-export const SUBJECT_TABS = ['writeup', 'todos', 'notes', 'log', 'files', 'details'] as const
-export type SubjectTab = (typeof SUBJECT_TABS)[number]
-
-export const isSubjectTab = (value: string | undefined): value is SubjectTab =>
-  (SUBJECT_TABS as readonly string[]).includes(value ?? '')
+import { SUBJECT_TABS, type SubjectTab } from './subject-tabs'
 
 const LABELS: Record<SubjectTab, string> = {
   writeup: 'Write-up',

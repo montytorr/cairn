@@ -18,6 +18,12 @@ export const imageMarkdown = (file: Pick<LabAttachment, 'filename' | 'content_ur
 /** What stands in the markdown while the upload runs, unique per upload so two of the same name cannot collide. */
 export const uploadPlaceholder = (filename: string, token: string) => `![Uploading ${escapeAlt(filename)}… ${token}]()`
 
+/**
+ * The preview of a body mid-upload: an image with no address yet would render
+ * as `<img src="">`, which asks the browser to fetch the page again.
+ */
+export const withoutPlaceholders = (text: string) => text.replace(/!\[Uploading [^\n]*?… [a-z0-9]+\]\(\)\n*/g, '')
+
 /** `text` with `insert` put where the selection was, and the caret just after it. */
 export const insertAt = (text: string, start: number, end: number, insert: string) => {
   const from = Math.max(0, Math.min(start, text.length))

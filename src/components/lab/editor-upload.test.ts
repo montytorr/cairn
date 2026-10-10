@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { imageFiles, imageMarkdown, insertAt, settlePlaceholder, uploadPlaceholder } from './editor-upload'
+import {
+  imageFiles, imageMarkdown, insertAt, settlePlaceholder, uploadPlaceholder, withoutPlaceholders,
+} from './editor-upload'
 
 describe('imageMarkdown', () => {
   it('embeds the stable content URL', () => {
@@ -58,5 +60,16 @@ describe('settlePlaceholder', () => {
   it('does not confuse two uploads of the same name', () => {
     const other = uploadPlaceholder('a.png', 't2')
     expect(settlePlaceholder(`${other}\n\n${token}`, token, 'IMG')).toBe(`${other}\n\nIMG`)
+  })
+})
+
+describe('withoutPlaceholders', () => {
+  it('leaves an upload in flight out of the preview, so no image has an empty address', () => {
+    const text = `before\n\n${uploadPlaceholder('shot [1].png', 'abc123')}\n\nafter`
+    expect(withoutPlaceholders(text)).toBe('before\n\nafter')
+  })
+
+  it('leaves an image that has landed alone', () => {
+    expect(withoutPlaceholders('![a](/x)')).toBe('![a](/x)')
   })
 })

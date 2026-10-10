@@ -11,6 +11,7 @@ import { mutate } from '@/lib/api/mutate'
 import { cn } from '@/lib/utils'
 import {
   imageFiles, imageMarkdown, insertAt, settlePlaceholder, uploadPlaceholder, uploadSubjectFile,
+  withoutPlaceholders,
 } from './editor-upload'
 
 type SaveState = 'idle' | 'saving' | 'error'
@@ -34,7 +35,7 @@ const Editor = ({
   onClose: (saved: boolean) => void
 }) => {
   const [markdown, setMarkdown] = useState(initial)
-  const preview = useDeferredValue(markdown)
+  const preview = withoutPlaceholders(useDeferredValue(markdown))
   const [state, setState] = useState<SaveState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [pane, setPane] = useState<'write' | 'preview'>('write')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NO_FILTERS, hasFilters, labQueryString, labUrl, parseLabFilters } from './filters'
+import { NO_FILTERS, hasFilters, labQueryString, labUrl, parseLabFilters, toSubjectQuery } from './filters'
 
 describe('parseLabFilters', () => {
   it('reads comma lists, trimmed and de-duplicated', () => {
@@ -54,5 +54,32 @@ describe('labQueryString and labUrl', () => {
 
   it('leaves a blank search out', () => {
     expect(labQueryString({ ...NO_FILTERS, q: '   ' })).toBe('')
+  })
+})
+
+describe('toSubjectQuery', () => {
+  const me = '11111111-1111-4111-8111-111111111111'
+
+  it('hands the library comma lists, and leaves out what is not set', () => {
+    expect(toSubjectQuery(me, { ...NO_FILTERS, stage: ['a', 'b'], tag: ['x'], q: 'pg' })).toEqual({
+      stage: 'a,b',
+      tag: 'x',
+      q: 'pg',
+      archived: 'exclude',
+    })
+  })
+
+  it('turns `me` into the viewer and keeps a user id', () => {
+    expect(toSubjectQuery(me, { ...NO_FILTERS, owner: 'me' }).ownerId).toBe(me)
+    const other = '22222222-2222-4222-8222-222222222222'
+    expect(toSubjectQuery(me, { ...NO_FILTERS, owner: other }).ownerId).toBe(other)
+  })
+
+  it('drops an owner that is neither, rather than sending a cast that would fail', () => {
+    expect(toSubjectQuery(me, { ...NO_FILTERS, owner: "bob'; --" }).ownerId).toBeUndefined()
+  })
+
+  it('includes archived only when asked', () => {
+    expect(toSubjectQuery(me, { ...NO_FILTERS, archived: true }).archived).toBe('include')
   })
 })

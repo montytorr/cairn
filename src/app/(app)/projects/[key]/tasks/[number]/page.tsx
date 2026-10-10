@@ -31,7 +31,7 @@ import { listFormerKeyRecords } from '@/lib/data'
 import { formerRefsOf, renameLine, renamesOf, taskRedirectNotice } from '@/lib/project-rename'
 import { LABEL, PANE } from './styles'
 import { HandoffBadge } from '@/components/lab/handoff-badge'
-import { taskLabFields } from '@/components/lab/task-fields'
+import { loadTaskLabFields } from '@/app/(app)/lab/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -119,7 +119,7 @@ const TaskPage = async ({
 
   const [
     notes, comments, attachments, relations, duplicateOf, activity, children, parent,
-    alsoProjects, allProjects, mentioned,
+    alsoProjects, allProjects, mentioned, lab,
   ] = await Promise.all([
     listNotes(task.id),
     listComments(task.id),
@@ -132,6 +132,8 @@ const TaskPage = async ({
     listAlsoProjects(task.id),
     listProjects(user.id),
     mentionsOf(task.id, 8),
+    // Hand-off and subject are not columns the task loader selects.
+    loadTaskLabFields(task.id),
   ])
 
   // What this task used to be called. An alias that only resolves is half an
@@ -151,7 +153,6 @@ const TaskPage = async ({
   // system, on the page whose whole job is to tell you what you are looking at.
   const ref = `${task.project.key}-${task.number}`
   const arrivedFrom = taskRedirectNotice(from, renames, { ...task, ref })
-  const lab = taskLabFields(task)
 
   return (
     <div className="flex h-dvh flex-col">

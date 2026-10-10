@@ -36,7 +36,11 @@ const useWrite = () => {
       setError(result.error)
       return null
     }
-    if (done) setMessage(done)
+    // The server enables the Lab even when it could not add the database's
+    // reservation of LAB, and says so; that is worth reading.
+    const warning = typeof result.data?.warning === 'string' ? result.data.warning : null
+    if (warning) setMessage(warning)
+    else if (done) setMessage(done)
     router.refresh()
     return result.data
   }

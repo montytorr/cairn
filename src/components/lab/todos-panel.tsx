@@ -341,7 +341,7 @@ export const TodosPanel = ({
           onDragCancel={() => setDragging(null)}
         >
           {/* The board's own scroll box: sideways on a phone, with snap. */}
-          <div className="scroll-visible -mx-4 h-[32rem] snap-x scroll-px-4 overflow-auto px-4 md:-mx-7 md:snap-none md:px-7">
+          <div className="scroll-visible h-[32rem] snap-x overflow-auto md:snap-none">
             <div className="flex h-full w-max gap-2.5">
               {lanes.map((status) => (
                 <Lane

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { ChevronRight, Plus, Search, X } from 'lucide-react'
+import { ChevronRight, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { BrandName } from '@/components/brand'
 import { EmptyState } from '@/components/empty-state'
 import { FilterMenu } from '@/components/filter-menu'
@@ -12,17 +12,15 @@ import { usePeople } from '@/components/people-context'
 import { Spinner } from '@/components/spinner'
 import { Button, Checkbox, Input, Select } from '@/components/ui/control'
 import { ViewToggle } from '@/app/(app)/projects/[key]/view-switch'
-import { viewCookieName, type ProjectView } from '@/lib/project-view'
+import type { ProjectView } from '@/lib/project-view'
 import { CreateSubjectDialog } from './create-subject'
-import { hasFilters, labUrl, type LabFilters } from './filters'
+import { cn } from '@/lib/utils'
+import { LAB_VIEW_COOKIE, hasFilters, labUrl, type LabFilters } from './filters'
 import { LabBoard } from './lab-board'
 import { LabList } from './lab-list'
 import {
   CATEGORY_FILTER_LABEL, STAGE_CATEGORIES, type ProjectRef, type Stage, type SubjectSummary, type Tag,
 } from './types'
-
-/** The list-or-board choice, remembered per browser as a project's is. */
-export const LAB_VIEW_COOKIE = viewCookieName('lab')
 
 // Secure wherever the page itself is served over HTTPS; plain http is only
 // ever local development, where a Secure cookie would never be stored.
@@ -59,6 +57,7 @@ export const LabView = ({
   const [query, setQuery] = useState(filters.q)
   const [running, startTransition] = useTransition()
   const [creating, setCreating] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const search = useRef<HTMLInputElement>(null)
 
   const navigate = useCallback(
@@ -118,6 +117,15 @@ export const LabView = ({
   )
 
   const filtered = hasFilters(filters)
+  // What the Filters button on a phone says is set; the search box is its own.
+  const setFilters = [
+    filters.category.length,
+    filters.stage.length,
+    filters.tag.length,
+    filters.project.length,
+    filters.owner ? 1 : 0,
+    filters.archived ? 1 : 0,
+  ].filter(Boolean).length
   const active = subjects.filter((s) => s.stage.category === 'active').length
   const planned = subjects.filter((s) => s.stage.category === 'planned').length
   const concluded = subjects.length - active - planned
@@ -137,7 +145,7 @@ export const LabView = ({
         <span className="text-fg text-ui">Lab</span>
         <p className="text-fg-subtle tabular ml-2 hidden items-center gap-3 text-meta xl:flex">
           <span><span className="text-fg-muted font-medium">{active}</span> active</span>
-          <span><span className="text-fg-muted font-medium">{planned}</span> ideas</span>
+          <span><span className="text-fg-muted font-medium">{planned}</span> {planned === 1 ? 'idea' : 'ideas'}</span>
           <span><span className="text-fg-muted font-medium">{concluded}</span> concluded</span>
         </p>
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -151,7 +159,7 @@ export const LabView = ({
       <div className="border-border flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-2">
         {toggle}
         <Divider />
-        <label className="relative flex w-full items-center sm:w-[14rem]">
+        <label className="relative flex min-w-0 flex-1 items-center sm:w-[14rem] sm:flex-none">
           <Search size={13} aria-hidden className="text-fg-subtle pointer-events-none absolute left-2.5 z-10" />
           <Input
             ref={search}
@@ -184,6 +192,27 @@ export const LabView = ({
           ) : null}
         </label>
 
+        {/* On a phone the filters sit behind one button, so the board starts
+            near the top of the screen; from `sm` they are the toolbar. */}
+        <Button
+          size="sm"
+          className="sm:hidden"
+          aria-expanded={filtersOpen}
+          aria-controls="lab-filters"
+          onClick={() => setFiltersOpen((o) => !o)}
+        >
+          <SlidersHorizontal size={13} aria-hidden />
+          Filters
+          {setFilters > 0 ? <span className="tabular">{setFilters}</span> : null}
+        </Button>
+
+        <div
+          id="lab-filters"
+          className={cn(
+            'items-center gap-1.5 sm:contents',
+            filtersOpen ? 'flex w-full flex-wrap' : 'hidden',
+          )}
+        >
         <FilterMenu
           label="Category"
           options={categoryOptions}
@@ -245,6 +274,7 @@ export const LabView = ({
             Clear filters
           </Button>
         ) : null}
+        </div>
       </div>
 
       {stages.length === 0 ? (

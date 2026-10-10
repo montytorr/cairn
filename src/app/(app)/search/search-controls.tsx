@@ -56,6 +56,7 @@ export const SearchControls = ({
   status,
   kind,
   projects,
+  lab = false,
 }: {
   q: string
   project: string
@@ -63,6 +64,8 @@ export const SearchControls = ({
   status: string
   kind: string
   projects: { key: string; title: string }[]
+  /** Subjects are a kind to pick only where the Lab is on. */
+  lab?: boolean
 }) => {
   const router = useRouter()
   // The query lives in the URL, so every keystroke is a server round trip.
@@ -168,6 +171,7 @@ export const SearchControls = ({
           { value: 'note', label: 'Work-log notes' },
           { value: 'knowledge', label: 'Knowledge' },
           { value: 'session', label: 'Sessions' },
+          ...(lab ? [{ value: 'subject', label: 'Subjects' }] : []),
         ]}
       />
       <Filter

@@ -1,4 +1,12 @@
+import { viewCookieName } from '@/lib/project-view'
 import { STAGE_CATEGORIES, type StageCategory } from './types'
+
+/**
+ * The list-or-board choice, remembered per browser as a project's is. Here and
+ * not in the client view: a server page reads it, and a constant imported from
+ * a client module arrives there as a reference, not as the string.
+ */
+export const LAB_VIEW_COOKIE = viewCookieName('lab')
 
 /**
  * What the Lab's list and board are narrowed by. All of it lives in the URL,
@@ -71,3 +79,34 @@ export const labUrl = (filters: LabFilters) => {
 }
 
 export const hasFilters = (filters: LabFilters) => labQueryString(filters) !== ''
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** What the server library's `listSubjects` takes. */
+export type SubjectQuery = {
+  stage?: string
+  category?: string
+  tag?: string
+  project?: string
+  ownerId?: string
+  q?: string
+  archived: 'exclude' | 'include'
+}
+
+/**
+ * The page's filters as the library takes them. `me` is the viewer; an owner
+ * that is neither `me` nor a user id is dropped rather than sent, since the
+ * query casts it and a hand-typed address must not become a 500.
+ */
+export const toSubjectQuery = (userId: string, filters: LabFilters): SubjectQuery => {
+  const ownerId = filters.owner === 'me' ? userId : UUID.test(filters.owner) ? filters.owner : undefined
+  return {
+    ...(filters.stage.length ? { stage: filters.stage.join(',') } : {}),
+    ...(filters.category.length ? { category: filters.category.join(',') } : {}),
+    ...(filters.tag.length ? { tag: filters.tag.join(',') } : {}),
+    ...(filters.project.length ? { project: filters.project.join(',') } : {}),
+    ...(ownerId ? { ownerId } : {}),
+    ...(filters.q ? { q: filters.q } : {}),
+    archived: filters.archived ? 'include' : 'exclude',
+  }
+}
