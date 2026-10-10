@@ -1087,18 +1087,18 @@ const flags = new Proxy(typedFlags, {
  */
 const KNOWN_FLAGS = new Set([
   'adopt', 'agent', 'all', 'all-instances', 'allow-dangling', 'also-project', 'archived', 'assignee', 'body',
-  'branch', 'completed',
-  'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'dir', 'dry-run',
+  'branch', 'category', 'clear', 'color', 'completed', 'conclusion',
+  'confirm', 'cwd', 'dangling', 'default', 'days', 'description', 'detach-todos', 'dir', 'dry-run',
   'duplicate-of', 'duration-ms', 'entity', 'exit-code', 'external-ref', 'external-url', 'file', 'files', 'folder',
   'force', 'force-empty', 'full', 'gaps', 'global', 'help', 'history', 'hours', 'id', 'instance',
-  'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'maintenance', 'max-parents',
+  'json', 'key', 'kind', 'kinds', 'label', 'learned', 'limit', 'link', 'maintenance', 'max-parents',
   'message', 'mine', 'name', 'next', 'no-checkpoint', 'no-herdr', 'no-hooks', 'no-jobs', 'no-parent',
   'no-skill', 'no-start', 'notify', 'older',
-  'orphans', 'output', 'parent', 'platform', 'pretty', 'priority', 'project',
+  'orphans', 'output', 'owner', 'parent', 'platform', 'position', 'pretty', 'priority', 'project',
   'reason', 'related', 'remote', 'repo', 'request', 'resolution', 'runtimes', 'scheduled', 'scope',
-  'session', 'show-toplevel', 'slug', 'start', 'started', 'status', 'summary',
-  'superseded', 'superseded-by', 'sweep', 'task', 'tasks', 'title', 'tool-calls',
-  'type', 'unused', 'url', 'verified', 'version',
+  'session', 'show-toplevel', 'slug', 'stage', 'start', 'started', 'status', 'subject', 'summary',
+  'superseded', 'superseded-by', 'sweep', 'tag', 'task', 'tasks', 'title', 'to', 'tool-calls',
+  'type', 'undo', 'unused', 'url', 'verified', 'version',
 ])
 
 for (let i = 0; i < argv.length; i += 1) {
@@ -1873,7 +1873,10 @@ const refreshProjectKeys = async (force) => {
   }
 }
 
-const request = async (method, path, body, { soft = false } = {}) => {
+/** What a task route answers for `LAB-12`: the subject lives elsewhere. */
+const SUBJECT_HREF = /^\/api\/v1\/subjects\/LAB-\d+$/i
+
+const request = async (method, path, body, { soft = false, onError } = {}) => {
   requireKey()
   if (method !== 'GET') mutated = true
   const isCheckpoint = path.split('?')[0].endsWith('/checkpoint')
@@ -1941,6 +1944,13 @@ const request = async (method, path, body, { soft = false } = {}) => {
   }
 
   if (!payload.success) {
+    // A verb that knows what a particular refusal means says so itself: it can
+    // die with better words, or hand back an answer (`show LAB-12` follows the
+    // 404 to the subject). Anything it leaves alone falls through below.
+    if (onError) {
+      const handled = onError(payload, res.status)
+      if (handled !== undefined) return handled
+    }
     // `soft` callers are probing, not asserting. `cairn know <word>` tries the
     // word as a slug first and falls back to searching, and dying on the miss
     // made the fallback unreachable.
@@ -1978,7 +1988,11 @@ const request = async (method, path, body, { soft = false } = {}) => {
     const hint = payload.code === 'secret_detected'
       ? '\n  write where it lives instead: `$ENV_VAR`, `process.env.X`, a vault path, or `<password>`.' +
         '\n  if it was a real credential, rotate it: it has already been in this transcript.'
-      : ''
+      : payload.code === 'lab_disabled'
+        ? '\n  the Lab is off on this instance; a human administrator switches it on (cairn lab on).'
+        : SUBJECT_HREF.test(String(payload.href ?? ''))
+          ? `\n  ${payload.subject ?? 'that ref'} is a subject, not a task: cairn subject show ${payload.subject ?? '<LAB-n>'}`
+          : ''
     // Some 409s get their own exit code so a caller can branch on them:
     // "someone else has it", and "that session is already closed" (the
     // session hook stops checkpointing it, CAIRN-319).
@@ -2707,6 +2721,9 @@ const renderContext = (d, { fileOnly = false } = {}) => {
     }
   }
 
+  // The Lab, when this instance has it on and there is something in it.
+  out.push(...labBriefing(d.lab))
+
   if (out.length === 1) return ''
   out.push('', ...BRIEFING_RULES)
   return `${out.join('\n')}\n`
@@ -2918,6 +2935,23 @@ const HELP = `cairn — agent-first task tracker and shared memory
     cairn reconcile|vitals --all-instances   once per instance on a machine with several;
                                         vitals --notify <instance>:<ref>[,…] says where each reports
 
+  hand-off
+    cairn handoff <ref> [--to <instance>:<KEY> | github:<owner>/<repo>]
+                                   the work leaves this instance: files it there, links it
+                                   here, and that tracker owns the status from then on.
+                                   --to is optional when its project has a default; a
+                                   Cairn is another configured instance (cairn instance)
+    cairn handoff <ref> --link <REF> [--url URL] [--to <tracker>:<target>]
+                                   record a task made by hand; a Cairn link needs --url,
+                                   the destination's absolute https address
+    cairn handoff <ref> --undo     take it back; nothing is done in the other tracker
+    cairn project handoff <KEY> [--to <instance>:<KEY> | github:<owner>/<repo> | --clear]
+                                   the project's default for --to; bare shows it
+    cairn sync [--project K]       read every handed-off task's status back, through that
+                                   tracker's own CLI and credentials (cairn, gh)
+    cairn sync --all-instances     once per instance on a machine with several
+
+@@lab@@
   coordinate
     cairn claim <ref>              exits 9 if another agent holds it
     cairn beat <ref>               keep a claim alive
@@ -2952,6 +2986,54 @@ const HELP = `cairn — agent-first task tracker and shared memory
 
   env: CAIRN_BASE_URL, CAIRN_API_KEY
 `
+
+/**
+ * The Lab's part of the help, printed only where the Lab is on (see
+ * labOnForHelp). Everything that is not the Lab, hand-off included, is in HELP.
+ */
+const LAB_HELP = `  the lab — exploring and proving ideas before they become work
+    an idea is a subject (LAB-n), not a task; its todos are ordinary tasks (--subject);
+    closing one — a completed or dropped stage — needs a conclusion; work that leaves
+    this instance is \`cairn handoff\` (above)
+    cairn idea "<title>" [--body -] [--tag a,b] [--owner me] [--project K]
+                                   file an idea: a subject in the first planned stage
+    cairn ideas [--tag t] [--mine] [--project K]    what the lab has not started
+    cairn subject list ["<text>"] [--stage S] [--category planned|active|completed|dropped]
+                       [--tag t] [--mine | --owner who] [--project K|none] [--archived [only]]
+                                   todos is open/closed; answered: it has a conclusion
+    cairn subject show LAB-12 [--full]   conclusion, todos, write-up and log (a digest);
+                                   \`cairn show LAB-12\` follows to it
+    cairn subject add "<title>" [--stage S] [--tag a,b] [--owner me] [--project K] [--body -]
+    cairn subject edit LAB-12 [--title T] [--body -] [--owner me|none] [--project K|none]
+    cairn subject stage LAB-12 "<stage>" [--conclusion -]
+                                   a completed or dropped stage needs the conclusion:
+                                   what the lab concluded, and why
+    cairn subject note LAB-12 "<text>"|- [--kind finding|decision|attempt|note|handoff]
+    cairn subject notes LAB-12     people's notes on it; the log is in show
+    cairn subject tag LAB-12 +x -y
+    cairn subject attach LAB-12 <file>   |   cairn subject files LAB-12
+    cairn subject todo LAB-12 "<title>" [--body -] [--type T] [--priority P] [--no-start]
+                                   an ordinary task that belongs to it: in its project,
+                                   else the lab's home project
+    cairn add ... --subject LAB-12      file a task as that subject's todo
+    cairn update <ref> --subject LAB-12|none    link an existing task, or unlink it
+    cairn list --subject LAB-12 [--project K]   its todos
+    cairn subject mentions LAB-12 [--limit N]   the tasks that name it
+    cairn subject archive|restore LAB-12        off the board, still searchable
+    cairn subject delete LAB-12 --confirm LAB-12 [--detach-todos]
+                                   for mistakes; refuses while it has todos, and never
+                                   deletes one
+    cairn check "<subject>" --kinds subject     only its subjects and what they concluded
+    cairn lab                      the settings; \`cairn lab stages\` and \`cairn lab tags\`
+                                   list the curated stages and tags
+    cairn lab stages add "<name>" --category planned|active|completed|dropped [--color #rrggbb]
+    cairn lab stages edit <name> [--name N] [--category C] [--color #rrggbb] [--position N]
+    cairn lab stages remove <name>  |  cairn lab stages order "<a>,<b>,…"
+    cairn lab tags add|edit|remove <name> [--name N] [--color #rrggbb] [--position N]
+    cairn lab on|off  |  cairn lab home <KEY>|default    a human administrator's
+`
+
+const helpText = () => HELP.replace('@@lab@@\n', labOnForHelp() ? `${LAB_HELP}\n` : '')
 
 const need = (v, msg) => (v === undefined || v === true ? die(msg) : v)
 
@@ -3345,6 +3427,815 @@ const keyIsValid = async (baseUrl, key) => {
   }
 }
 
+// ---------------------------------------------------------------------------
+// the lab: subjects, stages and tags
+// ---------------------------------------------------------------------------
+const SUBJECT_REF = /^(?:LAB-)?(\d{1,9})$/i
+const SUBJECT_NOTE_KINDS = ['note', 'finding', 'decision', 'attempt', 'handoff']
+const STAGE_CATEGORIES = ['planned', 'active', 'completed', 'dropped']
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
+const LAB_CACHE = join(STATE_DIR, 'lab.json')
+
+/**
+ * Whether this instance has the Lab on, as the last request that knew it said.
+ *
+ * Help reads nothing and sends nothing, and it is the one place that has to
+ * know: the Lab section of it appears only where the Lab is on. So the answer
+ * is kept beside the instance's other state by whichever command last saw it
+ * (the briefing, `cairn lab`), and read back here without a request.
+ */
+const rememberLab = (enabled) => {
+  try {
+    let was
+    try {
+      was = JSON.parse(readFileSync(LAB_CACHE, 'utf8')).enabled
+    } catch {
+      // nothing recorded yet
+    }
+    if (was === enabled) return
+    mkdirSync(dirname(LAB_CACHE), { recursive: true, mode: 0o700 })
+    writeFileSync(LAB_CACHE, `${JSON.stringify({ enabled, at: new Date().toISOString() })}\n`)
+  } catch {
+    // A line of help is not worth failing a command over.
+  }
+}
+
+const labCachedOn = (dir) => {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'lab.json'), 'utf8')).enabled === true
+  } catch {
+    return false
+  }
+}
+
+/** Help does not route: with several instances, any of them having the Lab on shows it. */
+const labOnForHelp = () => {
+  if (!INSTANCES || INSTANCES.error) return labCachedOn(CAIRN_DIR)
+  const asked = earlyFlag('instance') || process.env.CAIRN_INSTANCE?.trim()
+  const names = asked ? [asked] : Object.keys(INSTANCES.instances)
+  return names.some((name) => INSTANCE_NAME.test(name) && labCachedOn(instanceDir(name)))
+}
+
+/** `LAB-12`, `lab-12` or `12`, answered as `LAB-12`; anything else is refused with what it looks like. */
+const subjectArg = (value, usage) => {
+  const raw = String(need(value, usage)).trim()
+  const match = SUBJECT_REF.exec(raw)
+  if (!match) {
+    die(
+      `"${raw}" is not a subject ref — subjects are LAB-n (e.g. LAB-12).` +
+        (REF_ARG.test(raw.toUpperCase()) ? ` ${raw} looks like a task: use the task verbs (cairn show ${raw}).` : ''),
+    )
+  }
+  return `LAB-${Number(match[1])}`
+}
+
+/** `--subject LAB-12` on a task verb; `none` unlinks (update) or means "not a subject's" (list). */
+const subjectFlag = (value, verb) => {
+  const raw = String(need(value, '--subject needs a subject ref, e.g. --subject LAB-12')).trim()
+  if (raw.toLowerCase() === 'none') {
+    if (verb === 'add') die('--subject none has nothing to unlink on a new task: leave --subject off')
+    return 'none'
+  }
+  return subjectArg(raw)
+}
+
+/** A subject's page on the server the request went to. */
+const subjectUrl = (ref) => {
+  const m = /^LAB-(\d+)$/i.exec(ref ?? '')
+  return m ? `${BASE}/lab/subjects/${m[1]}` : null
+}
+
+const withSubjectUrl = (subject) => {
+  const url = subject && typeof subject === 'object' ? subjectUrl(subject.ref) : null
+  return url ? { ...subject, url } : subject
+}
+
+/** One TSV cell from whatever the server sent: a name for an object, no tabs or newlines. */
+const cellOf = (v) =>
+  v == null || v === false
+    ? ''
+    : typeof v === 'object'
+      ? String(v.name ?? v.key ?? v.ref ?? v.title ?? '')
+      : String(v).replace(/[\t\r\n]+/g, ' ')
+
+/** A list, whether the server sent it bare or under a key. */
+const asList = (d, key) => (Array.isArray(d) ? d : Array.isArray(d?.[key]) ? d[key] : Array.isArray(d?.items) ? d.items : [])
+
+const SUBJECT_COLUMNS = ['ref', 'stage', 'owner', 'todos', 'tags', 'project', 'answered', 'title', 'url']
+const subjectRow = (s) => {
+  const ref = s.ref ?? (s.number !== undefined ? `LAB-${s.number}` : '')
+  return {
+    ref,
+    stage: cellOf(s.stage),
+    owner: cellOf(s.owner),
+    todos: `${s.todos?.open ?? 0}/${s.todos?.done ?? 0}`,
+    tags: (s.tags ?? []).map((t) => cellOf(t)).join(','),
+    project: cellOf(s.project),
+    answered: s.conclusion ? 'yes' : '',
+    title: truncate(s.title, 70),
+    url: subjectUrl(ref) ?? '',
+  }
+}
+
+const emitSubjects = (list) => {
+  if (FORMAT !== 'tsv') return emit(list.map(withSubjectUrl))
+  return emit(list, { rows: (d) => d.map(subjectRow), columns: SUBJECT_COLUMNS })
+}
+
+/** `tracker:ref status`, one cell. */
+const handoffCell = (h) => (h ? `${h.tracker}:${h.ref}${h.status ? ` ${h.status}` : ''}` : '')
+
+const todoRow = (t) => ({
+  ref: t.ref ?? '',
+  status: t.status ?? '',
+  type: t.type ?? '',
+  priority: t.priority ?? '',
+  assignee: cellOf(t.assignee),
+  held: t.claimed_by ?? '',
+  handoff: handoffCell(t.handoff),
+  title: truncate(t.title, 70),
+  url: taskUrl(t.ref) ?? '',
+})
+const TODO_COLUMNS = ['ref', 'status', 'type', 'priority', 'assignee', 'held', 'handoff', 'title', 'url']
+
+const indent = (text, pad = '  ') => String(text).trim().split('\n').map((l) => `${pad}${l}`)
+
+const BODY_CLIP = 1500
+const CLOSED = new Set(['done', 'cancelled'])
+
+/**
+ * A subject as a model reads it: where it stands, what it concluded, what is
+ * left to do, then the write-up and the log. A digest by default — every
+ * finding, decision and hand-off, the last few of everything else, a clipped
+ * body — and a line on stderr saying what was withheld.
+ */
+const renderSubject = (s, { notes, todos, humanNotes, files, full }) => {
+  const ref = s.ref ?? ''
+  const out = [`${ref}  ${cellOf(s.stage)}  ${s.title}`]
+  const tags = (s.tags ?? []).map((t) => cellOf(t))
+  out.push(
+    [
+      s.owner?.name ? `owner ${s.owner.name}` : 'no owner',
+      s.project?.key ? `project ${s.project.key}` : '',
+      tags.length ? `tags ${tags.join(', ')}` : '',
+      s.updated_at ? `updated ${localStamp(s.updated_at)}` : '',
+      s.archived_at ? 'archived' : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  )
+  const url = subjectUrl(ref)
+  if (url) out.push(url)
+  if (s.conclusion) {
+    out.push('', `conclusion${s.concluded_at ? ` (${localStamp(s.concluded_at)})` : ''}:`, ...indent(s.conclusion))
+  }
+
+  const open = todos.filter((t) => !CLOSED.has(t.status))
+  out.push('', `todos: ${open.length} open / ${todos.length - open.length} closed`)
+  for (const t of full ? todos : open) {
+    out.push(
+      `  ${t.ref}  ${t.status}${t.claimed_by ? `  held by ${t.claimed_by}` : ''}  ${t.title}` +
+        `${t.handoff ? `  [handed off ${handoffCell(t.handoff)}]` : ''}`,
+    )
+  }
+
+  // Counts only: people's notes and files are read on purpose, not in every digest.
+  const extras = [
+    humanNotes.length ? `people's notes: ${humanNotes.length} (cairn subject notes ${ref})` : '',
+    files.length ? `files: ${files.length} (cairn subject files ${ref})` : '',
+  ].filter(Boolean)
+  if (extras.length) out.push('', extras.join(' · '))
+
+  const body = String(s.body ?? '').trim()
+  let withheldBody = 0
+  if (body) {
+    const shown = full || body.length <= BODY_CLIP ? body : `${body.slice(0, BODY_CLIP)}…`
+    withheldBody = body.length - Math.min(body.length, full ? body.length : BODY_CLIP)
+    out.push('', 'write-up:', ...indent(shown))
+  }
+
+  const ordered = [...notes].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+  const KEEP = new Set(['finding', 'decision', 'handoff'])
+  const recent = new Set(ordered.filter((n) => !KEEP.has(n.kind)).slice(-5))
+  const shownNotes = full ? ordered : ordered.filter((n) => KEEP.has(n.kind) || recent.has(n))
+  if (ordered.length) {
+    out.push('', `log${shownNotes.length < ordered.length ? ` (${shownNotes.length} of ${ordered.length})` : ''}:`)
+    for (const n of shownNotes) {
+      const text = full ? n.note : truncate(String(n.note).replace(/\s+/g, ' '), 400)
+      out.push(`  ${localStamp(n.created_at)}  ${n.kind}  ${n.actor_id ?? ''}`, ...indent(text, '    '))
+    }
+  }
+  const withheldNotes = ordered.length - shownNotes.length
+  const withheld =
+    withheldBody || withheldNotes
+      ? {
+          body: withheldBody,
+          notes: withheldNotes,
+          tokens: Math.ceil((body.length + ordered.reduce((n, x) => n + String(x.note).length, 0)) / 4),
+        }
+      : null
+  return { text: `${out.join('\n')}\n`, withheld }
+}
+
+/** The digest, or with --full everything, of one subject. */
+const showSubject = async (ref) => {
+  const [subject, notes, todos, humanNotes, files] = await Promise.all([
+    request('GET', `/api/v1/subjects/${ref}`),
+    request('GET', `/api/v1/subjects/${ref}/notes`, undefined, { soft: true }),
+    request('GET', `/api/v1/subjects/${ref}/todos`, undefined, { soft: true }),
+    request('GET', `/api/v1/subjects/${ref}/human-notes`, undefined, { soft: true }),
+    request('GET', `/api/v1/subjects/${ref}/attachments`, undefined, { soft: true }),
+  ])
+  if (FORMAT !== 'tsv') {
+    return emit({
+      ...withSubjectUrl(subject),
+      notes: asList(notes, 'notes'),
+      todos: asList(todos, 'todos'),
+      human_notes: asList(humanNotes, 'notes'),
+      files: asList(files, 'files'),
+    })
+  }
+  const { text, withheld } = renderSubject(
+    { ...subject, ref: subject.ref ?? ref },
+    {
+      notes: asList(notes, 'notes'),
+      todos: asList(todos, 'todos'),
+      humanNotes: asList(humanNotes, 'notes'),
+      files: asList(files, 'files'),
+      full: Boolean(flags.full),
+    },
+  )
+  process.stdout.write(text)
+  if (withheld) {
+    process.stderr.write(
+      `withheld: ${withheld.body}B of write-up, ${withheld.notes} note(s)` +
+        ` — cairn subject show ${subject.ref ?? ref} --full is ~${withheld.tokens} tokens\n`,
+    )
+  }
+}
+
+/** `--project K` on subject add/edit: a key, or `none` to take it out of its project (null on the wire). */
+const subjectProjectFlag = () => {
+  if (flags.project === undefined) return undefined
+  const value = String(need(flags.project, '--project needs a project key, or none')).trim()
+  return value.toLowerCase() === 'none' ? null : value
+}
+
+/** `--owner who` on subject add/edit: me, an email, a name or an id; `none` leaves it nobody's. */
+const subjectOwnerFlag = () => {
+  if (flags.owner === undefined) return undefined
+  const value = String(need(flags.owner, '--owner needs me, an email, a name or an id (or none)')).trim()
+  return value.toLowerCase() === 'none' ? null : value
+}
+
+/** Refused, said with what to do: the agent's next call is the fix. */
+const conclusionRefusal = (ref, stage) => (payload) => {
+  if (payload.code !== 'conclusion_required') return undefined
+  return die(
+    `${ref}${stage ? ` -> "${stage}"` : ''} needs a conclusion: ${payload.error}\n` +
+      're-run with --conclusion "<what was concluded, and why>" (or --conclusion - to read markdown from stdin)',
+  )
+}
+
+/** `+x -y`, or `x,y`: tag names to add and to remove. */
+const tagChanges = (args) => {
+  const add = []
+  const remove = []
+  for (const arg of args.flatMap((a) => String(a).split(',')).map((a) => a.trim()).filter(Boolean)) {
+    if (arg.startsWith('-')) remove.push(arg.slice(1).toLowerCase())
+    else add.push(arg.replace(/^\+/, '').toLowerCase())
+  }
+  return { add: add.filter(Boolean), remove: remove.filter(Boolean) }
+}
+
+/** A stage or tag by name (any case) or by id, from the list the server has. */
+const pickByName = (list, wanted, what) => {
+  const raw = String(wanted).trim()
+  const found = list.find((x) => x.id === raw) ?? list.find((x) => String(x.name).toLowerCase() === raw.toLowerCase())
+  if (!found) die(`no ${what} "${raw}" — they are: ${list.map((x) => x.name).join(', ') || '(none)'}`)
+  return found
+}
+
+const colorFlag = () => {
+  if (flags.color === undefined) return undefined
+  const value = String(need(flags.color, '--color needs a hex colour, e.g. --color "#6b7fa6"')).trim().toLowerCase()
+  if (!HEX_COLOR.test(value)) die(`"${value}" is not a colour: use #rrggbb`)
+  return value
+}
+
+const positionFlag = () => {
+  if (flags.position === undefined) return undefined
+  const n = Number(need(flags.position, '--position needs a number'))
+  if (!Number.isInteger(n) || n < 0) die('--position is a whole number, 0 first')
+  return n
+}
+
+/** The Lab block of the briefing: stage counts, then the caller's own subjects, only when there is any. */
+const labBriefing = (lab) => {
+  if (!lab || typeof lab !== 'object') return []
+  const counted = [...(lab.stages ?? [])]
+    .filter((s) => Number(s.count) > 0 && ['planned', 'active'].includes(s.category))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  const mine = (lab.mine ?? []).slice(0, 3)
+  if (!counted.length && !mine.length) return []
+  const out = ['', `Lab: ${counted.length ? counted.map((s) => `${s.count} ${s.name}`).join(' · ') : 'nothing open'}`]
+  for (const s of mine) {
+    const open = s.todos?.open ?? 0
+    out.push(`  ${s.ref}  ${cellOf(s.stage)}  ${truncate(s.title, 56)}${open ? ` -- ${open} todo${open === 1 ? '' : 's'}` : ''}`)
+  }
+  out.push(
+    '  An idea is a subject (cairn idea "<title>"); its todos are tasks (cairn subject todo LAB-n); closing it needs a conclusion.',
+    '  Work that leaves this instance: cairn handoff <ref> --to <instance>:<KEY>|github:<owner>/<repo>.',
+  )
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// hand-off: a task that leaves this instance, and reading its status back
+// ---------------------------------------------------------------------------
+// Everything Cairn knows about another tracker lives in this section. The
+// server stores the link and never calls the tracker; these adapters create the
+// task there and read it back, with the tracker's own CLI and credentials on
+// this machine:
+//
+//   { name,
+//     create({ ... }) → { ref, url } (dies on failure, before anything is linked),
+//     show(ref, url) → { status, resolution?, resolutionKind?, url? } | { error } }
+//
+// `cairn handoff` and `cairn sync` only call that interface.
+
+const TRACKER_NAME = /^[a-z][a-z0-9-]{1,31}$/
+const CAIRN_TASK_REF = /^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/
+const PROJECT_KEY = /^[A-Z][A-Z0-9]{1,9}$/
+const GH_REPO = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.][A-Za-z0-9_.-]*$/
+const GH_ISSUE = /^([A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.][A-Za-z0-9_.-]*)#(\d+)$/
+const TERMINAL = new Set(['done', 'cancelled'])
+const TASK_TYPES = new Set(['feature', 'bug', 'improvement', 'chore', 'spike', 'docs'])
+
+const runTool = (bin, args, input) => {
+  // A script path (a checkout, a test double) runs under this node.
+  const [cmd, argv] = /\.m?js$/.test(bin) ? [process.execPath, [bin, ...args]] : [bin, args]
+  return spawnSync(cmd, argv, {
+    input: input ?? '',
+    encoding: 'utf8',
+    timeout: 60_000,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+}
+
+const findOnPath = (name) => {
+  for (const dir of (process.env.PATH ?? '').split(':')) {
+    if (dir && existsSync(join(dir, name))) return join(dir, name)
+  }
+  return null
+}
+
+const firstLine = (run) => String(run.stderr || run.error?.message || `exit ${run.status}`).trim().split('\n')[0]
+
+/**
+ * This same CLI, run for another instance. The destination's key, its project
+ * keys and its own rules (a bug needs a body, a duplicate external ref returns
+ * the earlier task) are all decided by that instance's own command, not
+ * reimplemented here.
+ */
+const runCairn = (instance, args, input) => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'CAIRN_INSTANCE'))
+  const own = [process.argv[1], ...(instance ? ['--instance', instance] : []), ...args]
+  return spawnSync(process.execPath, own, {
+    input: input ?? '',
+    encoding: 'utf8',
+    timeout: 60_000,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env,
+  })
+}
+
+/**
+ * The words that are parsed as a flag must not start a title: the parser reads
+ * any argument beginning `--` as an option and has no terminator. It keeps its
+ * words; the dashes become a dash it cannot misread.
+ */
+const safeTitle = (title) => String(title).replace(/^-{2,}\s*/, '– ')
+
+const originOf = (url) => {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
+/** The configured instance that serves this URL, or null. `name: null` is a one-instance machine. */
+const instanceForUrl = (url) => {
+  const origin = originOf(url)
+  if (!origin) return null
+  if (INSTANCES && !INSTANCES.error) {
+    const name = Object.keys(INSTANCES.instances).find((n) => originOf(INSTANCES.instances[n].url) === origin)
+    return name ? { name } : null
+  }
+  return originOf(BASE) === origin ? { name: null } : null
+}
+
+const cairnAdapter = {
+  name: 'cairn',
+  create: ({ instance, target, title, body, type, priority, sourceRef, sourceUrl }) => {
+    if (!INSTANCES || INSTANCES.error) {
+      die(
+        'this machine has one instance (no ~/.cairn/instances.json), so there is no other Cairn to hand off to: ' +
+          'cairn instance add <name> --url <url>',
+      )
+    }
+    if (!instance) {
+      const others = Object.keys(INSTANCES.instances).filter((name) => name !== INSTANCE.name)
+      if (others.length !== 1) {
+        die(
+          `which instance holds ${String(target).toUpperCase()}? this machine has ${others.length ? `${others.join(', ')}` : 'no other one'}: ` +
+            `cairn handoff ${sourceRef} --to <instance>:${String(target).toUpperCase()}`,
+        )
+      }
+      instance = others[0]
+    }
+    const known = INSTANCES.instances[instance]
+    if (!known) {
+      die(`no instance named "${instance}" in ~/.cairn/instances.json (it has: ${Object.keys(INSTANCES.instances).join(', ')})`)
+    }
+    if (instance === INSTANCE.name) {
+      die(`${instance} is this instance: a hand-off leaves it. To move ${sourceRef} to another project here, use: cairn update ${sourceRef} --project <KEY>`)
+    }
+    const url = known.url.replace(/\/+$/, '')
+    // Checked before anything is filed: the server refuses the link too, but
+    // by then the destination task would already exist.
+    if (!/^https:\/\//i.test(url)) {
+      die(
+        `instance ${instance} is ${url}, which is not https: a hand-off to a Cairn records the destination task's ` +
+          'absolute https URL, which the server requires. Nothing was filed.',
+      )
+    }
+    const key = String(target).toUpperCase()
+    if (!PROJECT_KEY.test(key)) die(`"${target}" is not a project key (2-10 capital letters or digits), e.g. KDP`)
+    const kind = TASK_TYPES.has(type) ? type : 'feature'
+    const description = String(body ?? '').trim()
+    const text = [description, `Handed off from ${sourceRef}: ${sourceUrl}`].filter(Boolean).join('\n\n')
+    const args = [
+      'add', safeTitle(title), '--project', key, '--type', kind, '--body', '-', '--no-start', '--json',
+      '--external-ref', `${new URL(BASE).host}/${sourceRef}`, '--external-url', sourceUrl,
+    ]
+    if (priority) args.push('--priority', priority)
+    // A bug or a spike needs a real body; the line saying where it came from is not one.
+    if (!description && ['bug', 'spike'].includes(kind)) args.push('--force-empty')
+
+    const run = runCairn(instance, args, text)
+    if (run.error) die(`could not run ${process.argv[1]}: ${run.error.message}`)
+    if (run.stderr) process.stderr.write(String(run.stderr).replace(/^/gm, `${instance}: `))
+    if (run.status !== 0) {
+      die(`cairn add on ${instance} failed (exit ${run.status}); nothing was linked`, run.status === UNDECIDED_EXIT ? UNDECIDED_EXIT : 1)
+    }
+    let created = null
+    try {
+      created = JSON.parse(run.stdout)
+    } catch {
+      created = null
+    }
+    if (!created?.ref) {
+      die(
+        `cairn add on ${instance} exited 0 but named no task:\n${String(run.stdout).slice(0, 400)}\n` +
+          `find it there (external ref ${new URL(BASE).host}/${sourceRef}) and record it: ` +
+          `cairn handoff ${sourceRef} --link <REF> --to ${instance}:${key}`,
+      )
+    }
+    // The external ref is this task's for good: after a take-back, the
+    // destination answers with the task the earlier hand-off filed, which may
+    // be closed. Linking it silently would let the next sync close this one.
+    if (created.duplicate) {
+      die(
+        `${instance} already has ${created.ref} for ${sourceRef}, from an earlier hand-off; nothing new was filed.\n` +
+          `if that is the task, record it again: cairn handoff ${sourceRef} --link ${created.ref} --to ${instance}:${key}`,
+      )
+    }
+    const number = /-(\d+)$/.exec(created.ref)?.[1]
+    return { ref: created.ref, url: created.url ?? `${url}/projects/${key}/tasks/${number}`, instance }
+  },
+  show: (ref, url) => {
+    if (!CAIRN_TASK_REF.test(String(ref))) return { error: `"${ref}" is not a task ref` }
+    const where = instanceForUrl(url)
+    if (!where) {
+      return { error: url ? `no configured instance serves ${originOf(url) ?? url}` : 'no url recorded for it' }
+    }
+    const run = runCairn(where.name, ['show', ref, '--json'])
+    let task = null
+    try {
+      task = run.status === 0 ? JSON.parse(run.stdout) : null
+    } catch {
+      task = null
+    }
+    if (!task?.status) return { error: firstLine(run) }
+    return {
+      status: String(task.status),
+      resolution: task.resolution ? String(task.resolution) : undefined,
+      resolutionKind: task.resolutionKind ?? task.resolution_kind ?? undefined,
+      url: typeof task.url === 'string' ? task.url : null,
+    }
+  },
+}
+
+const resolveGh = () => {
+  const override = process.env.CAIRN_GH_BIN?.trim()
+  if (override) return existsSync(override) ? override : die(`CAIRN_GH_BIN=${override} does not exist`)
+  return findOnPath('gh')
+}
+
+const githubAdapter = {
+  name: 'github',
+  create: ({ target, title, body, sourceRef, sourceUrl }) => {
+    const bin = resolveGh()
+    if (!bin) die('a hand-off to github needs the `gh` CLI on PATH (or CAIRN_GH_BIN), signed in with `gh auth login`')
+    if (!GH_REPO.test(String(target))) die(`"${target}" is not a repository: use owner/repo`)
+    const text = [String(body ?? '').trim(), '---', `Handed off from ${sourceRef}: ${sourceUrl}`].filter(Boolean).join('\n\n')
+    const run = runTool(bin, ['issue', 'create', `--repo=${target}`, `--title=${title}`, '--body-file', '-'], text)
+    if (run.error) die(`could not run ${bin}: ${run.error.message}`)
+    if (run.stderr) process.stderr.write(String(run.stderr).replace(/^/gm, 'gh: '))
+    if (run.status !== 0) die(`gh issue create failed (exit ${run.status}); nothing was linked`)
+    const issue = /https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/issues\/(\d+)/.exec(String(run.stdout))
+    if (!issue) {
+      die(
+        `gh issue create exited 0 but printed no issue URL:\n${String(run.stdout).slice(0, 400)}\n` +
+          `find the issue and record it: cairn handoff ${sourceRef} --link ${target}#<N>`,
+      )
+    }
+    return { ref: `${issue[1]}#${issue[2]}`, url: issue[0] }
+  },
+  show: (ref) => {
+    const bin = resolveGh()
+    if (!bin) return { error: 'no gh CLI here' }
+    const parsed = GH_ISSUE.exec(String(ref))
+    if (!parsed) return { error: `"${ref}" is not owner/repo#N` }
+    const run = runTool(bin, ['issue', 'view', parsed[2], '-R', parsed[1], '--json', 'state,stateReason,url'])
+    let issue = null
+    try {
+      issue = run.status === 0 ? JSON.parse(run.stdout) : null
+    } catch {
+      issue = null
+    }
+    if (!issue?.state) return { error: firstLine(run) }
+    const url = typeof issue.url === 'string' ? issue.url : null
+    if (String(issue.state).toUpperCase() !== 'CLOSED') return { status: 'todo', url }
+    // Only a completed close is done. Not planned, a duplicate, or a reason
+    // never seen before closed the issue without doing the work.
+    if (issue.stateReason == null || String(issue.stateReason).toUpperCase() === 'COMPLETED') {
+      return { status: 'done', resolution: 'closed as completed', url }
+    }
+    const reason = String(issue.stateReason).toLowerCase().replace(/_/g, ' ')
+    return {
+      status: 'cancelled',
+      resolution: `closed as ${reason}`,
+      resolutionKind: String(issue.stateReason).toUpperCase() === 'DUPLICATE' ? 'duplicate' : 'wont-fix',
+      url,
+    }
+  },
+}
+
+const TRACKER_ADAPTERS = { cairn: cairnAdapter, github: githubAdapter }
+const adapterFor = (name) => (Object.hasOwn(TRACKER_ADAPTERS, name) ? TRACKER_ADAPTERS[name] : null)
+
+/**
+ * Where a hand-off goes, out of `--to` or a project's default.
+ *
+ *   work:KDP            instance `work`, project KDP        (a Cairn)
+ *   cairn:work:KDP      the same, when the instance's name is also a tracker's
+ *   github:owner/repo   a GitHub repository
+ *   linear:ENG          any other tracker: only --link can record it
+ */
+const parseHandoffTarget = (value) => {
+  const raw = String(value).trim()
+  const m = /^([a-z0-9][a-z0-9-]{0,31}):(.+)$/.exec(raw)
+  if (!m) die(`"${raw}" is not where a task goes: use <instance>:<KEY> or github:<owner>/<repo>`)
+  const [, head, rest] = m
+  if (head === 'github') return { tracker: 'github', target: rest }
+  if (head === 'cairn') {
+    const n = /^([a-z0-9][a-z0-9-]{0,31}):(.+)$/.exec(rest)
+    if (n) return { tracker: 'cairn', instance: n[1], target: n[2] }
+    // A bare key: the instance is whichever other one this machine has.
+    if (PROJECT_KEY.test(rest.toUpperCase())) return { tracker: 'cairn', instance: null, target: rest }
+    die(`"${raw}" needs a project: cairn:<instance>:<KEY>, or cairn:<KEY> when this machine has one other instance`)
+  }
+  if (INSTANCES && !INSTANCES.error && INSTANCES.instances[head]) return { tracker: 'cairn', instance: head, target: rest }
+  if (!TRACKER_NAME.test(head)) die(`"${head}" is not a tracker name: lowercase letters, digits and dashes`)
+  return { tracker: head, target: rest }
+}
+
+/** The tracker a hand-made link belongs to, when --to did not say. */
+const inferTracker = (link, url) => {
+  if (GH_ISSUE.test(link) || /^https:\/\/github\.com\//i.test(url ?? '')) return 'github'
+  if (CAIRN_TASK_REF.test(link) && (!url || instanceForUrl(url))) return 'cairn'
+  return null
+}
+
+/** This project's default tracker and target, from the server's project list. */
+const projectHandoffDefault = async (key) => {
+  const projects = await request('GET', '/api/v1/projects', undefined, { soft: true })
+  const found = (Array.isArray(projects) ? projects : []).find(
+    (p) => p.key === key || (p.former_keys ?? []).some((f) => f.key === key),
+  )
+  return found?.handoff_tracker && found?.handoff_target
+    ? { tracker: found.handoff_tracker, target: found.handoff_target }
+    : null
+}
+
+/** The body of `cairn handoff`. */
+const handOff = async () => {
+  const usage =
+    'usage: cairn handoff <ref> [--to <instance>:<KEY> | github:<owner>/<repo>]   |   --link <REF> [--url URL]   |   --undo'
+  const ref = need(positional[0], usage)
+
+  if (flags.undo) {
+    const taken = await request('DELETE', `/api/v1/tasks/${ref}/handoff`)
+    if (FORMAT !== 'tsv') return emit(taken)
+    process.stderr.write(`${ref} is back here: its status moves in this instance again; nothing was done in the other tracker\n`)
+    return emit([{ ref, status: taken?.status ?? '', title: truncate(taken?.title, 70) }], { columns: ['ref', 'status', 'title'] })
+  }
+
+  const task = await request('GET', `/api/v1/tasks/${ref}`)
+  const taskRef = task.ref ?? refOfTask(task) ?? String(ref).toUpperCase()
+  const sourceUrl = taskUrl(taskRef)
+  const existing = task.handoff ?? null
+  if (existing) {
+    die(
+      `${taskRef} is already handed off to ${existing.tracker} as ${existing.ref}` +
+        `${existing.status ? ` (${existing.status})` : ''} — \`cairn sync\` pulls its status; --undo takes it back`,
+    )
+  }
+
+  const toGiven = flags.to === undefined ? null : parseHandoffTarget(need(flags.to, '--to needs where it goes, e.g. --to work:KDP or --to github:owner/repo'))
+  const projectKey = /^([A-Za-z][A-Za-z0-9]*)-\d+$/.exec(taskRef)?.[1]?.toUpperCase()
+  const fallback = async () => {
+    const found = projectKey ? await projectHandoffDefault(projectKey) : null
+    if (!found) return null
+    // A project's default is stored as <tracker> and <target>, and the target
+    // cannot hold a colon: a Cairn's is `KEY`, or `<instance>/KEY`.
+    if (found.tracker === 'cairn') return parseHandoffTarget(`cairn:${found.target.replace('/', ':')}`)
+    return parseHandoffTarget(`${found.tracker}:${found.target}`)
+  }
+
+  // A task made by hand: record the link, file nothing.
+  if (flags.link !== undefined) {
+    const linkRef = String(need(flags.link, "--link needs the task's ref in the other tracker, e.g. --link KDP-41")).trim()
+    if (!linkRef || linkRef.length > 200 || /\s/.test(linkRef)) die(`"${linkRef}" is not a task ref: 1-200 characters, no spaces`)
+    let url = flags.url === undefined ? undefined : String(need(flags.url, '--url needs the task\'s address')).trim()
+    const where = toGiven ?? (inferTracker(linkRef, url) ? { tracker: inferTracker(linkRef, url) } : await fallback())
+    if (!where) die(`which tracker is ${linkRef} in? say so: --to <instance>:<KEY>, github:<owner>/<repo> or <tracker>:<target>`)
+    if (!TRACKER_NAME.test(where.tracker)) die(`"${where.tracker}" is not a tracker name: lowercase letters, digits and dashes`)
+    // The server requires the destination's absolute https URL for a Cairn,
+    // and a bare KDP-41 does not say which instance holds it.
+    if (where.tracker === 'cairn' && !url) {
+      const base = where.instance ? INSTANCES?.instances?.[where.instance]?.url?.replace(/\/+$/, '') : null
+      const m = /^([A-Z][A-Z0-9]{1,9})-(\d+)$/.exec(linkRef)
+      if (base && m) url = `${base}/projects/${m[1]}/tasks/${m[2]}`
+      else die(`a hand-off to a Cairn records the task's absolute https URL: add --url https://<host>/projects/<KEY>/tasks/<n>`)
+    }
+    if (where.tracker === 'github' && !url) {
+      const gh = GH_ISSUE.exec(linkRef)
+      if (gh) url = `https://github.com/${gh[1]}/issues/${gh[2]}`
+    }
+    const body = { tracker: where.tracker, ref: linkRef }
+    if (url) body.url = url
+    const linked = await request('POST', `/api/v1/tasks/${taskRef}/handoff`, body)
+    if (FORMAT !== 'tsv') return emit(linked)
+    return emit([{ ref: taskRef, tracker: where.tracker, handoff: linkRef, url: url ?? '', subject: linked?.subject ?? '', title: truncate(task.title, 70) }], {
+      columns: ['ref', 'tracker', 'handoff', 'url', 'subject', 'title'],
+    })
+  }
+
+  let where = toGiven
+  if (!where) {
+    where = await fallback()
+    if (!where) {
+      die(
+        `${taskRef} has nowhere to go: its project has no hand-off default.\n` +
+          `say where: cairn handoff ${taskRef} --to <instance>:<KEY>  or  --to github:<owner>/<repo>`,
+      )
+    }
+    process.stderr.write(`handing off to ${where.tracker} ${where.instance ? `${where.instance}:` : ''}${where.target}, ${projectKey}'s hand-off default\n`)
+  }
+  const adapter = adapterFor(where.tracker)
+  if (!adapter) {
+    die(
+      `no adapter for "${where.tracker}" here (adapters: ${Object.keys(TRACKER_ADAPTERS).join(', ')}): ` +
+        `file it by hand, then cairn handoff ${taskRef} --link <REF> --to ${where.tracker}:<target>`,
+    )
+  }
+
+  const created = adapter.create({
+    instance: where.instance,
+    target: where.target,
+    title: task.title,
+    body: task.description,
+    type: flags.type ?? task.type,
+    priority: task.priority,
+    sourceRef: taskRef,
+    sourceUrl,
+  })
+  // Said before the link is recorded, so a failure below still leaves the
+  // ref on screen rather than a task nobody knows was filed.
+  const holder = created.instance ?? where.instance
+  process.stderr.write(`filed ${created.ref} in ${holder ?? where.tracker}\n`)
+  const body = { tracker: where.tracker, ref: created.ref }
+  if (created.url) body.url = created.url
+  const again = `cairn handoff ${taskRef} --link ${created.ref} --url ${created.url ?? '<URL>'}${holder ? ` --to ${holder}:${where.target}` : ''}`
+  const linked = await request('POST', `/api/v1/tasks/${taskRef}/handoff`, body, {
+    onError: (payload) =>
+      die(`${created.ref} was filed, but the link was refused: ${payload.error}\nrecord it once that is fixed: ${again}`),
+  })
+  if (FORMAT !== 'tsv') return emit({ ref: taskRef, tracker: where.tracker, handoffRef: created.ref, ...(linked && typeof linked === 'object' ? linked : {}) })
+  emit([{ ref: taskRef, tracker: where.tracker, handoff: created.ref, url: created.url ?? '', subject: linked?.subject ?? '', title: truncate(task.title, 70) }], {
+    columns: ['ref', 'tracker', 'handoff', 'url', 'subject', 'title'],
+  })
+  process.stderr.write(`${taskRef} -> ${created.ref}: ${holder ?? where.tracker} owns its status from here; \`cairn sync\` pulls it back\n`)
+}
+
+/** A server refusal for one task of a sync is that row's answer, not the end of the run. */
+class SyncRowError extends Error {}
+
+/** The body of `cairn sync`: read every open hand-off back from where it lives. */
+const syncHandoffs = async () => {
+  const params = new URLSearchParams({ state: 'open' })
+  if (flags.project) params.set('project', flags.project)
+  const open = await request('GET', `/api/v1/handoffs?${params}`)
+  const rows = []
+  for (const item of asList(open, 'handoffs')) {
+    const handoff = item.handoff
+    if (!handoff) continue
+    const row = { ref: item.ref, tracker: handoff.tracker, handoff: handoff.ref }
+    const adapter = adapterFor(handoff.tracker)
+    if (!adapter) {
+      rows.push({ ...row, status: handoff.status ?? '', result: `skipped: no ${handoff.tracker} adapter on this machine` })
+      continue
+    }
+    const shown = adapter.show(handoff.ref, handoff.url)
+    if (!shown.status) {
+      rows.push({ ...row, status: handoff.status ?? '', result: `unread: ${truncate(shown.error ?? 'no answer', 60)}` })
+      continue
+    }
+    const body = { tracker: handoff.tracker, ref: handoff.ref, status: shown.status }
+    if (shown.url && !handoff.url) body.url = shown.url
+    if (TERMINAL.has(shown.status)) {
+      if (shown.resolution) body.resolution = shown.resolution
+      if (shown.resolutionKind) body.resolutionKind = String(shown.resolutionKind)
+    }
+    let linked
+    try {
+      linked = await request('POST', `/api/v1/tasks/${item.ref}/handoff`, body, {
+        onError: (payload) => {
+          throw new SyncRowError(payload.error ?? payload.code ?? 'refused')
+        },
+      })
+    } catch (error) {
+      if (!(error instanceof SyncRowError)) throw error
+      rows.push({ ...row, status: shown.status, result: `refused: ${truncate(error.message, 60)}` })
+      continue
+    }
+    rows.push({
+      ...row,
+      status: shown.status,
+      result: [
+        shown.status === handoff.status ? 'unchanged' : `was ${handoff.status ?? 'unknown'}`,
+        linked?.noted ? 'noted' : '',
+        linked?.closed ? 'closed' : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    })
+  }
+  emit(rows, { columns: ['ref', 'tracker', 'handoff', 'status', 'result'] })
+}
+
+/**
+ * The filters `subject list` and `ideas` share, as a query string. `--mine`
+ * here is whose subject it is (the human behind this key); on tasks it is
+ * what an agent holds, which a subject has no notion of.
+ */
+const subjectQuery = (text, forcedCategory) => {
+  const params = new URLSearchParams()
+  if (text) params.set('q', text)
+  if (flags.stage !== undefined) params.set('stage', splitList(need(flags.stage, '--stage needs a stage name (cairn lab stages)')).join(','))
+  const categories = forcedCategory ? [forcedCategory] : splitList(flags.category)
+  for (const category of categories) {
+    if (!STAGE_CATEGORIES.includes(category)) die(`--category must be one or more of ${STAGE_CATEGORIES.join(', ')}`)
+  }
+  if (categories.length) params.set('category', categories.join(','))
+  const tags = splitList(flags.tag)
+  if (tags.length) params.set('tag', tags.join(',').toLowerCase())
+  if (flags.mine) params.set('owner', 'me')
+  else if (flags.owner !== undefined) params.set('owner', need(flags.owner, '--owner needs me, an email, a name or an id'))
+  if (flags.project !== undefined) params.set('project', need(flags.project, '--project needs a project key, or none'))
+  if (flags.archived !== undefined) {
+    const value = flags.archived === true ? 'include' : String(flags.archived)
+    if (!['include', 'only', 'exclude'].includes(value)) die('--archived takes include (the default when bare), only or exclude')
+    params.set('archived', value)
+  }
+  if (flags.limit) params.set('limit', flags.limit)
+  return String(params) ? `?${params}` : ''
+}
+
 const commands = {
   async check() {
     const q = need(positional[0], 'usage: cairn check "<subject>"')
@@ -3362,7 +4253,12 @@ const commands = {
     for (const r of data.results ?? []) {
       if (r.renamedFrom) tellRename(r.requestedRef, r.renamedFrom, r.ref)
     }
-    const shown = { ...data, results: (data.results ?? []).map((r) => ((r.kind ?? 'task') === 'task' ? withUrl(r) : r)) }
+    const shown = {
+      ...data,
+      results: (data.results ?? []).map((r) =>
+        (r.kind ?? 'task') === 'task' ? withUrl(r) : r.kind === 'subject' ? withSubjectUrl(r) : r,
+      ),
+    }
     emit(shown, {
       rows: (d) =>
         d.results.map((r) => ({
@@ -3401,11 +4297,23 @@ const commands = {
   },
 
   async list() {
-    const project = need(flags.project ?? positional[0], 'usage: cairn list --project <KEY>')
+    // `--subject LAB-12` is the Lab's todos of that subject; with a project it
+    // narrows that project's list, without one it is the subject's own, across
+    // every project it was filed in.
+    const subject = flags.subject === undefined ? undefined : subjectFlag(flags.subject, 'list')
+    if (subject && subject !== 'none' && flags.project === undefined && positional[0] === undefined) {
+      const params = new URLSearchParams()
+      if (flags.status) params.set('status', flags.status)
+      const todos = asList(await request('GET', `/api/v1/subjects/${subject}/todos${String(params) ? `?${params}` : ''}`), 'todos')
+      if (FORMAT !== 'tsv') return emit(todos.map((t) => withUrl(t)))
+      return emit(todos, { rows: (d) => d.map(todoRow), columns: TODO_COLUMNS })
+    }
+    const project = need(flags.project ?? positional[0], 'usage: cairn list --project <KEY>   |   cairn list --subject LAB-12')
     const params = new URLSearchParams()
     for (const k of ['status', 'type', 'label', 'limit', 'offset']) {
       if (flags[k]) params.set(k, flags[k])
     }
+    if (subject) params.set('subject', subject)
     // The server resolves who "mine" is. This used to send
     // `claimed_by=$CAIRN_AGENT`, which guessed the caller from an environment
     // variable and, when it was unset, asked for tasks held by the empty
@@ -3420,6 +4328,12 @@ const commands = {
     else if (external === null) die('--external-ref needs a value to filter on')
     const data = await request('GET', `/api/v1/projects/${project}/tasks?${params}`)
     const listed = { ...data, tasks: data.tasks.map((t) => withUrl({ ...t, ref: t.ref ?? `${t.project?.key ?? project}-${t.number}` })) }
+    // Appended after `url`, and only when a row has them: a reader keyed on the
+    // header never sees an instance without the Lab or a hand-off change shape.
+    const extra = [
+      ...(listed.tasks.some((t) => t.subject) ? ['subject'] : []),
+      ...(listed.tasks.some((t) => t.handoff) ? ['handoff'] : []),
+    ]
     emit(listed, {
       rows: (d) =>
         d.tasks.map((t) => ({
@@ -3432,8 +4346,10 @@ const commands = {
           answered: t.resolution ? 'yes' : '',
           title: truncate(t.title, 70),
           url: t.url ?? '',
+          subject: cellOf(t.subject),
+          handoff: handoffCell(t.handoff),
         })),
-      columns: ['ref', 'status', 'type', 'priority', 'assignee', 'held', 'answered', 'title', 'url'],
+      columns: ['ref', 'status', 'type', 'priority', 'assignee', 'held', 'answered', 'title', 'url', ...extra],
     })
   },
 
@@ -3442,7 +4358,14 @@ const commands = {
     // A digest by default: the answer in full, findings and decisions, a
     // clipped body, and a note of what was withheld. `--full` for everything.
     const suffix = flags.full ? '' : '?view=digest'
-    const data = await request('GET', `/api/v1/tasks/${ref}${suffix}`)
+    // `LAB-12` is a subject, not a task: the task route says so, and where.
+    const data = await request('GET', `/api/v1/tasks/${ref}${suffix}`, undefined, {
+      onError: (payload) => {
+        const href = String(payload.href ?? '')
+        return payload.code === 'not_found' && SUBJECT_HREF.test(href) ? { followed: href.split('/').pop() } : undefined
+      },
+    })
+    if (data?.followed) return showSubject(data.followed.toUpperCase())
     emit(withUrl(named(data)))
     if (FORMAT === 'tsv' && data.omitted) {
       const { descriptionBytes, attemptsAndNotes, tokensToFetchFull } = data.omitted
@@ -3486,6 +4409,8 @@ const commands = {
     const externalRef = externalFlag('external-ref')
     const externalUrl = externalFlag('external-url')
     if (externalRef === null || externalUrl === null) die('--external-ref and --external-url need a value on add')
+    // Likewise before any request: `none` has nothing to unlink on a new task.
+    const subject = flags.subject === undefined ? undefined : subjectFlag(flags.subject, 'add')
 
     /**
      * A bug or a spike with no body is not yet a report — it is a title.
@@ -3588,6 +4513,8 @@ const commands = {
     if (flags.assignee) body.assignee = flags.assignee
     if (externalRef) body.externalRef = externalRef
     if (externalUrl) body.externalUrl = externalUrl
+    // A todo of that subject, filed in this project.
+    if (subject) body.subject = subject
     const created = withUrl(named(await request('POST', `/api/v1/projects/${project}/tasks`, body)))
 
     // The ref was already filed: this is that task, untouched. Nothing is
@@ -3659,6 +4586,11 @@ const commands = {
     const externalUrl = externalFlag('external-url')
     if (externalRef !== undefined) body.externalRef = externalRef
     if (externalUrl !== undefined) body.externalUrl = externalUrl
+    // Links it to a subject, or `none` unlinks. The task stays where it is.
+    if (flags.subject !== undefined) {
+      const subject = subjectFlag(flags.subject, 'update')
+      body.subject = subject === 'none' ? null : subject
+    }
     emit(named(await request('PATCH', `/api/v1/tasks/${ref}`, body)))
   },
 
@@ -3910,7 +4842,7 @@ const commands = {
   async project() {
     const sub = need(
       positional[0],
-      'usage: cairn project <create|rename|rekey|archive|restore|delete> <KEY> [...]',
+      'usage: cairn project <create|rename|rekey|archive|restore|delete|handoff> <KEY> [...]',
     )
     const key = need(positional[1], 'a project key is required')
 
@@ -3991,6 +4923,37 @@ const commands = {
       }))
       return
     }
+
+    /**
+     * Where this project's tasks go on `cairn handoff` with no --to: a tracker
+     * and a target, both or neither. A Cairn's target is its project key, or
+     * `<instance>/KEY` to name the instance (names are this machine's own).
+     */
+    if (sub === 'handoff') {
+      const usage = 'usage: cairn project handoff <KEY> --to <instance>:<KEY>|github:<owner>/<repo>   |   --clear'
+      if (flags.clear) {
+        emit(await request('PATCH', `/api/v1/projects/${key}`, { handoffTracker: null, handoffTarget: null }))
+        return
+      }
+      if (flags.to === undefined) {
+        const shown = await projectHandoffDefault(key.toUpperCase())
+        if (FORMAT !== 'tsv') return emit(shown ?? { handoff_tracker: null, handoff_target: null })
+        return emit(shown ? [{ project: key.toUpperCase(), tracker: shown.tracker, target: shown.target }] : [], {
+          columns: ['project', 'tracker', 'target'],
+        })
+      }
+      const where = parseHandoffTarget(need(flags.to, usage))
+      let target = where.target
+      if (where.tracker === 'cairn') {
+        target = String(where.target).toUpperCase()
+        if (!PROJECT_KEY.test(target)) die(`"${where.target}" is not a project key, e.g. KDP`)
+        if (where.instance) target = `${where.instance}/${target}`
+      } else if (where.tracker === 'github' && !GH_REPO.test(where.target)) {
+        die(`"${where.target}" is not a repository: use owner/repo`)
+      }
+      emit(await request('PATCH', `/api/v1/projects/${key}`, { handoffTracker: where.tracker, handoffTarget: target }))
+      return
+    }
     if (sub === 'delete') {
       // Deleting a project removes every task in it. The API demands the key
       // back as confirmation; require it here too rather than passing it
@@ -4005,7 +4968,461 @@ const commands = {
       emit(await request('DELETE', `/api/v1/projects/${key}?confirm=${encodeURIComponent(key)}`))
       return
     }
-    die(`unknown subcommand "${sub}" — expected create, rename, rekey, archive, restore or delete`)
+    die(`unknown subcommand "${sub}" — expected create, rename, rekey, archive, restore, delete or handoff`)
+  },
+
+  /**
+   * A subject is a thing the lab explores: a technology to evaluate, a proof
+   * of concept, an idea. It carries a write-up, a log, people's notes, files
+   * and tags, moves through stages, and ends with a conclusion. Its todos are
+   * ordinary tasks, so every task verb works on them unchanged.
+   */
+  async subject() {
+    const verb = positional[0]
+    const usage =
+      'usage: cairn subject add|list|show|edit|stage|note|notes|tag|attach|files|todo|archive|restore|delete|mentions …  (cairn help)'
+
+    if (verb === 'add') {
+      const title = need(
+        positional[1],
+        'usage: cairn subject add "<title>" [--stage S] [--tag a,b] [--owner me] [--project K] [--body -] [--conclusion -]',
+      )
+      const body = { title }
+      if (flags.body !== undefined) body.body = await resolveValue(need(flags.body, '--body needs text, or - for stdin'))
+      if (flags.stage !== undefined) body.stage = need(flags.stage, '--stage needs a stage name (cairn lab stages)')
+      const tags = splitList(flags.tag)
+      if (tags.length) body.tags = tags
+      const owner = subjectOwnerFlag()
+      if (owner !== undefined) body.owner = owner
+      const project = subjectProjectFlag()
+      if (project !== undefined) body.project = project
+      if (flags.conclusion !== undefined) {
+        body.conclusion = await resolveValue(need(flags.conclusion, '--conclusion needs text, or - for stdin'))
+      }
+      const created = await request('POST', '/api/v1/subjects', body, {
+        onError: conclusionRefusal(title, flags.stage),
+      })
+      if (FORMAT !== 'tsv') return emit(withSubjectUrl(created))
+      emitSubjects([created])
+      process.stderr.write(`filed ${created.ref} — log as you go: cairn subject note ${created.ref} - --kind finding\n`)
+      return
+    }
+
+    if (verb === 'list') {
+      return emitSubjects(asList(await request('GET', `/api/v1/subjects${subjectQuery(positional[1])}`), 'subjects'))
+    }
+
+    if (verb === 'show') {
+      return showSubject(subjectArg(positional[1], 'usage: cairn subject show LAB-12 [--full]'))
+    }
+
+    if (verb === 'edit') {
+      const ref = subjectArg(
+        positional[1],
+        'usage: cairn subject edit LAB-12 [--title T] [--body -] [--owner me|none] [--project K|none] [--conclusion -|none]',
+      )
+      const patch = {}
+      if (flags.title !== undefined) patch.title = need(flags.title, '--title needs text')
+      if (flags.body !== undefined) patch.body = await resolveValue(need(flags.body, '--body needs text, or - for stdin'))
+      const owner = subjectOwnerFlag()
+      if (owner !== undefined) patch.owner = owner
+      const project = subjectProjectFlag()
+      if (project !== undefined) patch.project = project
+      if (flags.conclusion !== undefined) {
+        const value = await resolveValue(need(flags.conclusion, '--conclusion needs text, or - for stdin'))
+        patch.conclusion = value.toLowerCase() === 'none' ? null : value
+      }
+      const position = positionFlag()
+      if (position !== undefined) patch.position = position
+      if (!Object.keys(patch).length) die('nothing to change — pass --title, --body, --owner, --project, --conclusion or --position')
+      const updated = await request('PATCH', `/api/v1/subjects/${ref}`, patch, { onError: conclusionRefusal(ref) })
+      return FORMAT === 'tsv' ? emitSubjects([updated]) : emit(withSubjectUrl(updated))
+    }
+
+    if (verb === 'stage') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject stage LAB-12 "<stage>" [--conclusion -]')
+      const stage = need(positional[2], `usage: cairn subject stage ${ref} "<stage>" [--conclusion -]   (cairn lab stages lists them)`)
+      const patch = { stage }
+      if (flags.conclusion !== undefined) {
+        patch.conclusion = await resolveValue(need(flags.conclusion, '--conclusion needs text, or - for stdin'))
+      }
+      const updated = await request('PATCH', `/api/v1/subjects/${ref}`, patch, { onError: conclusionRefusal(ref, stage) })
+      return FORMAT === 'tsv' ? emitSubjects([updated]) : emit(withSubjectUrl(updated))
+    }
+
+    if (verb === 'note') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject note LAB-12 "<text>"|- [--kind finding|decision|attempt|note|handoff]')
+      const note = await resolveValue(need(positional[2], 'a note body is required ("<text>", or - for stdin)'))
+      const kind = flags.kind ?? 'note'
+      if (kind === 'stage') die('--kind stage is the server\'s: it writes one itself on every stage move (cairn subject stage)')
+      if (!SUBJECT_NOTE_KINDS.includes(kind)) die(`--kind must be one of ${SUBJECT_NOTE_KINDS.join(', ')}`)
+      emit(await request('POST', `/api/v1/subjects/${ref}/notes`, { note, kind }))
+      if (!flags.kind && FORMAT === 'tsv' && DEAD_END.test(note)) {
+        process.stderr.write(
+          `reads like a dead end — \`cairn subject note ${ref} - --kind attempt\` marks it so the next agent does not retry it\n`,
+        )
+      }
+      return
+    }
+
+    if (verb === 'notes') {
+      // People's notes (the cards on the subject page), not the work log: read
+      // them here, and write what you found to the log with `note`.
+      const ref = subjectArg(positional[1], 'usage: cairn subject notes LAB-12')
+      const list = asList(await request('GET', `/api/v1/subjects/${ref}/human-notes`), 'notes')
+      return emit(list, {
+        lines: (d) =>
+          d.length === 0
+            ? [`no notes from people on ${ref}`]
+            : d.flatMap((n) => [
+                `${localStamp(n.created_at)}  ${n.author?.name ?? n.actor_id ?? ''}` +
+                  `${n.updated_at && n.updated_at !== n.created_at ? `  (edited ${localStamp(n.updated_at)})` : ''}`,
+                ...indent(String(n.body ?? ''), '    '),
+              ]),
+      })
+    }
+
+    if (verb === 'tag') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject tag LAB-12 +x -y')
+      const { add, remove } = tagChanges(positional.slice(2))
+      if (!add.length && !remove.length) die(`usage: cairn subject tag ${ref} +x -y   (cairn lab tags lists them)`)
+      const current = await request('GET', `/api/v1/subjects/${ref}`)
+      const names = new Set((current.tags ?? []).map((t) => cellOf(t).toLowerCase()))
+      for (const t of add) names.add(t)
+      for (const t of remove) names.delete(t)
+      const updated = await request('PATCH', `/api/v1/subjects/${ref}`, { tags: [...names] })
+      return FORMAT === 'tsv' ? emitSubjects([updated]) : emit(withSubjectUrl(updated))
+    }
+
+    if (verb === 'attach') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject attach LAB-12 <file>')
+      const file = need(positional[2], `usage: cairn subject attach ${ref} <file>`)
+      process.stderr.write(`uploading ${basename(file)} (${statSync(file).size} bytes, ${mimeOf(file)})\n`)
+      const added = await upload(`/api/v1/subjects/${ref}/attachments`, file)
+      if (FORMAT === 'tsv' && String(added?.mime_type ?? '').startsWith('image/') && added.content_url) {
+        process.stderr.write(`embed it in the write-up with ![${added.filename}](${added.content_url})\n`)
+      }
+      return emit(added)
+    }
+
+    if (verb === 'files') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject files LAB-12')
+      const list = asList(await request('GET', `/api/v1/subjects/${ref}/attachments`), 'files')
+      return emit(list, {
+        rows: (d) =>
+          d.map((a) => ({
+            id: a.id,
+            name: a.filename,
+            type: a.mime_type,
+            bytes: a.size_bytes,
+            by: a.uploaded_by ?? '',
+            url: a.content_url ? `${BASE}${a.content_url}` : '',
+          })),
+        columns: ['id', 'name', 'type', 'bytes', 'by', 'url'],
+      })
+    }
+
+    if (verb === 'todo') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject todo LAB-12 "<title>" [--body -] [--type T] [--priority P]')
+      const title = need(positional[2], `usage: cairn subject todo ${ref} "<title>" [--body -]`)
+      const body = { title }
+      if (flags.body !== undefined) body.description = await resolveValue(need(flags.body, '--body needs text, or - for stdin'))
+      for (const k of ['type', 'priority', 'status']) if (flags[k]) body[k] = flags[k]
+      if (flags.assignee) body.assignee = flags.assignee
+      const todo = withUrl(named(await request('POST', `/api/v1/subjects/${ref}/todos`, body)))
+      // As `add` does for a runtime: the agent that files a todo is about to do it.
+      const start = Boolean(flags.start) || (!flags['no-start'] && !flags.status && Boolean(AGENT))
+      if (start && todo.ref) {
+        const held = await request('POST', `/api/v1/tasks/${todo.ref}/claim`, {}, { soft: !flags.start })
+        if (held) {
+          if (!flags.start) process.stderr.write(`claimed ${todo.ref} (agents' todos start the work; --no-start to only file it)\n`)
+          return emit({ ...todo, status: held.status ?? todo.status, claimed_by: held.claimed_by ?? todo.claimed_by })
+        }
+        process.stderr.write(`filed ${todo.ref} but could not claim it — \`cairn claim ${todo.ref}\`\n`)
+      }
+      return emit(todo)
+    }
+
+    if (verb === 'archive' || verb === 'restore') {
+      const ref = subjectArg(positional[1], `usage: cairn subject ${verb} LAB-12`)
+      const updated = await request('PATCH', `/api/v1/subjects/${ref}`, { archived: verb === 'archive' })
+      if (FORMAT !== 'tsv') return emit(withSubjectUrl(updated))
+      emitSubjects([updated])
+      process.stderr.write(
+        verb === 'archive'
+          ? `${ref} is off the board and still searchable; cairn subject restore ${ref} puts it back\n`
+          : `${ref} is back on the board\n`,
+      )
+      return
+    }
+
+    if (verb === 'delete') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject delete LAB-12 --confirm LAB-12 [--detach-todos]')
+      // Permanent, so the ref is typed twice, as for a project delete: an
+      // agent cannot delete a subject by getting one argument wrong. Archiving
+      // is the way to retire one; this is for mistakes and duplicates.
+      if (String(flags.confirm ?? '').toUpperCase() !== ref) {
+        die(
+          `This permanently deletes ${ref}, its log, notes, files and tag links. Its todos are never deleted ` +
+            `(--detach-todos only unlinks them). Archiving keeps everything: cairn subject archive ${ref}.\n` +
+            `Re-run with --confirm ${ref} if that is what you want.`,
+        )
+      }
+      const detach = flags['detach-todos'] ? '&todos=detach' : ''
+      const deleted = await request('DELETE', `/api/v1/subjects/${ref}?confirm=${encodeURIComponent(ref)}${detach}`, undefined, {
+        onError: (payload) => {
+          if (payload.code !== 'subject_has_todos') return undefined
+          return die(
+            `${ref} has ${payload.todos ?? 'some'} todo(s) (${payload.open ?? '?'} open): ${payload.error}\n` +
+              `deleting never deletes a todo. cairn subject delete ${ref} --confirm ${ref} --detach-todos unlinks them and ` +
+              `deletes the subject; or close them first.`,
+          )
+        },
+      })
+      if (FORMAT !== 'tsv') return emit(deleted)
+      process.stderr.write(`deleted ${ref}: ${deleted.todos_detached ?? 0} todo(s) detached, ${deleted.files_removed ?? 0} file(s) removed\n`)
+      return
+    }
+
+    if (verb === 'mentions') {
+      const ref = subjectArg(positional[1], 'usage: cairn subject mentions LAB-12 [--limit N]')
+      const params = new URLSearchParams()
+      if (flags.limit) params.set('limit', flags.limit)
+      const found = await request('GET', `/api/v1/subjects/${ref}/mentions${String(params) ? `?${params}` : ''}`)
+      return emit(found, {
+        rows: (d) =>
+          asList(d, 'items').map((m) => ({
+            ref: m.ref,
+            status: m.status,
+            source: m.source ?? '',
+            at: localStamp(m.at),
+            title: truncate(m.title, 60),
+            excerpt: truncate(String(m.excerpt ?? '').replace(/\s+/g, ' '), 80),
+          })),
+        columns: ['ref', 'status', 'source', 'at', 'title', 'excerpt'],
+      })
+    }
+
+    return die(verb ? `unknown subject verb "${verb}"\n${usage}` : usage)
+  },
+
+  /** `cairn idea "<title>"`: a subject, in the first planned stage. */
+  async idea() {
+    const title = need(positional[0], 'usage: cairn idea "<title>" [--body -] [--tag a,b] [--owner me] [--project K]')
+    if (flags.stage !== undefined || flags.conclusion !== undefined) {
+      die('an idea goes in the first planned stage and has no conclusion yet: use cairn subject add for --stage and --conclusion')
+    }
+    const body = { title }
+    if (flags.body !== undefined) body.body = await resolveValue(need(flags.body, '--body needs text, or - for stdin'))
+    const tags = splitList(flags.tag)
+    if (tags.length) body.tags = tags
+    const owner = subjectOwnerFlag()
+    if (owner !== undefined) body.owner = owner
+    const project = subjectProjectFlag()
+    if (project !== undefined) body.project = project
+    const created = await request('POST', '/api/v1/subjects', body)
+    if (FORMAT !== 'tsv') return emit(withSubjectUrl(created))
+    emitSubjects([created])
+    process.stderr.write(`filed ${created.ref} as an idea (${cellOf(created.stage)}); cairn subject stage ${created.ref} "<stage>" starts it\n`)
+  },
+
+  /** The planned-category subjects: what the lab has not started. */
+  async ideas() {
+    if (flags.category !== undefined || flags.stage !== undefined) {
+      die('cairn ideas lists the planned stages; cairn subject list takes --stage and --category')
+    }
+    return emitSubjects(asList(await request('GET', `/api/v1/subjects${subjectQuery(positional[0], 'planned')}`), 'subjects'))
+  },
+
+  /**
+   * The lab's switch and its curated lists. Only the switch and the home
+   * project are a human administrator's; stages and tags are shared
+   * configuration, which an administrator's agent may edit too.
+   */
+  async lab() {
+    const verb = positional[0]
+    const forbidden = (what) => (payload, status) => {
+      if (status !== 403 && payload.code !== 'forbidden') return undefined
+      return die(`${payload.error}\n${what}`)
+    }
+    const humanOnly = forbidden('switching the Lab and choosing its home project are for a human administrator: an agent key is refused, even an administrator\'s. Use Settings in the web app.')
+    const adminOnly = forbidden('changing stages and tags needs an administrator.')
+
+    if (verb === undefined || verb === 'show' || verb === 'settings') {
+      const settings = await request('GET', '/api/v1/lab/settings')
+      rememberLab(settings?.enabled === true)
+      if (FORMAT !== 'tsv') return emit(settings)
+      emit(settings)
+      if (!settings?.enabled) process.stderr.write('the Lab is off here; a human administrator switches it on: cairn lab on\n')
+      return
+    }
+
+    if (verb === 'on' || verb === 'off') {
+      const settings = await request('PUT', '/api/v1/lab/settings', { enabled: verb === 'on' }, { onError: humanOnly })
+      rememberLab(settings?.enabled === true)
+      return emit(settings)
+    }
+
+    if (verb === 'home') {
+      const key = need(positional[1], 'usage: cairn lab home <KEY>|default')
+      const settings = await request(
+        'PUT',
+        '/api/v1/lab/settings',
+        { homeProject: String(key).toLowerCase() === 'default' ? null : key },
+        { onError: humanOnly },
+      )
+      return emit(settings)
+    }
+
+    if (verb === 'stages') {
+      const sub = positional[1]
+      if (sub === undefined || sub === 'list') {
+        const stages = asList(await request('GET', '/api/v1/lab/stages'), 'stages')
+        return emit(stages, {
+          rows: (d) =>
+            [...d]
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+              .map((s) => ({
+                stage: s.name,
+                category: s.category,
+                color: s.color ?? '',
+                conclusion: ['completed', 'dropped'].includes(s.category) ? 'required' : '',
+              })),
+          columns: ['stage', 'category', 'color', 'conclusion'],
+        })
+      }
+      const stagesPath = '/api/v1/lab/stages'
+      const stageIdOf = async (wanted) => pickByName(asList(await request('GET', stagesPath), 'stages'), wanted, 'stage')
+
+      if (sub === 'add') {
+        const name = need(positional[2], `usage: cairn lab stages add "<name>" --category ${STAGE_CATEGORIES.join('|')} [--color #rrggbb] [--position N]`)
+        const category = String(need(flags.category, `--category is required: ${STAGE_CATEGORIES.join(', ')}`)).toLowerCase()
+        if (!STAGE_CATEGORIES.includes(category)) die(`--category must be one of ${STAGE_CATEGORIES.join(', ')}`)
+        const body = { name, category }
+        const color = colorFlag()
+        if (color !== undefined) body.color = color
+        const position = positionFlag()
+        if (position !== undefined) body.position = position
+        return emit(await request('POST', stagesPath, body, { onError: adminOnly }))
+      }
+
+      if (sub === 'edit') {
+        const wanted = need(positional[2], 'usage: cairn lab stages edit <name|id> [--name N] [--category C] [--color #rrggbb] [--position N]')
+        const patch = {}
+        if (flags.name !== undefined) patch.name = need(flags.name, '--name needs the new name')
+        if (flags.category !== undefined) {
+          const category = String(need(flags.category, '--category needs a category')).toLowerCase()
+          if (!STAGE_CATEGORIES.includes(category)) die(`--category must be one of ${STAGE_CATEGORIES.join(', ')}`)
+          patch.category = category
+        }
+        const color = colorFlag()
+        if (color !== undefined) patch.color = color
+        const position = positionFlag()
+        if (position !== undefined) patch.position = position
+        if (!Object.keys(patch).length) die('nothing to change — pass --name, --category, --color or --position')
+        const stage = await stageIdOf(wanted)
+        return emit(await request('PATCH', `${stagesPath}/${stage.id}`, patch, { onError: adminOnly }))
+      }
+
+      if (sub === 'remove') {
+        const wanted = need(positional[2], 'usage: cairn lab stages remove <name|id>')
+        const stage = await stageIdOf(wanted)
+        return emit(
+          await request('DELETE', `${stagesPath}/${stage.id}`, undefined, {
+            onError: (payload, status) => {
+              if (payload.code === 'stage_in_use') {
+                return die(
+                  `${stage.name} holds ${payload.subjects ?? 'some'} subject(s), archived ones included: ` +
+                    'move them to another stage first (cairn subject stage LAB-n "<stage>").',
+                )
+              }
+              return adminOnly(payload, status)
+            },
+          }),
+        )
+      }
+
+      if (sub === 'order') {
+        const named = splitList(positional.slice(2))
+        if (!named.length) die('usage: cairn lab stages order "<name>,<name>,…"   (every stage, once, in board order)')
+        const stages = asList(await request('GET', stagesPath), 'stages')
+        const ids = named.map((n) => pickByName(stages, n, 'stage').id)
+        const missing = stages.filter((s) => !ids.includes(s.id)).map((s) => s.name)
+        if (missing.length || new Set(ids).size !== ids.length) {
+          die(`name every stage exactly once${missing.length ? `; missing: ${missing.join(', ')}` : ''}`)
+        }
+        return emit(await request('POST', `${stagesPath}/reorder`, { ids }, { onError: adminOnly }), {
+          rows: (d) => d.map((s) => ({ stage: s.name, category: s.category, position: s.position })),
+          columns: ['stage', 'category', 'position'],
+        })
+      }
+
+      return die(`unknown stages verb "${sub}" — try: list, add, edit, remove, order`)
+    }
+
+    if (verb === 'tags') {
+      const sub = positional[1]
+      const tagsPath = '/api/v1/lab/tags'
+      if (sub === undefined || sub === 'list') {
+        const tags = asList(await request('GET', tagsPath), 'tags')
+        return emit(tags, {
+          rows: (d) => d.map((t) => ({ tag: t.name, color: t.color ?? '' })),
+          columns: ['tag', 'color'],
+        })
+      }
+      const tagOf = async (wanted) => pickByName(asList(await request('GET', tagsPath), 'tags'), wanted, 'tag')
+
+      if (sub === 'add') {
+        const name = need(positional[2], 'usage: cairn lab tags add "<name>" [--color #rrggbb] [--position N]')
+        const body = { name }
+        const color = colorFlag()
+        if (color !== undefined) body.color = color
+        const position = positionFlag()
+        if (position !== undefined) body.position = position
+        return emit(await request('POST', tagsPath, body, { onError: adminOnly }))
+      }
+
+      if (sub === 'edit') {
+        const wanted = need(positional[2], 'usage: cairn lab tags edit <name|id> [--name N] [--color #rrggbb] [--position N]')
+        const patch = {}
+        if (flags.name !== undefined) patch.name = need(flags.name, '--name needs the new name')
+        const color = colorFlag()
+        if (color !== undefined) patch.color = color
+        const position = positionFlag()
+        if (position !== undefined) patch.position = position
+        if (!Object.keys(patch).length) die('nothing to change — pass --name, --color or --position')
+        const tag = await tagOf(wanted)
+        return emit(await request('PATCH', `${tagsPath}/${tag.id}`, patch, { onError: adminOnly }))
+      }
+
+      if (sub === 'remove') {
+        const tag = await tagOf(need(positional[2], 'usage: cairn lab tags remove <name|id>'))
+        return emit(await request('DELETE', `${tagsPath}/${tag.id}`, undefined, { onError: adminOnly }))
+      }
+
+      return die(`unknown tags verb "${sub}" — try: list, add, edit, remove`)
+    }
+
+    return die(`unknown lab verb "${verb}" — try: on, off, home, stages, tags`)
+  },
+
+  /**
+   * `handoff <ref>` is the hand-over: the work is committed, which belongs in
+   * a tracker. It files the task there through the adapter and records the
+   * link; from then on that tracker owns the status and `cairn sync` reads it
+   * back. Not a Lab feature: it works on any task.
+   *
+   *   handoff <ref> [--to <instance>:<KEY> | github:<owner>/<repo>]
+   *   handoff <ref> --link <REF> [--url URL]       a task made by hand
+   *   handoff <ref> --undo                         take it back (nothing is done there)
+   */
+  async handoff() {
+    return handOff()
+  },
+
+  /** Read the status of every handed-off task back, through each tracker's own CLI and credentials. */
+  async sync() {
+    return syncHandoffs()
   },
 
   async claim() {
@@ -4773,6 +6190,9 @@ const commands = {
     if (repo) params.set('repo', repo)
     if (flags.file) params.set('file', flags.file)
     const data = await request('GET', `/api/v1/context?${params}`)
+    // The one request every session makes: it is how help learns whether the
+    // Lab is on here, without sending anything itself.
+    rememberLab(Boolean(data?.lab))
     if (FORMAT === 'json') return emit(data)
     process.stdout.write(renderContext(data, { fileOnly: Boolean(flags.file) }))
   },
@@ -5211,8 +6631,14 @@ const commands = {
       if (flags['no-skill']) {
         line('– skill     skipped (--no-skill) · re-run without it to install it')
       } else {
+        // The skill is a folder: SKILL.md, and the Lab's workflow in lab.md
+        // beside it, which SKILL.md points at. Copying only the first would
+        // leave that pointer dangling on every runtime.
         const skillSource = join(releaseDir, 'skills', 'cairn', 'SKILL.md')
         const skillSourceBuf = existsSync(skillSource) ? readFileSync(skillSource) : null
+        const skillExtras = ['lab.md']
+          .filter((name) => existsSync(join(releaseDir, 'skills', 'cairn', name)))
+          .map((name) => ({ name, buf: readFileSync(join(releaseDir, 'skills', 'cairn', name)) }))
         const skillTargets = []
         if (runtimes.includes('claude-code')) skillTargets.push(join(HOME, '.claude', 'skills', 'cairn', 'SKILL.md'))
         if (runtimes.includes('codex')) skillTargets.push(join(HOME, '.codex', 'skills', 'cairn', 'SKILL.md'))
@@ -5221,22 +6647,30 @@ const commands = {
           if (clawdHome) skillTargets.push(join(clawdHome, 'skills', 'cairn', 'SKILL.md'))
           else line('! skill     openclaw: $CLAWD_HOME is not set — copy skills/cairn to its skills directory by hand')
         }
+        const skillFiles = skillSourceBuf
+          ? skillTargets.flatMap((target) => [
+              { path: target, buf: skillSourceBuf },
+              ...skillExtras.map((extra) => ({ path: join(dirname(target), extra.name), buf: extra.buf })),
+            ])
+          : []
+        const outOfDate = (file) => !(existsSync(file.path) && readFileSync(file.path).equals(file.buf))
+        const folders = (files) => [...new Set(files.map((f) => tilde(dirname(f.path))))].join(', ')
         if (!skillSourceBuf && skillTargets.length) {
           line(`! skill     ${skillSource} not found in the release — skipped`)
         } else if (dry) {
-          const changed = skillTargets.filter((t) => !(existsSync(t) && readFileSync(t).equals(skillSourceBuf)))
-          if (changed.length) line(`! skill     would write ${changed.map((t) => tilde(dirname(t))).join(', ')}`)
-          else if (skillTargets.length) line(`– skill     ${skillTargets.map((t) => tilde(dirname(t))).join(', ')} — unchanged`)
+          const changed = skillFiles.filter(outOfDate)
+          if (changed.length) line(`! skill     would write ${folders(changed)}`)
+          else if (skillTargets.length) line(`– skill     ${folders(skillFiles)} — unchanged`)
         } else {
           const written = []
-          for (const target of skillTargets) {
-            if (existsSync(target) && readFileSync(target).equals(skillSourceBuf)) continue
-            mkdirSync(dirname(target), { recursive: true })
-            writeFileSync(target, skillSourceBuf)
-            written.push(tilde(dirname(target)))
+          for (const file of skillFiles) {
+            if (!outOfDate(file)) continue
+            mkdirSync(dirname(file.path), { recursive: true })
+            writeFileSync(file.path, file.buf)
+            written.push(file)
           }
-          if (written.length) line(`✓ skill     ${written.join(', ')}`)
-          else if (skillTargets.length) line(`– skill     ${skillTargets.map((t) => tilde(dirname(t))).join(', ')} — unchanged`)
+          if (written.length) line(`✓ skill     ${folders(written)}`)
+          else if (skillTargets.length) line(`– skill     ${folders(skillFiles)} — unchanged`)
         }
       }
 
@@ -5670,7 +7104,7 @@ if (flags.version || command === 'version') {
 }
 
 if (!command || flags.help || command === 'help') {
-  process.stdout.write(HELP)
+  process.stdout.write(helpText())
   process.exit(0)
 }
 if (!commands[command]) {
@@ -5685,7 +7119,7 @@ if (!commands[command]) {
  * under that instance's own maintenance key. With one instance it changes
  * nothing, which is why install-cron can always pass it.
  */
-const FANS_OUT = new Set(['reconcile', 'vitals'])
+const FANS_OUT = new Set(['reconcile', 'vitals', 'sync'])
 /**
  * The task one instance reports to, out of `--notify personal:CAIRN-107,work:OPS-3`.
  * Only vitals reports, so only vitals looks: reading the flag for reconcile

@@ -453,10 +453,19 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn map <KEY>` | Tell Cairn which project this checkout is. Validates the key, and claims the repository so every other clone and worktree resolves too. `cairn map none` releases both |
 | `cairn project create <KEY> "<title>"` · `cairn project rename\|archive\|restore\|delete <KEY>` | Deleting takes every task with it, and demands `--confirm <KEY>` |
 | `cairn project rekey <KEY> <NEW>` · `cairn project rename <KEY> --key <NEW>` | Change the key. Every ref is renumbered under the new key, the old refs keep resolving, and the old key cannot be given to another project. Anything reached through a retired key says so — `AC-113 is now HOL-113`, `note: project AC is now HOL` — on stderr, and as `requested_ref` / `renamed_from` in the JSON. `cairn projects` lists former keys in a trailing `was` column |
+| **The Lab** (where an administrator has switched it on) | |
+| `cairn idea "<title>"` · `cairn ideas` | File an idea (a subject in the first planned stage), and list the planned ones |
+| `cairn subject add\|list\|show\|edit\|stage\|note\|notes\|tag\|attach\|files\|todo\|archive\|restore\|delete\|mentions` | A subject (`LAB-12`) is something being explored or proved: a stage, a write-up, a log, tags and a conclusion. `stage … --conclusion -` is required to enter a completed or dropped stage; `todo` files an ordinary task that belongs to it; `show` is a digest (`cairn show LAB-12` goes there too); `delete` needs `--confirm` and refuses while it has todos, and never deletes one |
+| `cairn add … --subject LAB-12` · `cairn update <ref> --subject LAB-12\|none` · `cairn list --subject LAB-12` | Link a task to a subject, unlink it, or list a subject's todos across projects |
+| `cairn lab` · `cairn lab stages\|tags [add\|edit\|remove\|order]` · `cairn lab on\|off\|home <KEY>` | The settings and the curated stages and tags. Switching it on or off and choosing its home project are a human administrator's; an agent key is refused |
+| **Hand-off** | |
+| `cairn handoff <ref> [--to <instance>:<KEY>\|github:<owner>/<repo>]` | The work leaves this instance: files it in another configured instance (through that instance's own CLI) or as a GitHub issue (through `gh`), and records the link here with the destination's absolute https URL. `--to` is optional when the project has a hand-off default. From then on the other tracker owns the status, and claiming, closing or moving the task here is refused (`handed_off`). `--link <REF> [--url URL]` records a task made by hand; `--undo` takes it back |
+| `cairn project handoff <KEY> [--to <instance>:<KEY>\|github:<owner>/<repo> \| --clear]` | The project's default for `--to`; bare shows it. A Cairn's target is stored as `KEY`, or `<instance>/KEY` (instance names are this machine's own) |
+| `cairn sync [--project K] [--all-instances]` | Read every handed-off task's status back; one that ended there is closed here once, with their resolution |
 | **Several instances** | |
 | `cairn instance [list]` · `cairn instance add <name> --url U [--default] [--adopt]` · `cairn instance policy ask\|default <name>` | Several Cairn instances on one machine: which one a command uses, adding one, and what a directory with no route does ([more](#several-instances-on-one-machine)) |
 | `cairn route` · `cairn route add <instance> [--folder\|--session]` · `cairn route list\|pending\|remove` | Which instance this directory belongs to, saving the answer, and the sessions waiting for one |
-| `--instance <name>` (any command) · `--all-instances` (`reconcile`, `vitals`) | Send this one command to that instance, or run the job once per instance |
+| `--instance <name>` (any command) · `--all-instances` (`reconcile`, `vitals`, `sync`) | Send this one command to that instance, or run the job once per instance |
 
 `cairn --help` is the full reference.
 

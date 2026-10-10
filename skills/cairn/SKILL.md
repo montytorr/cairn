@@ -240,6 +240,9 @@ above anything not begun, your human's first within each; another's says whose. 
 or actively held work is absent, not ranked last. A renamed key (`AC-113 is now HOL-113`)
 keeps resolving — write the new ref.
 
+**Lab on** (`cairn lab`)? Exploring an idea is a subject, `LAB-n`: read `lab.md` beside
+this file. `cairn handoff` (work leaving this instance) is there too.
+
 ## Before you stop
 
 Close what you finished (resolution, right `--kind`); `note --kind attempt` what failed;
