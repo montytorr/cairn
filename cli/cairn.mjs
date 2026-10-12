@@ -26,6 +26,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  rmdirSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -3294,6 +3295,15 @@ const deriveInstanceName = (url) => {
 
 /** Filesystem signals for a runtime being on this machine, independent of what process is running this. */
 const SETUP_RUNTIME_DIRS = { 'claude-code': join(HOME, '.claude'), codex: join(HOME, '.codex') }
+
+// Codex reads ~/.agents/skills and the deprecated ~/.codex/skills and lists a
+// skill in both twice, so it gets the first. Not in a home OpenClaw also uses:
+// its Codex harness may discover a shared ~/.agents/skills, and it already has
+// the skill from $CLAWD_HOME, so writing there would list it twice for
+// OpenClaw. That home keeps ~/.codex/skills as before (the same test is in
+// scripts/sync-agent-files.mjs).
+const openclawSharesHomeFor = (runtimes) => runtimes.includes('openclaw') || Boolean(process.env.CLAWD_HOME?.trim())
+const codexSkillsDir = (runtimes) => join(HOME, openclawSharesHomeFor(runtimes) ? '.codex' : '.agents', 'skills', 'cairn')
 const onSetupPath = (bin) => (process.env.PATH ?? '').split(':').some((dir) => dir && existsSync(join(dir, bin)))
 /** The first `bin` a shell with this PATH would run, or null. The PATH is a parameter so tests need not trust the host's. */
 const whichOnPath = (bin, pathEnv = process.env.PATH ?? '') => {
@@ -7038,9 +7048,11 @@ const commands = {
         const skillExtras = ['lab.md', 'reference.md']
           .filter((name) => existsSync(join(releaseDir, 'skills', 'cairn', name)))
           .map((name) => ({ name, buf: readFileSync(join(releaseDir, 'skills', 'cairn', name)) }))
+        const openclawSharesHome = openclawSharesHomeFor(runtimes)
+        const codexSkills = codexSkillsDir(runtimes)
         const skillTargets = []
         if (runtimes.includes('claude-code')) skillTargets.push(join(HOME, '.claude', 'skills', 'cairn', 'SKILL.md'))
-        if (runtimes.includes('codex')) skillTargets.push(join(HOME, '.codex', 'skills', 'cairn', 'SKILL.md'))
+        if (runtimes.includes('codex')) skillTargets.push(join(codexSkills, 'SKILL.md'))
         if (runtimes.includes('openclaw')) {
           const clawdHome = process.env.CLAWD_HOME?.trim()
           if (clawdHome) skillTargets.push(join(clawdHome, 'skills', 'cairn', 'SKILL.md'))
@@ -7070,6 +7082,15 @@ const commands = {
           }
           if (written.length) line(`✓ skill     ${folders(written)}`)
           else if (skillTargets.length) line(`– skill     ${folders(skillFiles)} — unchanged`)
+          // Codex merges ~/.agents/skills and the deprecated ~/.codex/skills
+          // by path, so a skill left in both is listed twice.
+          if (runtimes.includes('codex') && !openclawSharesHome && existsSync(join(codexSkills, 'SKILL.md'))) {
+            const oldCodex = join(HOME, '.codex', 'skills', 'cairn')
+            const retired = ['SKILL.md', 'lab.md', 'reference.md'].filter((name) => existsSync(join(oldCodex, name)))
+            for (const name of retired) rmSync(join(oldCodex, name), { force: true })
+            try { rmdirSync(oldCodex) } catch {}
+            if (retired.length) line(`✓ skill     retired ${tilde(oldCodex)} (Codex reads ~/.agents/skills)`)
+          }
         }
       }
 
@@ -7170,7 +7191,7 @@ const commands = {
         hermes: '`hermes config get hooks`',
       }
       const clawdSkills = process.env.CLAWD_HOME?.trim() ? `${tilde(join(process.env.CLAWD_HOME.trim(), 'skills', 'cairn'))}` : null
-      const skillHomes = { 'claude-code': '~/.claude/skills/cairn', codex: '~/.codex/skills/cairn', openclaw: clawdSkills }
+      const skillHomes = { 'claude-code': '~/.claude/skills/cairn', codex: tilde(codexSkillsDir(hookRuntimes)), openclaw: clawdSkills }
       const hooksAt = hookRuntimes.map((r) => hookHomes[r]).filter(Boolean)
       const skillsAt = hookRuntimes.map((r) => skillHomes[r]).filter(Boolean)
       if (hooksAt.length) line(`  hooks   delete the entries naming ~/.cairn/hooks in ${hooksAt.join(', ')}`)

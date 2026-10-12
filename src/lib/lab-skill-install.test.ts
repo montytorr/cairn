@@ -87,7 +87,7 @@ const serve = () =>
     server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as { port: number }).port}`))
   })
 
-const skillFolders = (home: string) => [join(home, '.claude/skills/cairn'), join(home, '.codex/skills/cairn')]
+const skillFolders = (home: string) => [join(home, '.claude/skills/cairn'), join(home, '.agents/skills/cairn')]
 
 describe('cairn setup carries the whole skill folder', () => {
   it('writes lab.md and reference.md beside SKILL.md for every runtime, and says nothing changed the second time', async () => {
@@ -110,6 +110,49 @@ describe('cairn setup carries the whole skill folder', () => {
 
     const second = await exec(args, env)
     expect(second.stdout).toMatch(/– skill\s+.*unchanged/)
+  })
+
+  it('setup retires the deprecated ~/.codex copy so Codex does not list the skill twice', async () => {
+    const base = await serve()
+    const home = await temp('cairn-lab-skill-')
+    const old = join(home, '.codex/skills/cairn')
+    await mkdir(old, { recursive: true })
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(old, 'SKILL.md'), 'old')
+    const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home, CAIRN_SETUP_SOURCE: REPO, PATH: process.env.PATH ?? '' }
+    delete env.CAIRN_AGENT
+    const out = await exec([CLI, 'setup', '--url', base, '--runtimes', 'codex', '--no-hooks', '--no-jobs'], env)
+    expect(out.code, out.stdout + out.stderr).toBe(0)
+    expect(existsSync(join(home, '.agents/skills/cairn/SKILL.md'))).toBe(true)
+    expect(existsSync(old)).toBe(false)
+  })
+
+  it('setup in a home OpenClaw shares keeps Codex at ~/.codex/skills and retires nothing', async () => {
+    const base = await serve()
+    const home = await temp('cairn-lab-skill-')
+    const gateway = await temp('cairn-lab-gateway-')
+    const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home, CLAWD_HOME: gateway, CAIRN_SETUP_SOURCE: REPO, PATH: process.env.PATH ?? '' }
+    delete env.CAIRN_AGENT
+    const out = await exec([CLI, 'setup', '--url', base, '--runtimes', 'codex,openclaw', '--no-hooks', '--no-jobs'], env)
+    expect(out.code, out.stdout + out.stderr).toBe(0)
+    expect(existsSync(join(home, '.codex/skills/cairn/SKILL.md'))).toBe(true)
+    expect(existsSync(join(home, '.agents'))).toBe(false)
+    expect(existsSync(join(gateway, 'skills/cairn/SKILL.md'))).toBe(true)
+  })
+
+  it('setup does not delete the old Codex copy when the new SKILL.md was not written', async () => {
+    const base = await serve()
+    const home = await temp('cairn-lab-skill-')
+    const old = join(home, '.codex/skills/cairn')
+    await mkdir(old, { recursive: true })
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(old, 'SKILL.md'), 'old')
+    // ~/.agents is a file, so the new folder cannot be created.
+    await writeFile(join(home, '.agents'), 'in the way')
+    const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home, CAIRN_SETUP_SOURCE: REPO, PATH: process.env.PATH ?? '' }
+    delete env.CAIRN_AGENT
+    await exec([CLI, 'setup', '--url', base, '--runtimes', 'codex', '--no-hooks', '--no-jobs'], env)
+    expect(await readFile(join(old, 'SKILL.md'), 'utf8')).toBe('old')
   })
 
   it('a dry run names the folder it would write, lab.md included', async () => {
@@ -159,9 +202,9 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     const out = await sync(home, base, ['--runtimes', 'claude-code'])
     expect(out.code, out.stdout).toBe(0)
     expect(existsSync(join(home, '.claude/skills/cairn/lab.md'))).toBe(true)
-    expect(existsSync(join(home, '.codex/skills/cairn/lab.md'))).toBe(false)
+    expect(existsSync(join(home, '.agents/skills/cairn/lab.md'))).toBe(false)
     expect(existsSync(join(home, '.claude/skills/cairn/reference.md'))).toBe(true)
-    expect(existsSync(join(home, '.codex/skills/cairn/reference.md'))).toBe(false)
+    expect(existsSync(join(home, '.agents/skills/cairn/reference.md'))).toBe(false)
   })
 
   it('a copy kept in a runtime\'s own tree (--also skill=) takes lab.md and reference.md along', async () => {
@@ -175,6 +218,79 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     expect(await readFile(join(gateway, 'skills/cairn/SKILL.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/SKILL.md')
     expect(await readFile(join(gateway, 'skills/cairn/lab.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/lab.md')
     expect(await readFile(join(gateway, 'skills/cairn/reference.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/reference.md')
+  })
+
+  it('puts Codex\'s skill in ~/.agents/skills and retires the deprecated copy, so Codex lists it once', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    const old = join(home, '.codex/skills/cairn')
+    await mkdir(old, { recursive: true })
+    const { writeFile } = await import('node:fs/promises')
+    for (const name of ['SKILL.md', 'lab.md', 'reference.md']) await writeFile(join(old, name), 'old')
+
+    const drift = await sync(home, base, ['--check'])
+    expect(drift.code).toBe(1)
+    expect(drift.stdout).toMatch(/DRIFT\s+\S*\.agents\/skills\/cairn\/SKILL\.md\s+\(missing\)/)
+
+    const out = await sync(home, base)
+    expect(out.code, out.stdout).toBe(0)
+    for (const name of ['SKILL.md', 'lab.md', 'reference.md']) {
+      expect(existsSync(join(home, '.agents/skills/cairn', name))).toBe(true)
+      expect(existsSync(join(old, name))).toBe(false)
+    }
+    expect(existsSync(old)).toBe(false)
+    const clean = await sync(home, base, ['--check'])
+    expect(clean.code, clean.stdout).toBe(0)
+  })
+
+  it('--check reports a stale old Codex copy beside a current one as drift', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    await sync(home, base)
+    const { writeFile } = await import('node:fs/promises')
+    await mkdir(join(home, '.codex/skills/cairn'), { recursive: true })
+    await writeFile(join(home, '.codex/skills/cairn/SKILL.md'), 'old')
+    const out = await sync(home, base, ['--check'])
+    expect(out.code).toBe(1)
+    expect(out.stdout).toMatch(/DRIFT\s+\S*\.codex\/skills\/cairn\/SKILL\.md\s+\(superseded/)
+  })
+
+  it('--check reports a missing ~/.agents copy as drift', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    await sync(home, base)
+    const { rm: remove } = await import('node:fs/promises')
+    await remove(join(home, '.agents/skills/cairn/reference.md'))
+    const out = await sync(home, base, ['--check'])
+    expect(out.code).toBe(1)
+    expect(out.stdout).toMatch(/DRIFT\s+\S*\.agents\/skills\/cairn\/reference\.md\s+\(missing\)/)
+  })
+
+  it('a home OpenClaw shares keeps Codex at ~/.codex/skills: nothing in ~/.agents, nothing retired', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    const gateway = await temp('cairn-lab-gateway-')
+    await mkdir(join(gateway, 'skills/cairn'), { recursive: true })
+    const old = join(home, '.codex/skills/cairn')
+    await mkdir(old, { recursive: true })
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(old, 'SKILL.md'), 'old')
+    const out = await sync(home, base, ['--also', `skill=${join(gateway, 'skills/cairn/SKILL.md')}`])
+    expect(out.code, out.stdout).toBe(0)
+    for (const name of ['SKILL.md', 'lab.md', 'reference.md']) {
+      expect(existsSync(join(old, name)), name).toBe(true)
+    }
+    expect(await readFile(join(old, 'SKILL.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/SKILL.md')
+    expect(existsSync(join(home, '.agents'))).toBe(false)
+  })
+
+  it('--runtimes openclaw,codex is the same signal for the sync', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    const out = await sync(home, base, ['--runtimes', 'codex,openclaw'])
+    expect(out.code, out.stdout).toBe(0)
+    expect(existsSync(join(home, '.codex/skills/cairn/SKILL.md'))).toBe(true)
+    expect(existsSync(join(home, '.agents'))).toBe(false)
   })
 
   it('--check reports a missing lab.md as drift', async () => {

@@ -44,6 +44,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  rmdirSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -75,6 +76,30 @@ const RUNTIMES = arg('--runtimes')
 /** A target applies only if the directory its runtime reads already exists. */
 const at = (path, needs, runtime) => ({ path, needs: needs ?? dirname(path), runtime })
 
+/**
+ * Codex reads `~/.agents/skills` (current) and `$CODEX_HOME/skills`
+ * (deprecated, still loaded), and merges the two roots by path, not by name:
+ * a skill in both is listed twice. So Codex gets the current root only, and
+ * the copy this file used to keep in the deprecated one is retired once the
+ * current one is in place (CAIRN-402).
+ *
+ * Except in a home OpenClaw also uses. Its Codex harness may discover a shared
+ * `$HOME/.agents/skills`, and OpenClaw already has the skill from its own tree
+ * (`--also skill=$CLAWD_HOME/skills/cairn/SKILL.md`), so writing there lists
+ * it twice for OpenClaw. Such a home keeps Codex at `~/.codex/skills`, as before,
+ * and retires nothing. The same test as `cairn setup`: openclaw among the
+ * runtimes, `CLAWD_HOME` set, or a gateway copy of the skill named by `--also`.
+ */
+const OPENCLAW_SHARES_HOME =
+  RUNTIMES?.has('openclaw') ||
+  Boolean(process.env.CLAWD_HOME?.trim()) ||
+  process.argv.some((a, i) => a === '--also' && (process.argv[i + 1] ?? '').startsWith('skill='))
+const CODEX_SKILLS = join(home, OPENCLAW_SHARES_HOME ? '.codex/skills/cairn' : '.agents/skills/cairn')
+const RETIRED_CODEX_SKILL = OPENCLAW_SHARES_HOME
+  ? []
+  : ['SKILL.md', 'lab.md', 'reference.md'].map((name) => join(home, '.codex/skills/cairn', name))
+const CODEX_SKILL_HOME = join(CODEX_SKILLS, 'SKILL.md')
+
 const ARTEFACTS = [
   {
     name: 'skill',
@@ -82,7 +107,7 @@ const ARTEFACTS = [
     mode: 0o644,
     targets: [
       at(join(home, '.claude/skills/cairn/SKILL.md'), join(home, '.claude'), 'claude-code'),
-      at(join(home, '.codex/skills/cairn/SKILL.md'), join(home, '.codex'), 'codex'),
+      at(CODEX_SKILL_HOME, join(home, '.codex'), 'codex'),
     ],
   },
   {
@@ -95,7 +120,7 @@ const ARTEFACTS = [
     mode: 0o644,
     targets: [
       at(join(home, '.claude/skills/cairn/lab.md'), join(home, '.claude/skills/cairn'), 'claude-code'),
-      at(join(home, '.codex/skills/cairn/lab.md'), join(home, '.codex/skills/cairn'), 'codex'),
+      at(join(CODEX_SKILLS, 'lab.md'), CODEX_SKILLS, 'codex'),
     ],
   },
   {
@@ -106,7 +131,7 @@ const ARTEFACTS = [
     mode: 0o644,
     targets: [
       at(join(home, '.claude/skills/cairn/reference.md'), join(home, '.claude/skills/cairn'), 'claude-code'),
-      at(join(home, '.codex/skills/cairn/reference.md'), join(home, '.codex/skills/cairn'), 'codex'),
+      at(join(CODEX_SKILLS, 'reference.md'), CODEX_SKILLS, 'codex'),
     ],
   },
   {
@@ -703,6 +728,25 @@ for (const artefact of ARTEFACTS) {
       console.log(`  FAILED    ${target.path}  (${error.code ?? error.message})`)
       if (artefact.self) selfProblem(artefact, `was not replaced at ${target.path} (${error.code ?? error.message})`)
     }
+  }
+}
+
+if (RETIRED_CODEX_SKILL.length && (!RUNTIMES || RUNTIMES.has('codex'))) {
+  for (const old of RETIRED_CODEX_SKILL) {
+    if (!existsSync(old) || !existsSync(CODEX_SKILL_HOME)) continue
+    drifted += 1
+    if (CHECK) {
+      console.log(`  DRIFT     ${old}  (superseded by ${CODEX_SKILL_HOME}; Codex would list the skill twice)`)
+      continue
+    }
+    rmSync(old, { force: true })
+    repaired.push(`retired: ${old}`)
+    console.log(`  retired   ${old}  (Codex reads ${CODEX_SKILL_HOME})`)
+  }
+  if (!CHECK) {
+    try {
+      rmdirSync(dirname(RETIRED_CODEX_SKILL[0]))
+    } catch {}
   }
 }
 

@@ -186,7 +186,7 @@ describe.skipIf(SYSTEM_TARGETS)('sync-agent-files --source release', () => {
 
     expect(result.code, result.stdout).toBe(0)
     expect(existsSync(join(home, '.claude/skills/cairn/SKILL.md'))).toBe(true)
-    expect(existsSync(join(home, '.codex/skills/cairn/SKILL.md'))).toBe(false)
+    expect(existsSync(join(home, '.agents/skills/cairn/SKILL.md'))).toBe(false)
     expect(result.stdout).toContain('(codex was not set up here)')
   })
 

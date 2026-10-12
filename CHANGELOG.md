@@ -15,6 +15,12 @@ out under **Breaking** with what to do about it.
   all Codex's explicit `$cairn` keeps) and an on-demand `reference.md`. Setup and the
   `agent-files` job install it beside `lab.md`. The size test now checks the runtimes' real
   limits instead of a rounded 15,000 bytes (CAIRN-401).
+- Codex gets the skill (`SKILL.md`, `lab.md`, `reference.md`) at `~/.agents/skills/cairn`, its
+  current user location, instead of the deprecated `~/.codex/skills/cairn`. Codex loads both
+  and merges them by path, so a copy in each is listed twice: setup and the `agent-files` job
+  now retire the old copy once the new one is in place, and `--check` reports it as drift
+  until then. A home OpenClaw also uses keeps Codex at `~/.codex/skills`, since OpenClaw may
+  discover a shared `~/.agents/skills` and already has its own copy. Claude Code is unchanged (CAIRN-402).
 
 ## [0.22.5] — 2026-10-12
 

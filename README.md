@@ -694,7 +694,7 @@ never detected: `hermes` on PATH gets a line saying how to add it
 | instance, keys | `CAIRN_BASE_URL` and one `CAIRN_API_KEY_<RUNTIME>` per runtime, paired in the browser | `~/.cairn/env` (mode 600), or `~/.cairn/instances/<name>/env` | — | remove the lines; revoke the keys at `<instance>/settings/keys` |
 | release | the release matching the CLI's version (or `CAIRN_SETUP_SOURCE`) | `~/.cairn/releases/<version>` | — | `rm -r` it |
 | cli | `cairn` | `~/.local/bin/cairn` | — | `rm ~/.local/bin/cairn` |
-| skill | the Cairn skill, per runtime set up | `~/.claude/skills/cairn`, `~/.codex/skills/cairn`, `$CLAWD_HOME/skills/cairn` | `--no-skill` | `rm -r` the folder |
+| skill | the Cairn skill, per runtime set up | `~/.claude/skills/cairn`, `~/.agents/skills/cairn`, `$CLAWD_HOME/skills/cairn` | `--no-skill` | `rm -r` the folder |
 | hooks | tagged hook entries, per runtime set up; the Herdr pane-title plugin when `herdr` is on PATH | `~/.claude/settings.json`, `~/.codex/hooks.json`, OpenClaw's hook link, `hermes config` if named; `~/.cairn/hooks` | `--no-hooks`, `--no-herdr` | delete the entries naming `~/.cairn/hooks`; `herdr plugin unlink cairn.pane-title` |
 | jobs | `agent-files` (below); `reconcile` and `vitals` with `--maintenance`; `openclaw-sessions` with OpenClaw | a LaunchAgent on macOS, root's or your crontab on Linux | `--no-jobs` | `node ~/.cairn/releases/<version>/scripts/install-cron.mjs --remove --only agent-files` |
 
@@ -750,7 +750,7 @@ waiting for approval… ✓ approved by Julien
 ✓ keys      claude-code, codex -> ~/.cairn/env
 ✓ release   v0.11.0 -> ~/.cairn/releases/0.11.0
 ✓ cli       ~/.local/bin/cairn (0.11.0)
-✓ skill     ~/.claude/skills/cairn, ~/.codex/skills/cairn
+✓ skill     ~/.claude/skills/cairn, ~/.agents/skills/cairn
 ✓ hooks     installed:
      claude: SessionStart, SessionEnd, PreCompact, Stop (asks once per session to cairn learn)
      codex: SessionStart, Stop (live checkpoint; asks once per session to cairn learn), SessionEnd
@@ -865,7 +865,7 @@ be dropped onto a box and run with no install step.
 
 ```bash
 cp -r skills/cairn ~/.claude/skills/     # Claude Code
-cp -r skills/cairn ~/.codex/skills/      # Codex
+mkdir -p ~/.agents/skills && cp -r skills/cairn ~/.agents/skills/      # Codex (~/.codex/skills is deprecated, and a copy in both is listed twice)
 cp -r skills/cairn "$CLAWD_HOME"/skills/ # OpenClaw — its own tree, not a dotfile dir
 ```
 
