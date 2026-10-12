@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 /**
  * AGENTS.md is hand-written, read by every agent at session start, and held
  * under 8KB by CI because a guide nobody can afford to read is not a guide.
+ * The cap is a cost budget, not a runtime limit (Codex's is 32 KiB in total):
+ * the detail lives in the skill's reference.md, read on demand.
  *
  * `next dev` appends a 679-byte block to it on every start. Committing that is
  * the path of least resistance — the block argues for itself, in the file — and
@@ -22,12 +24,12 @@ describe('the agent guide stays ours to write', () => {
   })
 
   it('leaves room to say more, with the generated block accounted for', () => {
-    // CI enforces the 8192 limit; this is the earlier warning, and it is the
-    // one that would have caught the real case: the file was 107 bytes under
-    // budget, so the next two sentences anyone added broke the build.
+    // CI enforces the 8192 limit; this is the earlier warning. It sits at 6000
+    // so growth past the trimmed guide is a conscious decision, not the next
+    // sentence that happens to fit.
     const bytes = readFileSync(join(process.cwd(), 'AGENTS.md')).byteLength
     expect(bytes).toBeLessThanOrEqual(8192)
-    expect(bytes, 'AGENTS.md is close enough to 8KB to be worth trimming').toBeLessThan(7900)
+    expect(bytes, 'AGENTS.md is past 6000 bytes: move detail to skills/cairn/reference.md').toBeLessThan(6000)
   })
 
   it('still depends on the upstream switch it thinks it does', () => {

@@ -375,8 +375,9 @@ the CLI is that implementation, and the other two shell out to it.
 | `SKILL.md` | Claude Code, Codex and OpenClaw; all three read skill folders |
 | MCP server | native tool-calling — a thin facade over the CLI, holding no logic; a subset of its verbs |
 
-[`AGENTS.md`](./AGENTS.md) is the contract every agent should read. It is kept under 7900
-bytes, and a test enforces that, because agents read it every session.
+[`AGENTS.md`](./AGENTS.md) is the contract every agent should read. It is kept under 6000
+bytes, and a test enforces that: a cost budget, because agents read it every session
+(Codex's real limit is 32 KiB), with the detail in the skill's `reference.md`.
 
 **A flag that does nothing says so.** An unknown flag is refused outright — a parser that
 ignores what it does not understand cannot be trusted by anything automated, and this
