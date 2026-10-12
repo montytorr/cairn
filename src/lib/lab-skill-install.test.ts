@@ -90,7 +90,7 @@ const serve = () =>
 const skillFolders = (home: string) => [join(home, '.claude/skills/cairn'), join(home, '.codex/skills/cairn')]
 
 describe('cairn setup carries the whole skill folder', () => {
-  it('writes lab.md beside SKILL.md for every runtime, and says nothing changed the second time', async () => {
+  it('writes lab.md and reference.md beside SKILL.md for every runtime, and says nothing changed the second time', async () => {
     const base = await serve()
     const home = await temp('cairn-lab-skill-')
     const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home, CAIRN_SETUP_SOURCE: REPO, PATH: process.env.PATH ?? '' }
@@ -101,9 +101,11 @@ describe('cairn setup carries the whole skill folder', () => {
     expect(first.code, first.stdout + first.stderr).toBe(0)
     const skill = await readFile(join(REPO, 'skills/cairn/SKILL.md'), 'utf8')
     const lab = await readFile(join(REPO, 'skills/cairn/lab.md'), 'utf8')
+    const reference = await readFile(join(REPO, 'skills/cairn/reference.md'), 'utf8')
     for (const folder of skillFolders(home)) {
       expect(await readFile(join(folder, 'SKILL.md'), 'utf8')).toBe(skill)
       expect(await readFile(join(folder, 'lab.md'), 'utf8')).toBe(lab)
+      expect(await readFile(join(folder, 'reference.md'), 'utf8')).toBe(reference)
     }
 
     const second = await exec(args, env)
@@ -118,6 +120,7 @@ describe('cairn setup carries the whole skill folder', () => {
     const out = await exec([CLI, 'setup', '--url', base, '--runtimes', 'claude-code', '--dry-run'], env)
     expect(out.stdout).toContain('would write ~/.claude/skills/cairn')
     expect(existsSync(join(home, '.claude/skills/cairn/lab.md'))).toBe(false)
+    expect(existsSync(join(home, '.claude/skills/cairn/reference.md'))).toBe(false)
   })
 })
 
@@ -145,6 +148,7 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     expect(out.code, out.stdout).toBe(0)
     for (const folder of skillFolders(home)) {
       expect(await readFile(join(folder, 'lab.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/lab.md')
+      expect(await readFile(join(folder, 'reference.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/reference.md')
       expect(await readFile(join(folder, 'SKILL.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/SKILL.md')
     }
   })
@@ -156,9 +160,11 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     expect(out.code, out.stdout).toBe(0)
     expect(existsSync(join(home, '.claude/skills/cairn/lab.md'))).toBe(true)
     expect(existsSync(join(home, '.codex/skills/cairn/lab.md'))).toBe(false)
+    expect(existsSync(join(home, '.claude/skills/cairn/reference.md'))).toBe(true)
+    expect(existsSync(join(home, '.codex/skills/cairn/reference.md'))).toBe(false)
   })
 
-  it('a copy kept in a runtime\'s own tree (--also skill=) takes lab.md along', async () => {
+  it('a copy kept in a runtime\'s own tree (--also skill=) takes lab.md and reference.md along', async () => {
     const base = await serve()
     const home = await machine(base)
     const gateway = await temp('cairn-lab-gateway-')
@@ -168,6 +174,7 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     expect(out.code, out.stdout).toBe(0)
     expect(await readFile(join(gateway, 'skills/cairn/SKILL.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/SKILL.md')
     expect(await readFile(join(gateway, 'skills/cairn/lab.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/lab.md')
+    expect(await readFile(join(gateway, 'skills/cairn/reference.md'), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/reference.md')
   })
 
   it('--check reports a missing lab.md as drift', async () => {
@@ -180,13 +187,26 @@ describe.skipIf(SYSTEM_TARGETS)('the agent-files job carries it too', () => {
     expect(out.code).toBe(1)
     expect(out.stdout).toMatch(/DRIFT\s+\S*skills\/cairn\/lab\.md\s+\(missing\)/)
   })
+
+  it('--check reports a missing reference.md as drift', async () => {
+    const base = await serve()
+    const home = await machine(base)
+    await sync(home, base, ['--runtimes', 'claude-code'])
+    const { rm: remove } = await import('node:fs/promises')
+    await remove(join(home, '.claude/skills/cairn/reference.md'))
+    const out = await sync(home, base, ['--runtimes', 'claude-code', '--check'])
+    expect(out.code).toBe(1)
+    expect(out.stdout).toMatch(/DRIFT\s+\S*skills\/cairn\/reference\.md\s+\(missing\)/)
+  })
 })
 
 describe('the skill and the guide point at it, and name nothing else', () => {
   it('SKILL.md says where lab.md is, and the file exists', async () => {
     const skill = await readFile(join(REPO, 'skills/cairn/SKILL.md'), 'utf8')
     expect(skill).toContain('`lab.md`')
+    expect(skill).toContain('`reference.md`')
     expect(existsSync(join(REPO, 'skills/cairn/lab.md'))).toBe(true)
+    expect(existsSync(join(REPO, 'skills/cairn/reference.md'))).toBe(true)
   })
 
   it('AGENTS.md points at both documents', async () => {
@@ -210,7 +230,7 @@ describe('the skill and the guide point at it, and name nothing else', () => {
   })
 
   it('no other product is named in the Lab\'s documents or the CLI\'s help', async () => {
-    const files = ['skills/cairn/lab.md', 'skills/cairn/SKILL.md', 'AGENTS.md']
+    const files = ['skills/cairn/lab.md', 'skills/cairn/reference.md', 'skills/cairn/SKILL.md', 'AGENTS.md']
     for (const file of files) {
       expect(await readFile(join(REPO, file), 'utf8'), file).not.toMatch(/croft|trig\b|quarry/i)
     }

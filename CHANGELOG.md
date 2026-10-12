@@ -9,6 +9,13 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Changed
+
+- The Cairn skill is split into a core `SKILL.md` (the lifecycle, under 8,000 bytes, which is
+  all Codex's explicit `$cairn` keeps) and an on-demand `reference.md`. Setup and the
+  `agent-files` job install it beside `lab.md`. The size test now checks the runtimes' real
+  limits instead of a rounded 15,000 bytes (CAIRN-401).
+
 ## [0.22.5] — 2026-10-12
 
 ### Fixed

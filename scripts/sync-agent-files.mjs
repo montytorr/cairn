@@ -99,6 +99,17 @@ const ARTEFACTS = [
     ],
   },
   {
+    // The reference SKILL.md points at, read on demand so the core stays small
+    // enough for every runtime's limit. Placed exactly like `skill:lab`.
+    name: 'skill:reference',
+    file: 'skills/cairn/reference.md',
+    mode: 0o644,
+    targets: [
+      at(join(home, '.claude/skills/cairn/reference.md'), join(home, '.claude/skills/cairn'), 'claude-code'),
+      at(join(home, '.codex/skills/cairn/reference.md'), join(home, '.codex/skills/cairn'), 'codex'),
+    ],
+  },
+  {
     name: 'cli',
     file: 'cli/cairn.mjs',
     mode: 0o755,
@@ -232,9 +243,10 @@ for (let i = 0; i < process.argv.length; i += 1) {
   const artefact = ARTEFACTS.find((a) => a.name === name)
   if (artefact && path) artefact.targets.push(at(path))
   // The skill is a folder: a copy of SKILL.md somewhere else (a gateway's own
-  // tree) takes its lab.md along, with no second `--also` to remember.
+  // tree) takes its lab.md and reference.md along, with no second `--also` to remember.
   if (name === 'skill' && path && basename(path) === 'SKILL.md') {
     ARTEFACTS.find((a) => a.name === 'skill:lab').targets.push(at(join(dirname(path), 'lab.md')))
+    ARTEFACTS.find((a) => a.name === 'skill:reference').targets.push(at(join(dirname(path), 'reference.md')))
   }
 }
 

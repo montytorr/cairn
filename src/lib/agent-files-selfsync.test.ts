@@ -70,7 +70,8 @@ const CRON_PATH = 'scripts/install-cron.mjs'
 const RELEASE_SYNC = await readFile(join(REPO, SYNC_PATH), 'utf8')
 const RELEASE_CRON = await readFile(join(REPO, CRON_PATH), 'utf8')
 const LAB_ENTRY = /\n  \{\n {4}\/\/ The Lab's workflow[\s\S]*?\n {2}\},/
-const OLD_SYNC = RELEASE_SYNC.replace(LAB_ENTRY, '')
+const REFERENCE_ENTRY = /\n  \{\n {4}\/\/ The reference SKILL\.md points at[\s\S]*?\n {2}\},/
+const OLD_SYNC = RELEASE_SYNC.replace(LAB_ENTRY, '').replace(REFERENCE_ENTRY, '')
 
 type Mirror = {
   version?: unknown
@@ -147,11 +148,14 @@ const job = (home: string, base: string, extra: string[] = [], env: Record<strin
 
 const copy = (home: string) => join(home, '.cairn/maintenance/sync-agent-files.mjs')
 const lab = (home: string) => join(home, '.claude/skills/cairn/lab.md')
+const reference = (home: string) => join(home, '.claude/skills/cairn/reference.md')
 
 describe.skipIf(SYSTEM_TARGETS)('agent-files updates its own script (CAIRN-390)', () => {
   it('fixture: the old copy really does not know the lab artefact', () => {
     expect(RELEASE_SYNC).toContain("file: 'skills/cairn/lab.md'")
     expect(OLD_SYNC).not.toContain("file: 'skills/cairn/lab.md'")
+    expect(RELEASE_SYNC).toContain("file: 'skills/cairn/reference.md'")
+    expect(OLD_SYNC).not.toContain("file: 'skills/cairn/reference.md'")
     expect(OLD_SYNC).toContain('CAIRN_SYNC_REEXEC')
   })
 
@@ -166,6 +170,7 @@ describe.skipIf(SYSTEM_TARGETS)('agent-files updates its own script (CAIRN-390)'
     expect(await readFile(copy(home), 'utf8')).toBe(RELEASE_SYNC)
     expect(await readFile(join(home, '.cairn/maintenance/install-cron.mjs'), 'utf8')).toBe(RELEASE_CRON)
     expect(await readFile(lab(home), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/lab.md')
+    expect(await readFile(reference(home), 'utf8')).toBe('pinned:/raw/v1.2.3/skills/cairn/reference.md')
     expect(await readFile(join(home, '.local/bin/cairn'), 'utf8')).toBe('pinned:/raw/v1.2.3/cli/cairn.mjs')
     expect(result.stdout).toContain('re-running')
     // The updated copy was handed the tag the first run resolved, not asked again.

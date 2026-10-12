@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -361,10 +361,21 @@ describe('the OpenClaw briefing hook', () => {
   })
 })
 
+// The skill's real limits (cairn know the-skill-s-real-size-limits-openclaw-on-codex-refuses-a-skill-read-over-16-000-weighted-chars-codex-explicit-skill):
+// - Codex's explicit `$cairn` keeps only the first 8,000 bytes: the core SKILL.md must fit.
+// - OpenClaw on the Codex runtime delivers a skill whole or not at all, within 16,000 weighted
+//   characters (ASCII counts 1, CJK counts 4): every file stays under 15,000 for margin.
+// - Claude Code re-attaches the first 5,000 tokens after compaction, and its docs advise
+//   under 500 lines: no skill file passes 500.
 describe('the skill and the agent guide', () => {
   it('fit the budgets that decide whether they are read', async () => {
     const skill = await readFile(join(REPO, 'skills/cairn/SKILL.md'))
-    expect(skill.byteLength).toBeLessThanOrEqual(15_000)
+    expect(skill.byteLength).toBeLessThanOrEqual(8_000)
+    for (const name of await readdir(join(REPO, 'skills/cairn'))) {
+      const text = await readFile(join(REPO, 'skills/cairn', name), 'utf8')
+      expect([...text].length, name).toBeLessThan(15_000)
+      expect(text.split('\n').length, name).toBeLessThanOrEqual(500)
+    }
     // The lifecycle has to be in what a partial read reaches.
     const head = skill.toString('utf8').split('\n').slice(0, 62).join('\n')
     expect(head).toMatch(/claims\s+by default/)

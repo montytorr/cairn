@@ -7030,12 +7030,12 @@ const commands = {
       if (flags['no-skill']) {
         line('– skill     skipped (--no-skill) · re-run without it to install it')
       } else {
-        // The skill is a folder: SKILL.md, and the Lab's workflow in lab.md
+        // The skill is a folder: SKILL.md, and lab.md and reference.md
         // beside it, which SKILL.md points at. Copying only the first would
         // leave that pointer dangling on every runtime.
         const skillSource = join(releaseDir, 'skills', 'cairn', 'SKILL.md')
         const skillSourceBuf = existsSync(skillSource) ? readFileSync(skillSource) : null
-        const skillExtras = ['lab.md']
+        const skillExtras = ['lab.md', 'reference.md']
           .filter((name) => existsSync(join(releaseDir, 'skills', 'cairn', name)))
           .map((name) => ({ name, buf: readFileSync(join(releaseDir, 'skills', 'cairn', name)) }))
         const skillTargets = []
