@@ -24,7 +24,8 @@ config change, a deploy, a migration, an investigation, a delegation. Size is ir
    it: pick different work**, never force it. What you file is **your human's** unless
    `--assignee <who>`.
 3. **Record as it happens.** `cairn note <ref> "…" --kind attempt|finding|decision|handoff`;
-   text is `"…"`, `-` (stdin) or `--body <text|->`. **Dead ends are `--kind attempt`** — "tried X, no change" is the note the next agent
+   text is `"…"`, `-` (stdin) or `--body <text|->`.
+   **Dead ends are `--kind attempt`** — "tried X, no change" is the note the next agent
    needs most, because the trying is the expensive part.
 4. **Checkpoint before you yield.** `cairn checkpoint <ref> --summary "state + next step"`
    after each milestone and before pausing, delegating or ending the turn. It alone
