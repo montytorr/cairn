@@ -2872,7 +2872,7 @@ const HELP = `cairn — agent-first task tracker and shared memory
                                    set or clear it ('' clears)
     cairn update <ref> --also-project HM,AT      work that spans several projects
     cairn update <ref> --project OTHER      moves it; the ref changes
-    cairn note <ref> "<text>" [--kind note|finding|decision|attempt|handoff]
+    cairn note <ref> "<text>"|- | --body <text|-> [--kind note|finding|decision|attempt|handoff]
     cairn commit <ref> <sha> [--repo PATH] [--branch NAME] [--message TEXT] [--url URL]
     cairn push <ref> <sha> [--repo PATH] [--branch NAME] [--remote NAME] [--url URL]
     cairn run <ref> "<command>" --status passed|failed|skipped [--exit-code N]
@@ -3063,7 +3063,7 @@ const LAB_HELP = `  the lab — exploring and proving ideas before they become w
     cairn subject stage LAB-12 "<stage>" [--conclusion -]
                                    a completed or dropped stage needs the conclusion:
                                    what the lab concluded, and why
-    cairn subject note LAB-12 "<text>"|- [--kind finding|decision|attempt|note|handoff]
+    cairn subject note LAB-12 "<text>"|- | --body <text|-> [--kind finding|decision|attempt|note|handoff]
     cairn subject notes LAB-12     people's notes on it (last column: id); the log is in show
     cairn subject notes LAB-12 add "<text>"|-  |  edit <id> "<text>"|-  |  delete <id>
     cairn subject tag LAB-12 +x -y
@@ -3095,6 +3095,13 @@ const LAB_HELP = `  the lab — exploring and proving ideas before they become w
 const helpText = () => HELP.replace('@@lab@@\n', labOnForHelp() ? `${LAB_HELP}\n` : '')
 
 const need = (v, msg) => (v === undefined || v === true ? die(msg) : v)
+
+// The note text is the positional or --body (agents guess --body by analogy
+// with `cairn add`, CAIRN-397); either may be `-` for stdin, never both.
+const noteText = async (positionalText) => {
+  if (positionalText !== undefined && flags.body !== undefined) die('pass the text or --body, not both')
+  return resolveValue(need(positionalText ?? flags.body, 'a note body is required ("<text>", --body <text>, or - for stdin)'))
+}
 
 const DEAD_END = /\b(tried|no change|didn['’]?t work|did not work|no effect|made no difference|ruled out|dead[- ]end)\b/i
 
@@ -4807,8 +4814,8 @@ const commands = {
   },
 
   async note() {
-    const ref = need(positional[0], 'usage: cairn note <ref> "<text>"')
-    const note = await resolveValue(need(positional[1], 'a note body is required'))
+    const ref = need(positional[0], 'usage: cairn note <ref> "<text>"|- | --body <text|->')
+    const note = await noteText(positional[1])
     const result = await request('POST', `/api/v1/tasks/${ref}/notes`, {
       note,
       kind: flags.kind ?? 'note',
@@ -5311,8 +5318,8 @@ const commands = {
     }
 
     if (verb === 'note') {
-      const ref = subjectArg(positional[1], 'usage: cairn subject note LAB-12 "<text>"|- [--kind finding|decision|attempt|note|handoff]')
-      const note = await resolveValue(need(positional[2], 'a note body is required ("<text>", or - for stdin)'))
+      const ref = subjectArg(positional[1], 'usage: cairn subject note LAB-12 "<text>"|- | --body <text|-> [--kind finding|decision|attempt|note|handoff]')
+      const note = await noteText(positional[2])
       const kind = flags.kind ?? 'note'
       if (kind === 'stage') die('--kind stage is the server\'s: it writes one itself on every stage move (cairn subject stage)')
       if (!SUBJECT_NOTE_KINDS.includes(kind)) die(`--kind must be one of ${SUBJECT_NOTE_KINDS.join(', ')}`)
@@ -5775,6 +5782,7 @@ const commands = {
   },
   async checkpoint() {
     const ref = need(positional[0], 'usage: cairn checkpoint <ref> --summary "<state>"')
+    if (flags.body !== undefined) die('checkpoint takes --summary, not --body')
     const summary = await resolveValue(need(flags.summary, 'a --summary is required'))
     emit(named(await request('POST', `/api/v1/tasks/${ref}/checkpoint`, { summary })))
   },

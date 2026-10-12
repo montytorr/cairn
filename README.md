@@ -422,7 +422,7 @@ and `--resolution -` read from stdin, so long markdown stays off argv.
 | `cairn block <ref> --reason "…"` · `cairn unblock <ref>` | Stuck on something outside Cairn |
 | `cairn task delete <ref> --confirm <ref>` | For junk that should never have existed. Refused if the task has children or dependencies, or notes or comments from anyone but you — cancel keeps the record |
 | **Work log and evidence** | |
-| `cairn note <ref> "…" --kind attempt` | Append to the work log — `note · attempt · finding · decision · handoff` |
+| `cairn note <ref> "…" --kind attempt` | Append to the work log — `note · attempt · finding · decision · handoff`; text may be `-` or `--body` |
 | `cairn commit <ref> <sha>` · `cairn push <ref> <sha>` | Record delivery evidence in the task history |
 | `cairn run <ref> "<command>" --status passed\|failed\|skipped` | Record a command result in the task history |
 | `cairn comment <ref> "…"` | Leave something for the human |
