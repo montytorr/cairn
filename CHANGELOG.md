@@ -11,6 +11,7 @@ out under **Breaking** with what to do about it.
 
 ### Added
 
+- **A moved task keeps its former ref.** Moving ABC-46 to another project renumbers it (XYZ-8); ABC-46 now keeps resolving in the API, search, `cairn check`, the web URL (redirect with a notice) and the CLI, which says `ABC-46 moved to XYZ-8` on stderr. Responses carry `requested_ref` and `moved_from: { ref, to, at }`. A live task always wins over an alias, chains and moves back keep every ref, and a rename of the source project still resolves. Migration 089 adds `task_former_refs` and records the old ref inside `move_task`; moves made before it are not recoverable.
 - Generic run links and run-tagged delivery evidence, grouped task runs API and CLI reads, for a runner such as Drove. Run links are retry-safe; evidence URLs accept only HTTP(S).
 
 ### Fixed

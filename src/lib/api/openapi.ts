@@ -259,6 +259,19 @@ const taskSummary = {
   },
 }
 
+const taskMove = {
+  type: 'object',
+  description:
+    'Present only when the ref asked for is one the task was filed under before it moved ' +
+    'to another project. The answer is the task at its new ref; this says so.',
+  properties: {
+    ref: { type: 'string', example: 'ABC-46', description: 'The former ref that was asked for.' },
+    to: { type: 'string', example: 'XYZ-8', description: 'The task\'s current ref — use this from now on.' },
+    at: { type: 'string', format: 'date-time', description: 'When the task moved.' },
+  },
+  required: ['ref', 'to', 'at'],
+}
+
 /**
  * How a lookup was reached when it went through a key the project no longer
  * has. Present only then — a current key or ref changes nothing (CAIRN-264).
@@ -573,6 +586,7 @@ export const openapiSpec = () => ({
                       description: 'Exact-ref hit only, when the ref asked for used a retired key (e.g. AC-113 for HOL-113).',
                     },
                     renamedFrom: keyRename,
+                    movedFrom: taskMove,
                   },
                 },
               },
@@ -758,6 +772,8 @@ export const openapiSpec = () => ({
           'is 2KB and the 90th percentile 5KB, so the body is what a digest has to clip. ' +
           'A ref through a key the project used to have (AC-113 after AC became HOL) returns ' +
           'the task with `requested_ref` and `renamed_from`; a current ref has neither. ' +
+          'A ref the task had before it moved to another project (ABC-46 after it became XYZ-8) ' +
+          'returns the task with `requested_ref` and `moved_from`. ' +
           '`former_refs` lists the refs the task was actually issued under — only keys retired ' +
           'after it was created, so a task filed after a rename claims none. A retired-key ref ' +
           'to a task created after the rename is a 404 that names the live ref, because that ' +
@@ -774,6 +790,7 @@ export const openapiSpec = () => ({
               ...taskSummary.properties,
               requested_ref: { type: 'string', example: 'AC-113', description: 'The ref as asked for, when it used a retired key.' },
               renamed_from: keyRename,
+              moved_from: taskMove,
               former_refs: {
                 type: 'array',
                 items: { type: 'string' },
@@ -791,7 +808,7 @@ export const openapiSpec = () => ({
           'Omitted fields are left alone. Moving to `done` or `cancelled` requires ' +
           '`resolution`, otherwise the request is refused with `resolution_required`. ' +
           '`project` moves the task: per-project numbering means it is renumbered and ' +
-          'its ref changes, so anything referring to the old ref goes stale. `assignee` ' +
+          'its ref changes; the old ref keeps resolving, with `moved_from`. `assignee` ' +
           'reassigns it (`me`, an email, a display name or a user id) and is never cleared; ' +
           '`dueDate: null` clears the due date. `externalRef` and `externalUrl` set where the ' +
           'task came from in another tool, and `null` clears them; a ref another task holds is a ' +

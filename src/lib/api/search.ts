@@ -1,5 +1,6 @@
 import { admin, pool } from '@/lib/db/client'
 import { issuedUnderFormerKey, lookupFormerKey, type KeyRename } from './project-keys'
+import { lookupMovedRef, type TaskMove } from './task-moves'
 import { isLabEnabled } from './lab-settings'
 import { subjectRefQuery } from './lab-shape'
 import { getSubjectByNumber, type Subject } from './subjects'
@@ -78,6 +79,7 @@ export type SearchRow = {
   /** Set only when the query was a ref through a retired key (CAIRN-264). */
   requested_ref?: string
   renamed_from?: KeyRename
+  moved_from?: TaskMove
 }
 
 /**
@@ -155,6 +157,7 @@ type ExactTask = {
   /** How the ref reached it, when that was through a retired key. */
   requested_ref?: string
   renamed_from?: KeyRename
+  moved_from?: TaskMove
 }
 
 const keyOfProject = (project: ExactTask['project']) =>
@@ -184,6 +187,26 @@ const tasksByNumber = async (
   return (data ?? []) as unknown as ExactTask[]
 }
 
+/** The task a ref named before it moved to another project, said as such. */
+const taskByMovedRef = async (key: string, number: number): Promise<ExactTask | null> => {
+  const moved = await lookupMovedRef(key, number)
+  if (!moved) return null
+
+  const { data } = await admin()
+    .from('tasks')
+    .select(EXACT_COLUMNS)
+    .eq('id', moved.taskId)
+    .maybeSingle()
+  const task = (data as unknown as ExactTask | null) ?? null
+  if (!task) return null
+  const to = keyOfProject(task.project)
+  return {
+    ...task,
+    requested_ref: moved.move.ref,
+    moved_from: { ...moved.move, to: to ? `${to}-${task.number}` : '' },
+  }
+}
+
 const taskByProjectRef = async (key: string, number: number): Promise<ExactTask | null> => {
   const columns = EXACT_COLUMNS
 
@@ -197,7 +220,7 @@ const taskByProjectRef = async (key: string, number: number): Promise<ExactTask 
   if (data) return data as unknown as ExactTask
 
   const former = await lookupFormerKey(key)
-  if (!former) return null
+  if (!former) return taskByMovedRef(key, number)
 
   const { data: byFormer } = await admin()
     .from('tasks')
@@ -207,7 +230,7 @@ const taskByProjectRef = async (key: string, number: number): Promise<ExactTask 
     .maybeSingle()
 
   const task = (byFormer as unknown as ExactTask | null) ?? null
-  if (!task) return null
+  if (!task) return taskByMovedRef(key, number)
   // HOL-114, filed after AC became HOL, was never AC-114. Answering the old
   // spelling with it would invent a ref, so the exact path stays out of it and
   // the ordinary search answers instead.
@@ -302,6 +325,7 @@ const asSearchAllRow = (task: ExactTask): SearchAllRow => ({
   rank: Number.POSITIVE_INFINITY,
   widened: false,
   ...(task.renamed_from ? { requested_ref: task.requested_ref, renamed_from: task.renamed_from } : {}),
+  ...(task.moved_from ? { requested_ref: task.requested_ref, moved_from: task.moved_from } : {}),
 })
 
 /**
@@ -393,6 +417,7 @@ const rankTasks = async (
     coverage: 1,
     widened: false,
     ...(task.renamed_from ? { requested_ref: task.requested_ref, renamed_from: task.renamed_from } : {}),
+    ...(task.moved_from ? { requested_ref: task.requested_ref, moved_from: task.moved_from } : {}),
   }))
 
   const headIds = new Set(heads.map((h) => h.id))
@@ -425,6 +450,7 @@ export type SearchAllRow = {
   widened: boolean
   requested_ref?: string
   renamed_from?: KeyRename
+  moved_from?: TaskMove
 }
 
 export const searchAll = async (

@@ -162,6 +162,7 @@ const taskResult = (row: SearchRow) => ({
   loose: row.widened,
   tokens: estimateTokens(row.description, row.resolution),
   ...(row.renamed_from ? { requestedRef: row.requested_ref, renamedFrom: row.renamed_from } : {}),
+  ...(row.moved_from ? { requestedRef: row.requested_ref, movedFrom: row.moved_from } : {}),
 })
 
 const unifiedResult = (row: SearchAllRow) => ({
@@ -188,4 +189,5 @@ const unifiedResult = (row: SearchAllRow) => ({
   unverified_days: null as number | null,
   // The exact-ref row only, when the ref went through a retired key.
   ...(row.renamed_from ? { requestedRef: row.requested_ref, renamedFrom: row.renamed_from } : {}),
+  ...(row.moved_from ? { requestedRef: row.requested_ref, movedFrom: row.moved_from } : {}),
 })
