@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.25.3] — 2026-10-28
+
 ### Added
 
 - **A moved task keeps its former ref.** Moving ABC-46 to another project renumbers it (XYZ-8); ABC-46 now keeps resolving in the API, search, `cairn check`, the web URL (redirect with a notice) and the CLI, which says `ABC-46 moved to XYZ-8` on stderr. Responses carry `requested_ref` and `moved_from: { ref, to, at }`. A live task always wins over an alias, chains and moves back keep every ref, and a rename of the source project still resolves. Migration 089 adds `task_former_refs` and records the old ref inside `move_task`; moves made before it are not recoverable. `scripts/move-projects` carries a moved task's former refs to the other instance, re-points a merged Lab mirror's to the real task, and drops the ones a replaced project held (CAIRN-441).
@@ -2249,7 +2251,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.3...HEAD
+[0.25.3]: https://github.com/montytorr/cairn/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/montytorr/cairn/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/montytorr/cairn/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/montytorr/cairn/compare/v0.24.0...v0.25.0
