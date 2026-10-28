@@ -2,6 +2,7 @@ import { admin } from '@/lib/db/client'
 import type { Actor } from './auth'
 import { issuedUnderFormerKey, lookupFormerKey, renameDay, type KeyRename } from './project-keys'
 import { fail } from './response'
+import { lookupMovedRef, type TaskMove } from './task-moves'
 
 /**
  * Columns returned by `show`. Kept explicit so responses stay predictable.
@@ -70,10 +71,12 @@ export type TaskRow = Record<string, unknown> & { id: string }
  * looks different (CAIRN-264). `neverIssued` is the other half of the same
  * rule — the key is retired, a task with that number exists under the live
  * key, but it was created after the rename, so the old ref never named it.
+ * `moved` is set when the ref is one the task was filed under before it moved
+ * to another project.
  */
 export type ResolvedTask =
-  | { task: TaskRow; renamed: KeyRename | null; requestedRef: string; neverIssued?: undefined }
-  | { task: null; renamed: KeyRename | null; requestedRef: string; neverIssued?: string }
+  | { task: TaskRow; renamed: KeyRename | null; moved?: TaskMove | null; requestedRef: string; neverIssued?: undefined }
+  | { task: null; renamed: KeyRename | null; moved?: null; requestedRef: string; neverIssued?: string }
 
 /** "HOL-113", from a row with either embedding of its project. */
 export const refOfRow = (row: Record<string, unknown>) => {
@@ -123,8 +126,25 @@ export const resolveTask = async (
   // than first: a live key is never also a retired one, and the common path
   // should not pay for the rare one.
   if ('id' in ref) return { task: null, renamed: null, requestedRef }
+
+  // A task that moved to another project keeps the ref it was filed under.
+  // Tried after the live and retired-key lookups: a live task always wins.
+  const viaMove = async (renamed: KeyRename | null): Promise<ResolvedTask> => {
+    const moved = await lookupMovedRef(ref.key, ref.number)
+    if (!moved) return { task: null, renamed, requestedRef }
+    const { data: byMove, error: moveError } = await admin()
+      .from('tasks')
+      .select(select)
+      .eq('id', moved.taskId)
+      .maybeSingle()
+    if (moveError) throw new Error(`task lookup failed: ${moveError.message}`)
+    if (!byMove) return { task: null, renamed, requestedRef }
+    const task = byMove as unknown as TaskRow
+    return { task, renamed: null, moved: { ...moved.move, to: refOfRow(task) ?? '' }, requestedRef }
+  }
+
   const former = await lookupFormerKey(ref.key)
-  if (!former) return { task: null, renamed: null, requestedRef }
+  if (!former) return viaMove(null)
 
   // created_at decides whether the old ref was ever issued, so it is read even
   // when the caller asked for a narrower projection.
@@ -137,7 +157,7 @@ export const resolveTask = async (
     .maybeSingle()
 
   if (formerError) throw new Error(`task lookup failed: ${formerError.message}`)
-  if (!byFormer) return { task: null, renamed: former.rename, requestedRef }
+  if (!byFormer) return viaMove(former.rename)
 
   const task = byFormer as unknown as TaskRow
   if (!issuedUnderFormerKey(former.rename, task.created_at)) {
@@ -217,10 +237,12 @@ export const refuseArchived = (task: TaskRow) => {
  * What a response says about how a ref was reached. Empty for a current ref,
  * so nothing changes for the common case.
  */
-export const renameFields = (resolved: Pick<ResolvedTask, 'renamed' | 'requestedRef'>) =>
+export const renameFields = (resolved: Pick<ResolvedTask, 'renamed' | 'moved' | 'requestedRef'>) =>
   resolved.renamed
     ? { requested_ref: resolved.requestedRef, renamed_from: resolved.renamed }
-    : {}
+    : resolved.moved
+      ? { requested_ref: resolved.requestedRef, moved_from: resolved.moved }
+      : {}
 
 /** The 404 for a ref that did not resolve, naming the rename when there was one. */
 export const noSuchTaskMessage = (raw: string, resolved: ResolvedTask) => {

@@ -128,7 +128,7 @@ const seedPersonal = async (db: string) => {
   await sql(
     db,
     `insert into projects (id, owner_user_id, key, title, status, task_counter, external_ref) values
-       ($1, $5, 'AT', 'Asha', 'active', 2, null), ($2, $5, 'CAIRN', 'Cairn', 'active', 7, 'BBTRADE:Cairn'),
+       ($1, $5, 'AT', 'Asha', 'active', 3, null), ($2, $5, 'CAIRN', 'Cairn', 'active', 7, 'BBTRADE:Cairn'),
        ($3, $5, 'TRIG', 'Trig', 'active', 3, null), ($4, $5, 'OLD', 'Old', 'archived', 1, null)`,
     [P.AT, P.CAIRN, P.TRIG, P.OLD, PERSONAL_CAL],
   )
@@ -183,6 +183,14 @@ const seedPersonal = async (db: string) => {
   })
   await task(T.OLD1, P.OLD, 1, 'Old one')
   await sql(db, `insert into task_projects (task_id, project_id) values ($1, $2)`, [T.CAIRN1, P.AT])
+  // Former refs: CAIRN-3 moves with its task, AT-3 stays behind with AT, CAIRN-4 names a task that stays.
+  await sql(db, `insert into task_former_refs (project_id, number, task_id) values ($1, 3, $3), ($2, 3, $4), ($1, 4, $5)`, [
+    P.CAIRN,
+    P.AT,
+    T.CAIRN1,
+    T.CAIRN3,
+    T.AT1,
+  ])
   await sql(db, `insert into task_deps (blocked_id, blocking_id) values ($1, $2), ($3, $4)`, [T.CAIRN1, T.CAIRN2, T.AT1, T.CAIRN2])
   await sql(
     db,
@@ -263,7 +271,7 @@ const seedCroft = async (db: string) => {
   await sql(
     db,
     `insert into projects (id, owner_user_id, key, title, task_counter, handoff_tracker, handoff_target) values
-       ($1, $3, 'LT', 'Lab todos', 2, null, null), ($2, $3, 'TRIG', 'Trig', 2, 'cairn', 'TRIG')`,
+       ($1, $3, 'LT', 'Lab todos', 3, null, null), ($2, $3, 'TRIG', 'Trig', 3, 'cairn', 'TRIG')`,
     [C.LT, C.TRIG, CROFT_CAL],
   )
   await sql(db, `update lab_settings set enabled = true, home_project_id = $1`, [C.LT])
@@ -301,6 +309,13 @@ const seedCroft = async (db: string) => {
   await task(C.extraTRIG2, C.TRIG, 2, 'A lab todo filed in TRIG', null, 'croft:croft.example.com/T-2')
   await task(C.mirrorLT1, C.LT, 1, 'Mirror of CAIRN-2', ['CAIRN-2', 'https://tasks.example.com/projects/CAIRN/tasks/2'], 'croft:croft.example.com/T-3')
   await task(C.plainLT2, C.LT, 2, 'Plain lab todo, after TRIG-1 and LT-1', null, 'croft:croft.example.com/T-4')
+  // LT-3 was the mirror of CAIRN-2 before it moved; TRIG-3 names a todo in the TRIG the real one replaces.
+  await sql(db, `insert into task_former_refs (project_id, number, task_id) values ($1, 3, $3), ($2, 3, $4)`, [
+    C.LT,
+    C.TRIG,
+    C.mirrorLT1,
+    C.extraTRIG2,
+  ])
   await sql(
     db,
     `insert into task_notes (task_id, actor_type, actor_id, note, kind, content_hash) values
@@ -495,6 +510,12 @@ describe('an applied move', () => {
     expect(await sql(croft, `select count(*)::int as n from task_projects`)).toEqual([{ n: 0 }])
     expect(await sql(croft, `select blocked_id, blocking_id from task_deps`)).toEqual([{ blocked_id: T.CAIRN1, blocking_id: T.CAIRN2 }])
     expect((await sql(croft, `select key from project_former_keys`)).map((k) => k.key)).toEqual(['CAI'])
+    // A former ref moves with its task, follows a merged mirror to the real task, and goes with a replaced project.
+    expect(await sql(croft, `select project_id, number, task_id from task_former_refs order by project_id`)).toEqual([
+      { project_id: P.CAIRN, number: 3, task_id: T.CAIRN1 },
+      { project_id: C.LT, number: 3, task_id: T.CAIRN2 },
+    ])
+    expect(await sql(personal, `select count(*)::int as n from task_former_refs`)).toEqual([{ n: 0 }])
     expect((await sql(croft, `select key from entities`)).map((k) => k.key)).toEqual(['clawdius'])
     expect((await sql(croft, `select project_id from project_entities`)).map((k) => k.project_id)).toEqual([P.CAIRN])
 

@@ -16,6 +16,7 @@ export const TOTALS = [
   'entities',
   'tasks',
   'task_projects',
+  'task_former_refs',
   'task_deps',
   'task_notes',
   'task_comments',
@@ -67,6 +68,7 @@ export const verify = async ({ source, target, facts, written, removedFromSource
     projects: -facts.collisions.length,
     task_notes: (merge.mirrors_deleted ?? 0) - (merge.duplicate_notes ?? 0) + (written.lostLinkNotes ?? 0),
     task_activity_events: -(merge.duplicate_events ?? 0),
+    task_former_refs: -(written.parkedFormerRefs ?? 0),
   }
   for (const table of Object.keys(after)) {
     const added = written.tables[table]?.written ?? 0

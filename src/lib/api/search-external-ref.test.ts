@@ -71,6 +71,8 @@ vi.mock('./project-keys', () => ({
   issuedUnderFormerKey: () => true,
 }))
 
+vi.mock('./task-moves', () => ({ lookupMovedRef: async () => null }))
+
 vi.mock('./lab-settings', () => ({ isLabEnabled: async () => false }))
 
 import { searchAll, searchTasks } from './search'

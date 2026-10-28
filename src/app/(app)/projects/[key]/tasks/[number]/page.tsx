@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import {
-  currentUser, getDuplicateOf, getParent, getTask, listActivity, listAlsoProjects,
+  currentUser, getDuplicateOf, getMovedTaskRef, getParent, getTask, listActivity, listAlsoProjects,
   listAttachments, listProjects,
-  listChildren, listComments, listNotes, listRelations, listTaskRuns,
+  listChildren, listComments, listNotes, listRelations, listTaskMoves, listTaskRuns,
 } from '@/lib/data'
 import { MarkdownEditor } from '@/components/markdown-editor'
 import { MarkdownView } from '@/components/markdown'
@@ -30,7 +30,7 @@ import { mentionsOf } from '@/lib/api/mentions'
 import { MobileNavButton } from '@/components/mobile-nav-context'
 import { RedirectNotice } from '@/components/redirect-notice'
 import { listFormerKeyRecords } from '@/lib/data'
-import { formerRefsOf, renameLine, renamesOf, taskRedirectNotice } from '@/lib/project-rename'
+import { formerRefsOf, renameLine, renamesOf, taskMovedNotice, taskRedirectNotice } from '@/lib/project-rename'
 import { LABEL, PANE } from './styles'
 import { HandoffBadge } from '@/components/lab/handoff-badge'
 import { loadTaskLabFields } from '@/app/(app)/lab/data'
@@ -116,6 +116,12 @@ const TaskPage = async ({
       const was = `${retired.key}-${parsed}`
       redirect(`/projects/${retired.current}/tasks/${parsed}?from=${encodeURIComponent(was)}`)
     }
+    // Or a ref the task was filed under before it moved to another project.
+    const moved = await getMovedTaskRef(key, parsed)
+    if (moved) {
+      const was = `${key.toUpperCase()}-${parsed}`
+      redirect(`/projects/${moved.key}/tasks/${moved.number}?from=${encodeURIComponent(was)}`)
+    }
     notFound()
   }
 
@@ -156,7 +162,13 @@ const TaskPage = async ({
   // migrated task as LEGACY-1234 — an identifier that resolves nowhere in this
   // system, on the page whose whole job is to tell you what you are looking at.
   const ref = `${task.project.key}-${task.number}`
-  const arrivedFrom = taskRedirectNotice(from, renames, { ...task, ref })
+  const moves = (await listTaskMoves(task.id)).flatMap((move) =>
+    [move.key, ...formerKeys.filter((row) => row.project_id === move.project_id).map((row) => row.key)].map((k) => ({
+      ref: `${k}-${move.number}`,
+      at: move.moved_at,
+    })),
+  )
+  const arrivedFrom = taskRedirectNotice(from, renames, { ...task, ref }) ?? taskMovedNotice(from, moves, { ref })
 
   return (
     <div className="flex h-dvh flex-col">

@@ -1425,6 +1425,16 @@ const tellRename = (requested, rename, ref) => {
   process.stderr.write(`${renameLine(requested, rename, ref)}\n`)
 }
 
+const toldMoves = new Set()
+const tellMove = (requested, moved, ref) => {
+  if (!moved?.ref) return
+  const id = `${requested ?? ''}|${moved.ref}`
+  if (toldMoves.has(id)) return
+  toldMoves.add(id)
+  const to = moved.to || ref
+  process.stderr.write(`${moved.ref} moved to ${to} on ${renameDay(moved.at)}. ${moved.ref} still resolves; write ${to}.\n`)
+}
+
 /** `-` means read the value from stdin, so long markdown bodies stay off argv. */
 const readStdin = async () => {
   const chunks = []
@@ -2118,6 +2128,9 @@ const request = async (method, path, body, { soft = false, onError } = {}) => {
   const told = payload.data
   if (told && typeof told === 'object' && !Array.isArray(told) && told.renamed_from) {
     tellRename(told.requested_ref, told.renamed_from, refOfTask(told))
+  }
+  if (told && typeof told === 'object' && !Array.isArray(told) && told.moved_from) {
+    tellMove(told.requested_ref, told.moved_from, refOfTask(told))
   }
 
   await refreshProjectKeys(method !== 'GET' && path.startsWith('/api/v1/projects'))
@@ -4573,6 +4586,7 @@ const commands = {
     // the table, so "AC-113" coming back as HOL-113 is not a mystery.
     for (const r of data.results ?? []) {
       if (r.renamedFrom) tellRename(r.requestedRef, r.renamedFrom, r.ref)
+      if (r.movedFrom) tellMove(r.requestedRef, r.movedFrom, r.ref)
     }
     const shown = {
       ...data,

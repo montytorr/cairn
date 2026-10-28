@@ -16,6 +16,7 @@ export const TABLES = [
   'project_entities',
   'tasks',
   'task_projects',
+  'task_former_refs',
   'task_deps',
   'task_notes',
   'task_comments',

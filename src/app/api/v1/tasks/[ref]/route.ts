@@ -338,7 +338,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof patchBody>>({
           ...(await withAssignee(task)),
           ref: moved.ref,
           moved,
-          note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; anything referring to the old one is now stale.`,
+          note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; the old one still resolves, but write the new one.`,
         })
       }
       return fail('validation_failed', 'No fields to update.')
@@ -439,7 +439,7 @@ export const PATCH = route<{ ref: string }, z.infer<typeof patchBody>>({
     const named = await withAssignee(data)
     return ok({ ...named, ...(alsoProjects ? { alsoProjects } : {}),
       ...(labelPatch ? { labelPatch } : {}),
-      ...(moved ? { ref: moved.ref, moved, note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; anything referring to the old one is now stale.` } : {}),
+      ...(moved ? { ref: moved.ref, moved, note: `Ref changed from ${moved.from}-${task.number} to ${moved.ref}; the old one still resolves, but write the new one.` } : {}),
     })
   },
 })

@@ -86,6 +86,22 @@ export const taskRedirectNotice = (
   return `${ref} is now ${task.ref} — project ${rename.from} was renamed ${rename.to} on ${when}${then}.`
 }
 
+/**
+ * The line shown after a ref the task was filed under before moving to another
+ * project redirected here, or null. Believed only when `from` is one of the
+ * task's own former refs, like `taskRedirectNotice`.
+ */
+export const taskMovedNotice = (
+  from: string | undefined,
+  moves: { ref: string; at: string }[],
+  task: { ref: string },
+): string | null => {
+  const ref = (from ?? '').toUpperCase()
+  const move = moves.find((m) => m.ref === ref)
+  if (!move) return null
+  return `${ref} is now ${task.ref} — the task moved to another project on ${shortDateWithYear(move.at)}.`
+}
+
 /** The line shown after `/projects/AC` redirected here, or null. */
 export const projectRedirectNotice = (from: string | undefined, renames: Rename[]): string | null => {
   const key = (from ?? '').toUpperCase()

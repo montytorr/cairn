@@ -99,6 +99,7 @@ const MOVES = {
   project_entities: 't.project_id in (select id from mv_projects)',
   tasks: 't.id in (select id from mv_tasks)',
   task_projects: 't.task_id in (select id from mv_tasks)',
+  task_former_refs: 't.task_id in (select id from mv_tasks)',
   task_deps: 't.blocked_id in (select id from mv_tasks) or t.blocking_id in (select id from mv_tasks)',
   task_notes: 't.task_id in (select id from mv_tasks)',
   task_comments: 't.task_id in (select id from mv_tasks)',
@@ -120,6 +121,7 @@ const MOVES = {
 /** Of the rows that move, the ones the target cannot hold (they name something that stays). */
 const DROPPED = {
   task_projects: 't.project_id not in (select id from mv_projects)',
+  task_former_refs: 't.project_id not in (select id from mv_projects)',
   task_deps: 'not (t.blocked_id in (select id from mv_tasks) and t.blocking_id in (select id from mv_tasks))',
   knowledge_projects: 't.project_id not in (select id from mv_projects)',
 }
@@ -134,6 +136,7 @@ const ORDER = {
   project_repos: 't.project_id, t.remote',
   project_entities: 't.project_id, t.entity_id',
   task_projects: 't.task_id, t.project_id',
+  task_former_refs: 't.project_id, t.number',
   task_deps: 't.blocked_id, t.blocking_id',
   knowledge_projects: 't.knowledge_id, t.project_id',
   knowledge_entities: 't.knowledge_id, t.entity_id',
@@ -670,6 +673,7 @@ export const writeTarget = async ({ source, target, catalog, facts, pre, options
   }
   out.tables.tasks.links = links.length
   await copy('task_projects', `(${MOVES.task_projects}) and not (${DROPPED.task_projects})`)
+  await copy('task_former_refs', `(${MOVES.task_former_refs}) and not (${DROPPED.task_former_refs})`)
   await copy('task_deps', `(${MOVES.task_deps}) and not (${DROPPED.task_deps})`)
   await copy('task_notes')
   await copy('task_comments')
@@ -853,6 +857,7 @@ export const writeTarget = async ({ source, target, catalog, facts, pre, options
           and exists (select 1 from task_projects y where y.task_id = m.real and y.project_id = x.project_id)`,
     )
     merged.task_projects = (await target.query(`update task_projects x set task_id = m.real from mv_merge m where x.task_id = m.mirror`)).rowCount
+    merged.former_refs = (await target.query(`update task_former_refs x set task_id = m.real from mv_merge m where x.task_id = m.mirror`)).rowCount
     merged.children = (await target.query(`update tasks t set parent_id = m.real from mv_merge m where t.parent_id = m.mirror and t.id <> m.real`)).rowCount
     merged.duplicates = (await target.query(`update tasks t set duplicate_of = m.real from mv_merge m where t.duplicate_of = m.mirror and t.id <> m.real`)).rowCount
     await target.query(
@@ -891,6 +896,8 @@ export const writeTarget = async ({ source, target, catalog, facts, pre, options
                           and remote not in (select remote from project_repos where project_id = $2)`, [c.id, c.real_id])
     await target.query(`update project_entities set project_id = $2 where project_id = $1
                           and entity_id not in (select entity_id from project_entities where project_id = $2)`, [c.id, c.real_id])
+    // The parked project's key now names the real one, so its former refs would name the wrong tasks.
+    out.parkedFormerRefs = (out.parkedFormerRefs ?? 0) + (await target.query(`delete from task_former_refs where project_id = $1`, [c.id])).rowCount
     const left = await n(target, `select count(*) as n from tasks where project_id = $1`, [c.id])
     if (left) throw new Error(`${c.key} on the target still holds ${left} task(s) after the merge`)
     await target.query(`delete from projects where id = $1`, [c.id])

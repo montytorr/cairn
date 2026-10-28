@@ -5,6 +5,7 @@ import {
   projectRedirectNotice,
   renameLine,
   renamesOf,
+  taskMovedNotice,
   taskRedirectNotice,
 } from './project-rename'
 
@@ -126,5 +127,18 @@ describe('keyChangeProblem', () => {
 
   it('lets a project take back its own former key', () => {
     expect(keyChangeProblem('AC', context)).toBeNull()
+  })
+})
+
+describe('taskMovedNotice', () => {
+  const moves = [{ ref: 'ABC-46', at: '2026-10-01T09:00:00.000Z' }]
+
+  it('says where the task went when from is one of its former refs', () => {
+    expect(taskMovedNotice('abc-46', moves, { ref: 'XYZ-8' })).toContain('ABC-46 is now XYZ-8')
+  })
+
+  it('does not believe a hand-edited from', () => {
+    expect(taskMovedNotice('ABC-47', moves, { ref: 'XYZ-8' })).toBeNull()
+    expect(taskMovedNotice(undefined, moves, { ref: 'XYZ-8' })).toBeNull()
   })
 })

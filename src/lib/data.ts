@@ -2,6 +2,7 @@ import { groupRuns, type TaskRun, type RunActivity } from '@/lib/runs'
 import { admin, pool, normalizeDatabaseValue } from '@/lib/db/client'
 import { byTitle } from '@/lib/utils'
 import { sessionUser } from '@/lib/auth/session'
+import { lookupMovedRef } from '@/lib/api/task-moves'
 import { withAssignee, withAssignees, type Person } from '@/lib/api/people'
 import { withHierarchy, type Hierarchy } from '@/lib/task-hierarchy'
 import type { TaskPriority, TaskStatus, TaskType } from '@/schemas/task'
@@ -302,6 +303,46 @@ export const getTask = async (
     .maybeSingle()
   if (!data) return null
   return await withAssignee(data as unknown as Task & { project: Project })
+}
+
+/** Where a task went, when `key-number` is a ref it was filed under before moving. */
+export const getMovedTaskRef = async (
+  key: string,
+  number: number,
+): Promise<{ key: string; number: number } | null> => {
+  const moved = await lookupMovedRef(key, number)
+  if (!moved) return null
+  const { data } = await admin()
+    .from('tasks')
+    .select('number, project:projects!project_id!inner(key)')
+    .eq('id', moved.taskId)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as unknown as { number: number; project: { key: string } | { key: string }[] }
+  const project = Array.isArray(row.project) ? row.project[0] : row.project
+  return project?.key ? { key: project.key, number: row.number } : null
+}
+
+/** The refs a task was filed under before it moved, with the project each belonged to. */
+export const listTaskMoves = async (
+  taskId: string,
+): Promise<{ number: number; project_id: string; key: string; moved_at: string }[]> => {
+  const { data, error } = await admin()
+    .from('task_former_refs')
+    .select('number, project_id, moved_at, project:projects(key)')
+    .eq('task_id', taskId)
+    .order('moved_at')
+  if (error) throw new Error(error.message)
+  type Row = {
+    number: number
+    project_id: string
+    moved_at: string
+    project: { key: string } | { key: string }[] | null
+  }
+  return ((data ?? []) as unknown as Row[]).map(({ project, ...row }) => ({
+    ...row,
+    key: (Array.isArray(project) ? project[0]?.key : project?.key) ?? '',
+  }))
 }
 
 /**
