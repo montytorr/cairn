@@ -9,11 +9,16 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
-## [0.25.2] — 2026-10-24
+## [0.25.3] — 2026-10-28
 
 ### Added
 
 - **A moved task keeps its former ref.** Moving ABC-46 to another project renumbers it (XYZ-8); ABC-46 now keeps resolving in the API, search, `cairn check`, the web URL (redirect with a notice) and the CLI, which says `ABC-46 moved to XYZ-8` on stderr. Responses carry `requested_ref` and `moved_from: { ref, to, at }`. A live task always wins over an alias, chains and moves back keep every ref, and a rename of the source project still resolves. Migration 089 adds `task_former_refs` and records the old ref inside `move_task`; moves made before it are not recoverable. `scripts/move-projects` carries a moved task's former refs to the other instance, re-points a merged Lab mirror's to the real task, and drops the ones a replaced project held (CAIRN-441).
+
+## [0.25.2] — 2026-10-24
+
+### Added
+
 - Generic run links and run-tagged delivery evidence, grouped task runs API and CLI reads, for a runner such as Drove. Run links are retry-safe; evidence URLs accept only HTTP(S).
 - **Atomic task label changes** (CAIRN-421). `cairn update <ref> --add-label a,b --remove-label c` adds and removes labels without replacing concurrent changes; repeated flags and other update fields can be combined. PATCH accepts `labelPatch: { add, remove }` and returns the resulting labels plus `added`, `removed`, `alreadyPresent` and `alreadyAbsent` arrays. No-ops succeed without a labels activity event. Replacement `--label` keeps its existing meaning and cannot be mixed with these flags. Migration 086 applies the delta and other requested fields in a transaction, preserving order and refusing results above 20 labels.
 
@@ -2246,7 +2251,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.3...HEAD
+[0.25.3]: https://github.com/montytorr/cairn/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/montytorr/cairn/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/montytorr/cairn/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/montytorr/cairn/compare/v0.24.0...v0.25.0
