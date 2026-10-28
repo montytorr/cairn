@@ -9,6 +9,10 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Releases bump every version string.** `scripts/release.mjs` now bumps `package-lock.json` with `package.json` and the CLI's `VERSION`, and commits as `chore(release): <version>`. `.drove.json` declares `release.versionFiles` (`package.json` and `package-lock.json`), so `drove release --prepare` no longer refuses here. Drove reaches only JSON, so a Drove-prepared release still needs `cli/cairn.mjs`'s `VERSION` edited by hand (CAIRN-439).
+
 ## [0.25.3] — 2026-10-28
 
 ### Added

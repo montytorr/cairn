@@ -10,5 +10,22 @@
     "npm run lint",
     "npm test",
     "npm run build"
-  ]
+  ],
+  "release": {
+    "versionFiles": [
+      {
+        "path": "package.json",
+        "pointers": [
+          "/version"
+        ]
+      },
+      {
+        "path": "package-lock.json",
+        "pointers": [
+          "/version",
+          "/packages//version"
+        ]
+      }
+    ]
+  }
 }
