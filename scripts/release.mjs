@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Cut a release: bump both version strings, close the changelog section, tag.
+ * Cut a release: bump the version strings, close the changelog section, tag.
  *
  * This exists because the process lived in whoever remembered it, and it has
- * two version strings to keep in step by hand — package.json, which the server
- * reports, and the constant in cli/cairn.mjs, which a copied CLI reports.
+ * version strings to keep in step by hand — package.json, which the server
+ * reports, package-lock.json, which npm ci checks against it, and the constant
+ * in cli/cairn.mjs, which a copied CLI reports.
  * Forgetting the second one is the dangerous half: every stale install then
  * agrees with a server that has moved on, and `cairn --version`, the one
  * mechanism for noticing drift, says all is well.
@@ -32,7 +33,7 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) die(`not a semver version: ${version}`)
 // en-CA is YYYY-MM-DD; Paris, so a release cut just after midnight there is not dated the day before.
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date())
 
-// --- the two version strings -----------------------------------------------
+// --- the version strings ---------------------------------------------------
 
 const pkgRaw = readFileSync('package.json', 'utf8')
 const current = JSON.parse(pkgRaw).version
@@ -42,6 +43,18 @@ const cliRaw = readFileSync('cli/cairn.mjs', 'utf8')
 if (!new RegExp(`^const VERSION = '${current}'`, 'm').test(cliRaw)) {
   die(`cli/cairn.mjs does not say ${current} — the two are already out of step, fix that first`)
 }
+
+// The lockfile is npm's own JSON.stringify output, so it is rewritten the same
+// way; one that does not round-trip was edited by hand and is left to a human.
+const lockRaw = readFileSync('package-lock.json', 'utf8')
+const lock = JSON.parse(lockRaw)
+if (`${JSON.stringify(lock, null, 2)}\n` !== lockRaw) die('package-lock.json is not in npm\'s format — run npm install first')
+if (lock.version !== current || lock.packages?.['']?.version !== current) {
+  die(`package-lock.json does not say ${current} — the two are already out of step, fix that first`)
+}
+lock.version = version
+lock.packages[''].version = version
+const nextLock = `${JSON.stringify(lock, null, 2)}\n`
 
 const nextPkg = pkgRaw.replace(`"version": "${current}"`, `"version": "${version}"`)
 const nextCli = cliRaw.replace(
@@ -83,7 +96,7 @@ const commits = execFileSync('git', ['rev-list', `v${current}..HEAD`, '--count']
 
 process.stdout.write(
   `${current} -> ${version}\n` +
-    `  package.json, cli/cairn.mjs VERSION\n` +
+    `  package.json, package-lock.json, cli/cairn.mjs VERSION\n` +
     `  CHANGELOG [Unreleased] -> [${version}] — ${today} (${entries} entries)\n` +
     `  ${commits} commits since v${current}\n`,
 )
@@ -94,11 +107,12 @@ if (!CONFIRM) {
 }
 
 writeFileSync('package.json', nextPkg)
+writeFileSync('package-lock.json', nextLock)
 writeFileSync('cli/cairn.mjs', nextCli)
 writeFileSync('CHANGELOG.md', nextChangelog)
 
-execFileSync('git', ['add', 'package.json', 'cli/cairn.mjs', 'CHANGELOG.md'])
-execFileSync('git', ['commit', '-m', `release ${version}`])
+execFileSync('git', ['add', 'package.json', 'package-lock.json', 'cli/cairn.mjs', 'CHANGELOG.md'])
+execFileSync('git', ['commit', '-m', `chore(release): ${version}`])
 execFileSync('git', ['tag', '-a', `v${version}`, '--cleanup=verbatim', '-F', '-'], { input: tagMessage })
 
 process.stdout.write(
