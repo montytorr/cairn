@@ -1,7 +1,9 @@
 # Cairn in Herdr
 
 Herdr's sidebar can show, for each agent pane, the Cairn task that agent holds. Two parts
-make it work: the CLI publishes the task, and a Herdr plugin turns it into labels.
+make it work: the CLI publishes the task, and a Herdr plugin turns it into labels. The Herdr
+desktop app (`herdr-app`, terminals run by herdr-core) has no plugins: there the CLI writes a
+terminal label and a mod displays it, see [The Herdr app](#the-herdr-app).
 
 ## What the pane shows
 
@@ -24,6 +26,13 @@ with a two-hour TTL, the same two hours after which the maintenance sweep releas
 claim. `done`, `cancel`, `release` and `session end` clear it; a release of a different task
 than the one shown leaves it. The call is detached, silent and ignores every failure, so a
 missing `herdr` costs nothing. `CAIRN_HERDR=0` turns it off.
+
+Inside a herdr-core terminal (`HC_TERMINAL_ID` set) the same events run
+`hc label "$HC_TERMINAL_ID" "cairn.task=<REF> · <title>"` and clear it with
+`hc label "$HC_TERMINAL_ID" cairn.task=`. A label has no TTL: a crash that skips the clear
+leaves it until the next claim, release or `session end` in that terminal. When both
+variables are set, one was inherited from an enclosing session, and the label wins; an
+invalid `HC_TERMINAL_ID` shows nothing rather than falling back to the pane.
 
 ## The plugin
 
@@ -75,3 +84,27 @@ rows = [["state_icon", { token = "workspace", fg = "#7195ba" }], [{ token = "$ti
 ```
 
 Check it with `herdr config check`, then `herdr server reload-config`.
+
+## The Herdr app
+
+The app keeps the CLI half and drops the plugin: labels on a terminal are visible to every
+mod through `terminals()`, which mirrors `hc ls --json`, so nothing has to resync. Check one
+with `hc get "$HC_TERMINAL_ID" --json | jq .labels`.
+
+No shipped panel shows a custom label yet. To put the task in the agents list, duplicate the
+shipped `agents` mod (`mod.clone`, from the command palette or `herdr-app do`), point a
+personal copy of the layout at it, and pick the row title from the label, falling back to the
+agent's own title:
+
+```js
+import { terminals } from "herdr";
+
+// Called on every render: labels change while the mod runs.
+const rowTitle = (agent) => {
+  const task = terminals().find((t) => t.address === agent.address)?.labels?.["cairn.task"];
+  return task || agent.title || agent.program?.name || "";
+};
+```
+
+`~/.config/herdr-app/AGENTS.md`, which the app rewrites on every start, documents mods,
+layouts and `herdr-app check`.

@@ -206,6 +206,8 @@ describe('the CLI publishes the claimed task to Herdr', () => {
     await mkdir(bin)
     await writeFile(join(bin, 'herdr'), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${log}"\n`)
     await chmod(join(bin, 'herdr'), 0o755)
+    await writeFile(join(bin, 'hc'), `#!/bin/sh\nprintf 'hc %s\\n' "$*" >> "${log}"\n`)
+    await chmod(join(bin, 'hc'), 0o755)
     const base = await serve(title)
     const cairn = (args: string[]) =>
       new Promise<{ code: number | null; stdout: string; stderr: string }>((done, fail) => {
@@ -218,6 +220,7 @@ describe('the CLI publishes the claimed task to Herdr', () => {
             CAIRN_API_KEY: 'test-key',
             CAIRN_AGENT: 'test',
             HERDR_PANE_ID: '',
+            HC_TERMINAL_ID: '',
             CAIRN_HERDR: '',
             ...herdrEnv,
           },
@@ -272,6 +275,29 @@ describe('the CLI publishes the claimed task to Herdr', () => {
     expect(await calls(2)).toHaveLength(1)
   })
 
+  it('labels an hc terminal instead, and clears only its own label', async () => {
+    const { cairn, calls } = await setup('Nommer les panes', { HC_TERMINAL_ID: 'm1/t7', HERDR_PANE_ID: 'w1:p1' })
+    const claimed = await cairn(['claim', 'CAIRN-15'])
+    expect(claimed.code).toBe(0)
+    expect(claimed.stdout).not.toContain('hc')
+    const label = 'hc label m1/t7 cairn.task=CAIRN-15 · Nommer les panes'
+    expect(await calls(1)).toEqual([label])
+    await cairn(['beat', 'CAIRN-15'])
+    expect(await calls(2)).toEqual([label, label])
+    await cairn(['release', 'CAIRN-99'])
+    await new Promise((r) => setTimeout(r, 300))
+    expect(await calls(3)).toHaveLength(2)
+    await cairn(['release', 'CAIRN-15'])
+    expect((await calls(3))[2]).toBe('hc label m1/t7 cairn.task=')
+  })
+
+  it.each(['t1; touch x', '-x'])('ignores the hc terminal id %j, without falling back to the pane', async (id) => {
+    const { cairn, log } = await setup('Nommer les panes', { HC_TERMINAL_ID: id, HERDR_PANE_ID: 'w1:p1' })
+    await cairn(['claim', 'CAIRN-15'])
+    await new Promise((r) => setTimeout(r, 300))
+    expect(await readFile(log, 'utf8').catch(() => '')).toBe('')
+  })
+
   it('truncates a long title', async () => {
     const { cairn, calls } = await setup('x'.repeat(300))
     await cairn(['claim', 'CAIRN-15'])
@@ -281,7 +307,12 @@ describe('the CLI publishes the claimed task to Herdr', () => {
   })
 
   it('does nothing outside Herdr or with CAIRN_HERDR=0', async () => {
-    for (const env of [{ HERDR_PANE_ID: '' }, { HERDR_PANE_ID: 'w1:p1', CAIRN_HERDR: '0' }] as Record<string, string>[]) {
+    const envs = [
+      { HERDR_PANE_ID: '' },
+      { HERDR_PANE_ID: 'w1:p1', CAIRN_HERDR: '0' },
+      { HC_TERMINAL_ID: 't7', CAIRN_HERDR: '0' },
+    ] as Record<string, string>[]
+    for (const env of envs) {
       const { cairn, log } = await setup('Nommer les panes', env)
       const claimed = await cairn(['claim', 'CAIRN-15'])
       expect(claimed.code).toBe(0)
@@ -290,13 +321,16 @@ describe('the CLI publishes the claimed task to Herdr', () => {
     }
   })
 
-  it('never fails a command when herdr is missing', async () => {
+  it.each([
+    ['herdr', { HERDR_PANE_ID: 'w1:p1', HC_TERMINAL_ID: '' }],
+    ['hc', { HC_TERMINAL_ID: 't7', HERDR_PANE_ID: '' }],
+  ])('never fails a command when %s is missing', async (bin, herdrEnv) => {
     const home = await scratch()
-    const withoutHerdr = (process.env.PATH ?? '').split(':').filter((d) => !existsSync(join(d, 'herdr'))).join(':')
+    const without = (process.env.PATH ?? '').split(':').filter((d) => !existsSync(join(d, bin))).join(':')
     const base = await serve('Nommer les panes')
     const code = await new Promise<number | null>((done) => {
       const child = spawn(process.execPath, ['cli/cairn.mjs', 'claim', 'CAIRN-15'], {
-        env: { ...process.env, HOME: home, PATH: withoutHerdr, CAIRN_BASE_URL: base, CAIRN_API_KEY: 'k', CAIRN_AGENT: 'test', HERDR_PANE_ID: 'w1:p1' },
+        env: { ...process.env, HOME: home, PATH: without, CAIRN_BASE_URL: base, CAIRN_API_KEY: 'k', CAIRN_AGENT: 'test', ...herdrEnv },
       })
       child.stdout.resume()
       child.stderr.resume()
