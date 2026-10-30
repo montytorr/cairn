@@ -275,8 +275,8 @@ describe('the CLI publishes the claimed task to Herdr', () => {
     expect(await calls(2)).toHaveLength(1)
   })
 
-  it('labels an hc terminal instead, and clears only its own label', async () => {
-    const { cairn, calls } = await setup('Nommer les panes', { HC_TERMINAL_ID: 'm1/t7', HERDR_PANE_ID: 'w1:p1' })
+  it('labels an hc terminal, and clears only its own label', async () => {
+    const { cairn, calls } = await setup('Nommer les panes', { HC_TERMINAL_ID: 'm1/t7' })
     const claimed = await cairn(['claim', 'CAIRN-15'])
     expect(claimed.code).toBe(0)
     expect(claimed.stdout).not.toContain('hc')
@@ -291,11 +291,30 @@ describe('the CLI publishes the claimed task to Herdr', () => {
     expect((await calls(3))[2]).toBe('hc label m1/t7 cairn.task=')
   })
 
-  it.each(['t1; touch x', '-x'])('ignores the hc terminal id %j, without falling back to the pane', async (id) => {
-    const { cairn, log } = await setup('Nommer les panes', { HC_TERMINAL_ID: id, HERDR_PANE_ID: 'w1:p1' })
+  it('labels both the hc terminal and the herdr pane when both are set, and clears both', async () => {
+    const { cairn, calls } = await setup('Nommer les panes', { HC_TERMINAL_ID: 'm1/t7', HERDR_PANE_ID: 'w1:p1' })
+    await cairn(['claim', 'CAIRN-15'])
+    const claim = [
+      'hc label m1/t7 cairn.task=CAIRN-15 · Nommer les panes',
+      'pane report-metadata w1:p1 --source cairn --token cairn_task=CAIRN-15 · Nommer les panes --ttl-ms 7200000',
+    ]
+    expect((await calls(2)).sort()).toEqual(claim)
+    await cairn(['beat', 'CAIRN-15'])
+    expect((await calls(4)).slice(2).sort()).toEqual(claim)
+    await cairn(['release', 'CAIRN-15'])
+    expect((await calls(6)).slice(4).sort()).toEqual([
+      'hc label m1/t7 cairn.task=',
+      'pane report-metadata w1:p1 --source cairn --clear-token cairn_task',
+    ])
+  })
+
+  it.each(['t1; touch x', '-x'])('ignores the hc terminal id %j and labels only the pane', async (id) => {
+    const { cairn, calls } = await setup('Nommer les panes', { HC_TERMINAL_ID: id, HERDR_PANE_ID: 'w1:p1' })
     await cairn(['claim', 'CAIRN-15'])
     await new Promise((r) => setTimeout(r, 300))
-    expect(await readFile(log, 'utf8').catch(() => '')).toBe('')
+    expect(await calls(1)).toEqual([
+      'pane report-metadata w1:p1 --source cairn --token cairn_task=CAIRN-15 · Nommer les panes --ttl-ms 7200000',
+    ])
   })
 
   it('truncates a long title', async () => {

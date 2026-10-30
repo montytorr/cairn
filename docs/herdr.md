@@ -31,8 +31,8 @@ Inside a herdr-core terminal (`HC_TERMINAL_ID` set) the same events run
 `hc label "$HC_TERMINAL_ID" "cairn.task=<REF> · <title>"` and clear it with
 `hc label "$HC_TERMINAL_ID" cairn.task=`. A label has no TTL: a crash that skips the clear
 leaves it until the next claim, release or `session end` in that terminal. When both
-variables are set, one was inherited from an enclosing session, and the label wins; an
-invalid `HC_TERMINAL_ID` shows nothing rather than falling back to the pane.
+variables are set, as for the herdr TUI running inside a herdr-app terminal, both the label
+and the pane token are set and cleared; an invalid id drops only its own target.
 
 ## The plugin
 

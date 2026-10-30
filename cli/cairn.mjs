@@ -2427,9 +2427,9 @@ const rememberWrite = (method, path, data) => {
  * and keeps labels instead of tokens: `hc label <id> cairn.task=<text>`, read
  * live by the app's mods. A label has no TTL, so a crash that skips the clear
  * leaves it until the next claim, release or `session end` in that terminal.
- * When both variables are set, one was inherited from an enclosing session;
- * the label wins, and an invalid HC_TERMINAL_ID shows nothing rather than
- * labelling a pane that may not be this one.
+ * When both variables are set (the herdr TUI inside a herdr-app terminal, where
+ * every pane inherits the same HC_TERMINAL_ID), both are labelled, each with
+ * its own shown-task memory; an invalid id drops only its own target.
  *
  * Fire and forget: no herdr binary, no pane, a slow socket, all are normal and
  * none may touch the command's output, exit code or latency.
@@ -2441,12 +2441,14 @@ const HERDR_TOKEN_MAX = 120
 
 const HC_LABEL = 'cairn.task'
 
-const herdrPane = () => {
-  if (process.env.CAIRN_HERDR === '0') return null
+const herdrPanes = () => {
+  if (process.env.CAIRN_HERDR === '0') return []
+  const panes = []
   const terminal = (process.env.HC_TERMINAL_ID || '').trim()
-  if (terminal) return /^\w[\w:/.-]*$/.test(terminal) ? { hc: true, id: terminal } : null
+  if (/^\w[\w:/.-]*$/.test(terminal)) panes.push({ hc: true, id: terminal })
   const pane = (process.env.HERDR_PANE_ID || '').trim()
-  return pane && /^[\w:.-]+$/.test(pane) ? { hc: false, id: pane } : null
+  if (/^[\w:.-]+$/.test(pane)) panes.push({ hc: false, id: pane })
+  return panes
 }
 
 const herdrTokenText = (ref, title) => {
@@ -2495,8 +2497,10 @@ const herdrShownPath = (pane) =>
   join(CAIRN_DIR, 'herdr', `${pane.hc ? 'terminal' : 'pane'}-${pane.id.replace(/[^\w.-]/g, '_')}.json`)
 
 const herdrPublish = (method, path, data) => {
-  const pane = herdrPane()
-  if (!pane) return
+  for (const pane of herdrPanes()) herdrPublishTo(pane, method, path, data)
+}
+
+const herdrPublishTo = (pane, method, path, data) => {
   try {
     const tail = /^\/api\/v1\/tasks\/[^/?]+(?:\/([a-z-]+))?$/.exec(path.split('?')[0])?.[1]
     const ref = refOfWrite(path, data)
@@ -2521,8 +2525,7 @@ const herdrPublish = (method, path, data) => {
 }
 
 const herdrClearPane = () => {
-  const pane = herdrPane()
-  if (pane) herdrClear(pane, herdrShownPath(pane), null)
+  for (const pane of herdrPanes()) herdrClear(pane, herdrShownPath(pane), null)
 }
 
 /** A null ref clears whatever is shown; a ref clears only that task's own label. */
