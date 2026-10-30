@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.25.5] — 2026-10-30
+
 ### Added
 
 - **The Herdr app shows the held task.** Inside a herdr-core terminal (`HC_TERMINAL_ID` set), `claim`, a claiming `add`, `beat` and `checkpoint` set a `cairn.task` label with `hc label`, and `done`, `cancel`, `release` and `session end` clear it, with the same detached, silent, `CAIRN_HERDR=0` behaviour as the legacy pane token. When `HERDR_PANE_ID` is also set, both the label and the pane token are published. `docs/herdr.md` shows how a mod displays it.
@@ -2261,7 +2263,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.4...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.5...HEAD
+[0.25.5]: https://github.com/montytorr/cairn/compare/v0.25.4...v0.25.5
 [0.25.4]: https://github.com/montytorr/cairn/compare/v0.25.3...v0.25.4
 [0.25.3]: https://github.com/montytorr/cairn/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/montytorr/cairn/compare/v0.25.1...v0.25.2
