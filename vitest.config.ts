@@ -13,6 +13,6 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // The CLI tests inherit this environment; run from a Herdr pane, they would
     // label or clear that real pane.
-    env: { HERDR_PANE_ID: '' },
+    env: { HERDR_PANE_ID: '', HC_TERMINAL_ID: '' },
   },
 })

@@ -2422,6 +2422,15 @@ const rememberWrite = (method, path, data) => {
  * Herdr sets HERDR_PANE_ID in every pane it runs, so a claim made here knows
  * which pane to label. The token is display-only, and a crash that skips the
  * clear is covered by its TTL: the lease the maintenance sweep reclaims after.
+ *
+ * The Herdr app runs every terminal in herdr-core, which sets HC_TERMINAL_ID
+ * and keeps labels instead of tokens: `hc label <id> cairn.task=<text>`, read
+ * live by the app's mods. A label has no TTL, so a crash that skips the clear
+ * leaves it until the next claim, release or `session end` in that terminal.
+ * When both variables are set (the herdr TUI inside a herdr-app terminal, where
+ * every pane inherits the same HC_TERMINAL_ID), both are labelled, each with
+ * its own shown-task memory; an invalid id drops only its own target.
+ *
  * Fire and forget: no herdr binary, no pane, a slow socket, all are normal and
  * none may touch the command's output, exit code or latency.
  * `CAIRN_HERDR=0` opts out.
@@ -2430,9 +2439,16 @@ const HERDR_TOKEN = 'cairn_task'
 const HERDR_TOKEN_TTL_MS = 2 * 60 * 60 * 1000
 const HERDR_TOKEN_MAX = 120
 
-const herdrPane = () => {
+const HC_LABEL = 'cairn.task'
+
+const herdrPanes = () => {
+  if (process.env.CAIRN_HERDR === '0') return []
+  const panes = []
+  const terminal = (process.env.HC_TERMINAL_ID || '').trim()
+  if (/^\w[\w:/.-]*$/.test(terminal)) panes.push({ hc: true, id: terminal })
   const pane = (process.env.HERDR_PANE_ID || '').trim()
-  return pane && process.env.CAIRN_HERDR !== '0' && /^[\w:.-]+$/.test(pane) ? pane : null
+  if (/^[\w:.-]+$/.test(pane)) panes.push({ hc: false, id: pane })
+  return panes
 }
 
 const herdrTokenText = (ref, title) => {
@@ -2451,15 +2467,23 @@ const herdrTokenText = (ref, title) => {
  */
 const HERDR_DEADLINE_S = 5
 
-const herdrReport = (pane, args) => {
+/** Shows `text`, or clears what is shown when it is null. */
+const herdrReport = (pane, text) => {
   try {
-    // Herdr raises no plugin event for a metadata report, so the plugin is asked to resync
-    // once the token has landed; arguments go through "$@", never through the script text.
+    // Herdr raises no plugin event for a metadata report, so the legacy plugin is asked to
+    // resync once the token has landed; arguments go through "$@", never through the script text.
+    const command = pane.hc
+      ? 'hc label "$@"'
+      : 'herdr pane report-metadata "$@" && herdr plugin action invoke sync --plugin cairn.pane-title'
+    const argv = pane.hc
+      ? [pane.id, `${HC_LABEL}=${text ?? ''}`]
+      : text === null
+        ? [pane.id, '--source', 'cairn', '--clear-token', HERDR_TOKEN]
+        : [pane.id, '--source', 'cairn', '--token', `${HERDR_TOKEN}=${text}`, '--ttl-ms', String(HERDR_TOKEN_TTL_MS)]
     const script =
-      `( sleep ${HERDR_DEADLINE_S}; kill -s KILL 0 ) & watchdog=$!; ` +
-      'herdr pane report-metadata "$@" && herdr plugin action invoke sync --plugin cairn.pane-title; ' +
+      `( sleep ${HERDR_DEADLINE_S}; kill -s KILL 0 ) & watchdog=$!; ${command}; ` +
       'kill $watchdog 2>/dev/null'
-    const child = spawn('sh', ['-c', script, 'sh', pane, '--source', 'cairn', ...args], {
+    const child = spawn('sh', ['-c', script, 'sh', ...argv], {
       detached: true,
       stdio: 'ignore',
     })
@@ -2468,12 +2492,15 @@ const herdrReport = (pane, args) => {
   } catch { /* display only */ }
 }
 
-/** What this pane shows is remembered, so a beat can refresh it and a release clear only its own. */
-const herdrShownPath = (pane) => join(CAIRN_DIR, 'herdr', `pane-${pane.replace(/[^\w.-]/g, '_')}.json`)
+/** What this pane or terminal shows is remembered, so a beat can refresh it and a release clear only its own. */
+const herdrShownPath = (pane) =>
+  join(CAIRN_DIR, 'herdr', `${pane.hc ? 'terminal' : 'pane'}-${pane.id.replace(/[^\w.-]/g, '_')}.json`)
 
 const herdrPublish = (method, path, data) => {
-  const pane = herdrPane()
-  if (!pane) return
+  for (const pane of herdrPanes()) herdrPublishTo(pane, method, path, data)
+}
+
+const herdrPublishTo = (pane, method, path, data) => {
   try {
     const tail = /^\/api\/v1\/tasks\/[^/?]+(?:\/([a-z-]+))?$/.exec(path.split('?')[0])?.[1]
     const ref = refOfWrite(path, data)
@@ -2493,13 +2520,12 @@ const herdrPublish = (method, path, data) => {
     }
     mkdirSync(dirname(shown), { recursive: true })
     writeFileSync(shown, JSON.stringify({ ref, text }))
-    herdrReport(pane, ['--token', `${HERDR_TOKEN}=${text}`, '--ttl-ms', String(HERDR_TOKEN_TTL_MS)])
+    herdrReport(pane, text)
   } catch { /* display only */ }
 }
 
 const herdrClearPane = () => {
-  const pane = herdrPane()
-  if (pane) herdrClear(pane, herdrShownPath(pane), null)
+  for (const pane of herdrPanes()) herdrClear(pane, herdrShownPath(pane), null)
 }
 
 /** A null ref clears whatever is shown; a ref clears only that task's own label. */
@@ -2511,7 +2537,7 @@ const herdrClear = (pane, shown, ref) => {
     }
     rmSync(shown, { force: true })
   } catch { /* display only */ }
-  herdrReport(pane, ['--clear-token', HERDR_TOKEN])
+  herdrReport(pane, null)
 }
 
 /** HOL-113 from a full task row or a digest, whichever this is. */

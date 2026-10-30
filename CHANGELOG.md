@@ -9,6 +9,10 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Added
+
+- **The Herdr app shows the held task.** Inside a herdr-core terminal (`HC_TERMINAL_ID` set), `claim`, a claiming `add`, `beat` and `checkpoint` set a `cairn.task` label with `hc label`, and `done`, `cancel`, `release` and `session end` clear it, with the same detached, silent, `CAIRN_HERDR=0` behaviour as the legacy pane token. When `HERDR_PANE_ID` is also set, both the label and the pane token are published. `docs/herdr.md` shows how a mod displays it.
+
 ## [0.25.4] — 2026-10-28
 
 ### Changed
