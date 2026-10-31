@@ -33,6 +33,7 @@
     "operator:create": "node scripts/create-operator.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:local": "bash scripts/with-throwaway-postgres.sh 'npm run db:migrate && npm run test:integration'",
     "check:overflow": "node scripts/check-overflow.mjs",
     "audit:controls": "node scripts/audit-controls.mjs"
   },

@@ -47,35 +47,10 @@ jobs:
             exit 1
           fi
 
-  integration:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: cairn
-          POSTGRES_DB: cairn_test
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U cairn -d cairn_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://cairn@127.0.0.1:5432/cairn_test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.22.1
-          cache: npm
-      - run: npm ci
-      - name: migrate clean PostgreSQL
-        run: npm run db:migrate
-      - name: blocking integrity integration suite
-        run: npm run test:integration
+  # The PostgreSQL integration suite (migrate a clean database, then
+  # tests/integration/) runs on the Mac before merge, not here:
+  # `npm run test:integration:local`, a .drove.json check. CI keeps the unit
+  # suite, the build and the image the deploy needs.
 
   # The image as it ships, started as a platform would start it. Nothing else
   # in CI builds the Dockerfile, so a start-up that only fails inside the

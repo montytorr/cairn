@@ -33,10 +33,24 @@ describe('release validation boundary', () => {
     expect(deploy).toMatch(/\n  deploy:\n    needs: gate\n    if: needs\.gate\.outputs\.current == 'true'/)
   })
 
-  it('makes PostgreSQL integrity coverage a blocking CI job', () => {
+  it('runs the PostgreSQL integrity suite as a local merge check, not in GitHub CI', () => {
     const ci = readFileSync(join(process.cwd(), '.github/workflows/ci.yml'), 'utf8')
-    expect(ci).toContain('image: postgres:16')
-    expect(ci).toContain('npm run db:migrate')
-    expect(ci).toContain('npm run test:integration')
+    expect(ci).not.toMatch(/\n  integration:\n/)
+    expect(ci).not.toMatch(/run: npm run (db:migrate|test:integration)/)
+    expect(ci).toMatch(/\n  image:\n/)
+
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+    expect(pkg.scripts['test:integration:local']).toContain('scripts/with-throwaway-postgres.sh')
+    expect(pkg.scripts['test:integration:local']).toContain('npm run db:migrate && npm run test:integration')
+
+    const wrapper = readFileSync(join(process.cwd(), 'scripts/with-throwaway-postgres.sh'), 'utf8')
+    expect(wrapper).toContain('postgres:16')
+    expect(wrapper).toContain('--tmpfs /var/lib/postgresql/data')
+    expect(wrapper).toContain('-p 127.0.0.1::5432')
+    expect(wrapper).toMatch(/trap cleanup EXIT/)
+
+    const { checks } = JSON.parse(readFileSync(join(process.cwd(), '.drove.json'), 'utf8'))
+    expect(checks.indexOf('npm run test:integration:local')).toBeGreaterThan(checks.indexOf('npm run build'))
+    expect(checks.indexOf('npm run build')).toBeGreaterThanOrEqual(0)
   })
 })

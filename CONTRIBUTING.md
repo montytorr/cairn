@@ -21,17 +21,19 @@ npm run typecheck
 npm test
 npm run build
 
-# needs a real PostgreSQL — point DATABASE_URL at a throwaway database
-npm run db:migrate
-npm run test:integration
+# migrates a throwaway PostgreSQL in Docker (tmpfs, removed afterwards), then runs
+# tests/integration/ — or point DATABASE_URL at one and run
+# `npm run db:migrate && npm run test:integration`
+npm run test:integration:local
 ```
 
-CI runs every one of those, plus a check that `AGENTS.md` stays under 7900 bytes — agents
+CI runs all but the last, plus a check that `AGENTS.md` stays under 7900 bytes — agents
 read that file every session, so its size is a real cost. It currently sits a couple of
 bytes under, so adding a line there means cutting one: guidance with room to grow belongs
 in [`skills/cairn/SKILL.md`](./skills/cairn/SKILL.md) instead.
 
-The integration suite runs in a job of its own because it migrates a clean PostgreSQL
+The integration suite runs on your machine before merge, not in GitHub CI: it is the last
+`.drove.json` check, after the build, and needs Docker. It migrates a clean PostgreSQL
 first, which is the point of it: `tests/integration/` is the only execution-level proof
 that the SQL does what the rest of the suite mocks. `vitals-closure.test.ts` in particular
 checks queries no unit test can reach. It is easy to skip locally and easy to break, so run

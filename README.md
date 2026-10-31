@@ -1539,11 +1539,11 @@ it does it that way, and half of them are a bug someone already paid for.
 
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build
-npm run db:migrate && npm run test:integration   # needs a real PostgreSQL
+npm run test:integration:local   # throwaway PostgreSQL in Docker, migrated, then tests/integration/
 ```
 
-CI runs every one of those, the integration suite in a job of its own because it migrates a
-clean database first — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#before-opening-a-pr). The
+CI runs the first line. The integration suite runs locally before merge (a `.drove.json`
+check after the build), because it migrates a clean database first — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#before-opening-a-pr). The
 domain vocabulary lives in
 [`src/schemas/task.ts`](./src/schemas/task.ts) — types, statuses, priorities, note kinds
 and resolution kinds are defined there once and flow into the API, the OpenAPI document,
