@@ -9,6 +9,8 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+## [0.25.6] — 2026-11-06
+
 ### Fixed
 
 - **Indexes for the two hottest reads (CAIRN-443).** Migration `090_hot_path_indexes.sql` adds `task_activity_events (created_at desc)` for the live-update check behind `/api/v1/events`, which every open tab runs every 4 s, plus `file_touches (path, created_at desc)` and a partial `file_touches (session_id)` for the knowledge staleness checks behind `check`, recall and context. It drops the owner-first `file_touches_path_idx`, which no query has used since the shared workspace. Each index is skipped when a valid index on the same leading column already exists, so re-running is harmless. On Lab these two reads were about 62% of all rows read, and `check` and recall took 4–6 s. Each build briefly blocks writes (not reads) to its table while the migration runs on deploy.
@@ -2267,7 +2269,8 @@ which it became something somebody else could reasonably run.
   vitals, sweep transcripts from runtimes that have no session-end event.
 - Backup and restore-drill scripts, because an untested backup is not a backup.
 
-[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.5...HEAD
+[Unreleased]: https://github.com/montytorr/cairn/compare/v0.25.6...HEAD
+[0.25.6]: https://github.com/montytorr/cairn/compare/v0.25.5...v0.25.6
 [0.25.5]: https://github.com/montytorr/cairn/compare/v0.25.4...v0.25.5
 [0.25.4]: https://github.com/montytorr/cairn/compare/v0.25.3...v0.25.4
 [0.25.3]: https://github.com/montytorr/cairn/compare/v0.25.2...v0.25.3
