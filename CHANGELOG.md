@@ -9,6 +9,10 @@ out under **Breaking** with what to do about it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Indexes for the two hottest reads (CAIRN-443).** Migration `090_hot_path_indexes.sql` adds `task_activity_events (created_at desc)` for the live-update check behind `/api/v1/events`, which every open tab runs every 4 s, plus `file_touches (path, created_at desc)` and a partial `file_touches (session_id)` for the knowledge staleness checks behind `check`, recall and context. It drops the owner-first `file_touches_path_idx`, which no query has used since the shared workspace. Each index is skipped when a valid index on the same leading column already exists, so re-running is harmless. On Lab these two reads were about 62% of all rows read, and `check` and recall took 4–6 s. Each build briefly blocks writes (not reads) to its table while the migration runs on deploy.
+
 ## [0.25.5] — 2026-10-30
 
 ### Added
